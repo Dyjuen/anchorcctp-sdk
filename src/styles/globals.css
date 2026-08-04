@@ -1,0 +1,61 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap');
+
+@theme {
+  --color-background: #FDFCFB;
+  --color-foreground: #1A0508;
+  --color-accent: #550C18;
+  --color-accent-light: #FF4D6D;
+  --color-muted: #6B7280;
+  --color-border: #E5E7EB;
+
+  --font-display: "Playfair Display", serif;
+  --font-sans: "Inter", sans-serif;
+
+  --font-size-display-xl: 7.5rem;
+  --font-size-display-xl--line-height: 0.9;
+  --font-size-display-xl--letter-spacing: -0.02em;
+
+  --font-size-heading-l: 2.5rem;
+  --font-size-heading-l--line-height: 1.1;
+  --font-size-heading-l--letter-spacing: 0.05em;
+
+  --font-size-caption-s: 0.75rem;
+  --font-size-caption-s--line-height: 1.2;
+  --font-size-caption-s--letter-spacing: 0.1em;
+
+  --ease-circ-out: cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased overflow-x-hidden;
+    background-color: #FDFCFB;
+  }
+
+  /* Custom Selection */
+  ::selection {
+    @apply bg-accent text-white;
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #FDFCFB;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #E5E7EB;
+  }
+}
+
+@layer components {
+  .text-display {
+    @apply font-display uppercase leading-[0.85] tracking-tighter;
+  }
+}
