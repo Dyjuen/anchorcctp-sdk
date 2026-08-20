@@ -1,0 +1,31 @@
+{
+  "name": "@anchor-cctp/core",
+  "version": "1.0.0",
+  "description": "AnchorCCTP SDK Core Engine — accept USDC from any CCTP-connected chain on Stellar with a single function call.",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "jest --coverage"
+  },
+  "keywords": [
+    "stellar",
+    "cctp",
+    "usdc",
+    "anchor",
+    "circle",
+    "cross-chain"
+  ],
+  "author": "Mother's Grace (Juen)",
+  "license": "MIT",
+  "dependencies": {
+    "@stellar/stellar-sdk": "^13.1.0"
+  }
+}

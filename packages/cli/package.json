@@ -1,0 +1,23 @@
+{
+  "name": "@anchor-cctp/cli",
+  "version": "1.0.0",
+  "description": "AnchorCCTP CLI — terminal command suite for Stellar anchor CCTP integration",
+  "main": "./dist/index.js",
+  "bin": {
+    "anchor-cctp": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "jest"
+  },
+  "keywords": [
+    "stellar",
+    "cctp",
+    "cli"
+  ],
+  "author": "Mother's Grace (Juen)",
+  "license": "MIT",
+  "dependencies": {
+    "@anchor-cctp/core": "*"
+  }
+}
