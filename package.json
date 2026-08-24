@@ -1,35 +1,37 @@
 {
-  "name": "anchorcctp-sdk",
+  "name": "anchorcctp-monorepo",
   "version": "1.0.0",
+  "private": true,
   "description": "AnchorCCTP SDK — accept USDC from any CCTP-connected chain on Stellar with a single function call.",
-  "main": "index.js",
-  "directories": {
-    "doc": "docs"
-  },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev:demo": "npm run dev --workspace=@anchor-cctp/demo",
+    "build:demo": "npm run build --workspace=@anchor-cctp/demo",
+    "build:core": "npm run build --workspace=@anchor-cctp/core",
+    "build:cli": "npm run build --workspace=@anchor-cctp/cli",
+    "build": "npm run build --workspaces",
+    "test": "jest --coverage",
+    "typecheck": "tsc --build"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
   "devDependencies": {
-    "@tailwindcss/postcss": "^4.3.0",
-    "@vitejs/plugin-react": "^6.0.2",
-    "autoprefixer": "^10.5.0",
-    "postcss": "^8.5.15",
-    "tailwindcss": "^4.3.0",
-    "vite": "^8.0.16"
+    "@types/jest": "^29.5.14",
+    "@types/node": "^22.13.4",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.5",
+    "typescript": "^5.7.3"
   },
-  "dependencies": {
-    "clsx": "^2.1.1",
-    "framer-motion": "^12.40.0",
-    "lucide-react": "^1.17.0",
-    "react": "^19.2.7",
-    "react-dom": "^19.2.7",
-    "tailwind-merge": "^3.6.0"
-  }
+  "keywords": [
+    "stellar",
+    "cctp",
+    "usdc",
+    "circle",
+    "anchor",
+    "cross-chain",
+    "soroban"
+  ],
+  "author": "Mother's Grace (Juen)",
+  "license": "MIT"
 }
