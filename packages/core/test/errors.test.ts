@@ -2,7 +2,10 @@ import {
   InvalidDomainError,
   InvalidAmountError,
   AttestationTimeoutError,
-  TrustlineMissingError
+  TrustlineMissingError,
+  MintFailedError,
+  TrustlineCreationError,
+  ReplayTransferError,
 } from '../src/index';
 
 describe('Typed Error Classes', () => {
@@ -35,4 +38,33 @@ describe('Typed Error Classes', () => {
     expect(err.destinationAddress).toBe('GBBD47...');
     expect(err.remediation).toContain('allowTrustlineCreation');
   });
+
+  it('MintFailedError carries burnTxHash + remediation', () => {
+    const e = new MintFailedError('0xabc', 'revert');
+    expect(e.code).toBe('MINT_FAILED');
+    expect(e.burnTxHash).toBe('0xabc');
+    expect(e.reason).toBe('revert');
+    expect(e.remediation).toContain('mint');
+    expect(e.message).toContain('0xabc');
+
+    const eNoReason = new MintFailedError('0xabc');
+    expect(eNoReason.reason).toBeUndefined();
+  });
+
+  it('TrustlineCreationError + ReplayTransferError have codes', () => {
+    const tcErr = new TrustlineCreationError('GBX', 'fee too low');
+    expect(tcErr.code).toBe('TRUSTLINE_CREATION_FAILED');
+    expect(tcErr.destinationAddress).toBe('GBX');
+    expect(tcErr.reason).toBe('fee too low');
+    expect(tcErr.remediation).toBeDefined();
+
+    const tcErrNoReason = new TrustlineCreationError('GBX');
+    expect(tcErrNoReason.reason).toBeUndefined();
+
+    const rpErr = new ReplayTransferError('0xabc');
+    expect(rpErr.code).toBe('REPLAY_TRANSFER');
+    expect(rpErr.burnTxHash).toBe('0xabc');
+    expect(rpErr.remediation).toBeDefined();
+  });
 });
+
