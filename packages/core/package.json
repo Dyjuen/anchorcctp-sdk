@@ -11,10 +11,17 @@
       "require": "./dist/index.js"
     }
   },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc",
     "test": "jest --coverage"
   },
+
   "keywords": [
     "stellar",
     "cctp",

@@ -1,0 +1,20 @@
+[2026-08-24T10:00:00.120Z] [INFO] [anchor-cctp] Initializing AnchorCCTP SDK client (testnet)
+[2026-08-24T10:00:00.122Z] [DEBUG] [attestation] Base URL: https://iris-api-sandbox.circle.com
+[2026-08-24T10:00:00.125Z] [INFO] [anchor-cctp] Starting CCTP receive flow for burnTxHash: 0x35687770176d655848c41804f9814467d0ea378877ca6b6b7a2d80d196fc9df9
+[2026-08-24T10:00:00.126Z] [INFO] [domains] Source domain validated: 6 (Base) -> Target domain: 27 (Stellar)
+[2026-08-24T10:00:00.128Z] [DEBUG] [replay] Checking idempotency store for burnTxHash: 0x35687770176d655848c41804f9814467d0ea378877ca6b6b7a2d80d196fc9df9 (processed: false)
+[2026-08-24T10:00:00.130Z] [DEBUG] [forwarder] Translating destination address: GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5 (valid Ed25519 StrKey)
+[2026-08-24T10:00:00.132Z] [DEBUG] [attestation] Polling Circle Attestation Iris API (attempt: 1, elapsedMs: 0)
+[2026-08-24T10:00:02.145Z] [DEBUG] [attestation] Circle Iris response status: pending -> emitting onReceiving event
+[2026-08-24T10:00:02.146Z] [EVENT] [onReceiving] {"burnTxHash":"0x35687770176d655848c41804f9814467d0ea378877ca6b6b7a2d80d196fc9df9","status":"attesting","attempt":1,"elapsedTimeMs":2014,"sourceDomain":6}
+[2026-08-24T10:00:05.160Z] [DEBUG] [attestation] Polling Circle Attestation Iris API (attempt: 2, elapsedMs: 5028)
+[2026-08-24T10:00:05.280Z] [INFO] [attestation] Attestation complete (attempt: 2, elapsedMs: 5148)
+[2026-08-24T10:00:05.282Z] [INFO] [attestation] Cryptographic verification passed: valid signature format and non-empty message payload
+[2026-08-24T10:00:05.285Z] [DEBUG] [trustline] Inspecting destination trustline for USDC: existing=true
+[2026-08-24T10:00:05.290Z] [INFO] [forwarder] Submitting mint transaction to Soroban Forwarder Contract (CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC)
+[2026-08-24T10:00:05.292Z] [INFO] [forwarder] Delegating transaction signing to caller signer callback
+[2026-08-24T10:00:07.410Z] [INFO] [forwarder] Mint transaction submitted to Stellar testnet: txHash=5f4b9319e7a8dfbc971485601a4e58b194fec9b85c189b5814526d11e5f8bc99
+[2026-08-24T10:00:07.412Z] [INFO] [decimals] Converting 6-decimal USDC (10000000 base units) to 7-decimal Stellar stroops (100000000 stroops, dust: 0)
+[2026-08-24T10:00:07.415Z] [EVENT] [onSettled] {"amount":"100000000","dust":"0","txHash":"5f4b9319e7a8dfbc971485601a4e58b194fec9b85c189b5814526d11e5f8bc99","sourceDomain":6,"destinationAddress":"GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5","timestamp":"2026-08-24T10:00:07.415Z"}
+[2026-08-24T10:00:07.418Z] [DEBUG] [replay] Recorded processed settlement record in ReplayStore
+[2026-08-24T10:00:07.420Z] [INFO] [anchor-cctp] Transfer settled successfully. Total duration: 7.3s
