@@ -1,0 +1,75 @@
+import React, { useState } from 'react';
+import { Copy, Check, Terminal, Code2 } from 'lucide-react';
+
+export const CodeSnippet: React.FC = () => {
+  const [copied, setCopied] = useState(false);
+
+  const codeExample = `import { createAnchorCCTP } from '@anchor-cctp/core';
+
+// 1. Initialize SDK with anchor configuration
+const cctp = createAnchorCCTP({
+  dustCollectorAddress: 'GDDUSTCOLLECTOR...',
+  trustline: { allowCreation: true, spendCapXlm: 2 }
+});
+
+// 2. Subscribe to real-time deposit lifecycle events
+cctp.on('onReceiving', (evt) => console.log('Attesting Iris Proof:', evt.burnTxHash));
+cctp.on('onSettled', (evt) => console.log('Settled on Stellar:', evt.amount, evt.txHash));
+
+// 3. Receive cross-chain USDC with single async function call
+const result = await cctp.receive({
+  sourceDomain: 0, // Ethereum
+  burnTxHash: '0x9a8f4c2e...',
+  destinationAddress: 'GBBD47IF6LWK...'
+});
+
+console.log('Credited Stellar Amount:', result.amount);`;
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(codeExample);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="max-w-4xl mx-auto space-y-6">
+      <div className="text-center space-y-2">
+        <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight sm:text-4xl">
+          Anchor SDK Integration
+        </h1>
+        <p className="text-gray-600 max-w-2xl mx-auto text-base">
+          Accept cross-chain USDC from any CCTP-connected chain on Stellar in 3 lines of TypeScript.
+        </p>
+      </div>
+
+      <div className="bg-gray-900 rounded-2xl p-6 text-white shadow-xl space-y-4">
+        <div className="flex items-center justify-between border-b border-gray-800 pb-4">
+          <div className="flex items-center space-x-2">
+            <Code2 className="w-5 h-5 text-red-400" />
+            <span className="font-mono text-sm text-gray-300">deposit-service.ts</span>
+          </div>
+          <button
+            onClick={handleCopy}
+            className="inline-flex items-center px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-xs font-medium text-gray-200 transition-colors"
+          >
+            {copied ? (
+              <>
+                <Check className="w-3.5 h-3.5 mr-1 text-emerald-400" />
+                Copied!
+              </>
+            ) : (
+              <>
+                <Copy className="w-3.5 h-3.5 mr-1" />
+                Copy Code
+              </>
+            )}
+          </button>
+        </div>
+
+        <pre className="font-mono text-xs text-emerald-400 overflow-x-auto p-2 leading-relaxed">
+          {codeExample}
+        </pre>
+      </div>
+    </div>
+  );
+};
