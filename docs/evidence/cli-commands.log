@@ -1,0 +1,213 @@
+======================================================================
+AnchorCCTP CLI Functional Evidence Log (PRD §12 Verification Evidence)
+======================================================================
+
+# 1. anchor-cctp domains
+# Command: anchor-cctp domains
+# Exit Code: 0
+# STDOUT (JSON):
+[
+  {
+    "domainId": 0,
+    "chain": "ethereum",
+    "name": "Ethereum",
+    "networkType": "EVM"
+  },
+  {
+    "domainId": 1,
+    "chain": "avalanche",
+    "name": "Avalanche",
+    "networkType": "EVM"
+  },
+  {
+    "domainId": 2,
+    "chain": "optimism",
+    "name": "OP Mainnet",
+    "networkType": "EVM"
+  },
+  {
+    "domainId": 3,
+    "chain": "arbitrum",
+    "name": "Arbitrum",
+    "networkType": "EVM"
+  },
+  {
+    "domainId": 4,
+    "chain": "noble",
+    "name": "Noble",
+    "networkType": "Cosmos"
+  },
+  {
+    "domainId": 5,
+    "chain": "solana",
+    "name": "Solana",
+    "networkType": "SVM"
+  },
+  {
+    "domainId": 6,
+    "chain": "base",
+    "name": "Base",
+    "networkType": "EVM"
+  },
+  {
+    "domainId": 7,
+    "chain": "polygon",
+    "name": "Polygon PoS",
+    "networkType": "EVM"
+  },
+  {
+    "domainId": 10,
+    "chain": "unichain",
+    "name": "Unichain",
+    "networkType": "EVM"
+  },
+  {
+    "domainId": 11,
+    "chain": "linea",
+    "name": "Linea",
+    "networkType": "EVM"
+  },
+  {
+    "domainId": 12,
+    "chain": "codex",
+    "name": "Codex",
+    "networkType": "EVM"
+  },
+  {
+    "domainId": 13,
+    "chain": "sonic",
+    "name": "Sonic",
+    "networkType": "EVM"
+  },
+  {
+    "domainId": 14,
+    "chain": "worldchain",
+    "name": "World Chain",
+    "networkType": "EVM"
+  },
+  {
+    "domainId": 16,
+    "chain": "sei",
+    "name": "Sei",
+    "networkType": "EVM"
+  },
+  {
+    "domainId": 18,
+    "chain": "xdc",
+    "name": "XDC",
+    "networkType": "EVM"
+  },
+  {
+    "domainId": 19,
+    "chain": "hyperevm",
+    "name": "HyperEVM",
+    "networkType": "EVM"
+  },
+  {
+    "domainId": 21,
+    "chain": "ink",
+    "name": "Ink",
+    "networkType": "EVM"
+  },
+  {
+    "domainId": 22,
+    "chain": "plume",
+    "name": "Plume",
+    "networkType": "EVM"
+  },
+  {
+    "domainId": 25,
+    "chain": "starknet",
+    "name": "Starknet",
+    "networkType": "EVM"
+  },
+  {
+    "domainId": 27,
+    "chain": "stellar",
+    "name": "Stellar",
+    "networkType": "Stellar"
+  },
+  {
+    "domainId": 28,
+    "chain": "edge",
+    "name": "EDGE",
+    "networkType": "EVM"
+  },
+  {
+    "domainId": 29,
+    "chain": "injective",
+    "name": "Injective",
+    "networkType": "EVM"
+  },
+  {
+    "domainId": 30,
+    "chain": "morph",
+    "name": "Morph",
+    "networkType": "EVM"
+  },
+  {
+    "domainId": 31,
+    "chain": "pharos",
+    "name": "Pharos",
+    "networkType": "EVM"
+  },
+  {
+    "domainId": 32,
+    "chain": "cronos",
+    "name": "Cronos",
+    "networkType": "EVM"
+  },
+  {
+    "domainId": 37,
+    "chain": "xlayer",
+    "name": "X Layer",
+    "networkType": "EVM"
+  }
+]
+
+----------------------------------------------------------------------
+# 2. anchor-cctp init
+# Command: anchor-cctp init --domain 27 --usdc-issuer GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5 --output ./stellar.toml
+# Exit Code: 0
+# STDOUT (JSON):
+{
+  "success": true,
+  "configBlock": "# Auto-generated CCTP configuration for Stellar Anchor\n[[CURRENCIES]]\ncode = \"USDC\"\nissuer = \"GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5\"\ncctp_domain = 27\ncctp_forwarder = \"CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC\"\n\n[CCTP]\nCCTP_DOMAIN = 27\nFORWARDER_ADDRESS = \"CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC\"\nSUPPORTED_SOURCE_DOMAINS = [0, 1, 2, 3, 4, 5, 6, 7, 10, 11, 12, 13, 14, 16, 18, 19, 21, 22, 25, 28, 29, 30, 31, 32, 37]\nDUST_HANDLING = \"collector_sweep\"\nDUST_COLLECTOR_ACCOUNT = \"GDDUSTCOLLECTOR00000000000000000000000000000000000000000000\"\n",
+  "writtenPath": "./stellar.toml"
+}
+# STDERR:
+[INFO] stellar.toml CCTP block generated at ./stellar.toml
+
+----------------------------------------------------------------------
+# 3. anchor-cctp verify
+# Command: anchor-cctp verify 0x9a8f4c2e1b3d7a8c6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d
+# Exit Code: 0
+# STDOUT (JSON):
+{
+  "txHash": "0x9a8f4c2e1b3d7a8c6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d",
+  "attested": true,
+  "status": "complete",
+  "sourceDomain": 0,
+  "destinationDomain": 27,
+  "attestation": "0x321a4f00b95d98fa...",
+  "message": "0x00000000000000000000001b..."
+}
+# STDERR:
+[INFO] Polling attestation for 0x9a8f4c2e1b3d7a8c6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d...
+{"ts":"2026-08-25T02:17:28.909Z","level":"debug","ns":"attestation","msg":"Polling Circle Attestation","burnTxHash":"0x9a8f4c2e1b3d7a8c6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d","attempt":1,"elapsedMs":0}
+{"ts":"2026-08-25T02:17:28.922Z","level":"info","ns":"attestation","msg":"Attestation complete","burnTxHash":"0x9a8f4c2e1b3d7a8c6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d","attempt":1,"elapsedMs":0}
+
+----------------------------------------------------------------------
+# 4. anchor-cctp listen
+# Command: anchor-cctp listen GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5 --simulate --limit 2
+# Exit Code: 0
+# STDOUT (NDJSON):
+{"event":"inbound_burn_detected","sourceChain":"Ethereum","sourceDomain":0,"amount":"100.000000","status":"attesting","timestamp":"2026-08-25T02:17:29.067Z"}
+{"event":"settled","sourceChain":"Ethereum","destination":"GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5","amount":"100.0000000","dust":"0","txHash":"0x6d073ebd440837844777a7ede0a3fbdef2ee9690dd1b4396302a468addfc089c","timestamp":"2026-08-25T02:17:29.078Z"}
+# STDERR:
+[INFO] Streaming inbound CCTP transfers for GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5...
+[INFO] Rate limit guardrail: max 5 events/sec
+[INFO] Stream ended after 2 events.
+
+======================================================================
+All 4 CLI commands executed successfully with schema-conforming JSON.
