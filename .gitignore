@@ -1,4 +1,8 @@
 node_modules/
 dist/
+coverage/
+packages/*/coverage/
+*.tsbuildinfo
 *.local
 .DS_Store
+/stellar.toml
