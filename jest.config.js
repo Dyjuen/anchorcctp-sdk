@@ -3,7 +3,8 @@ module.exports = {
   preset: 'ts-jest',
   testEnvironment: 'node',
   projects: [
-    '<rootDir>/packages/core'
+    '<rootDir>/packages/core',
+    '<rootDir>/packages/cli'
   ],
   collectCoverageFrom: [
     'packages/core/src/**/*.ts',
