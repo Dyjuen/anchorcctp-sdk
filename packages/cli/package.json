@@ -17,6 +17,13 @@
   ],
   "author": "Mother's Grace (Juen)",
   "license": "MIT",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "dependencies": {
     "@anchor-cctp/core": "*"
   }
