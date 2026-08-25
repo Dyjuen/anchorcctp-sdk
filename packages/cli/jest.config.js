@@ -9,6 +9,7 @@ module.exports = {
     '^(\\.\\.?/.*)\\.js$': '$1'
   },
   collectCoverageFrom: [
-    'src/**/*.ts'
+    'src/**/*.ts',
+    '!src/index.ts'
   ]
 };
