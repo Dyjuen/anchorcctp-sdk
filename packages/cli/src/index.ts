@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { runDomainsCommand } from './commands/domains.js';
 import { runInitCommand } from './commands/init.js';
+import { runListenCommand } from './commands/listen.js';
 import { runVerifyCommand } from './commands/verify.js';
 
 async function main() {
@@ -20,6 +21,11 @@ async function main() {
 
   if (command === 'verify') {
     const code = await runVerifyCommand(commandArgs);
+    process.exit(code);
+  }
+
+  if (command === 'listen') {
+    const code = await runListenCommand(commandArgs);
     process.exit(code);
   }
 
