@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { runDomainsCommand } from './commands/domains.js';
 import { runInitCommand } from './commands/init.js';
+import { runVerifyCommand } from './commands/verify.js';
 
 async function main() {
   const args = process.argv.slice(2);
@@ -14,6 +15,11 @@ async function main() {
 
   if (command === 'init') {
     const code = await runInitCommand(commandArgs);
+    process.exit(code);
+  }
+
+  if (command === 'verify') {
+    const code = await runVerifyCommand(commandArgs);
     process.exit(code);
   }
 
