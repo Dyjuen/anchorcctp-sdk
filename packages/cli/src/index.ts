@@ -1,14 +1,20 @@
 #!/usr/bin/env node
-import { CCTP_DOMAINS } from '@anchor-cctp/core';
+import { runDomainsCommand } from './commands/domains.js';
+import { runInitCommand } from './commands/init.js';
 
-function main() {
+async function main() {
   const args = process.argv.slice(2);
   const command = args[0];
+  const commandArgs = args.slice(1);
 
   if (command === 'domains') {
-    // Machine readable JSON to stdout
-    process.stdout.write(JSON.stringify(Object.values(CCTP_DOMAINS), null, 2) + '\n');
-    process.exit(0);
+    const code = await runDomainsCommand();
+    process.exit(code);
+  }
+
+  if (command === 'init') {
+    const code = await runInitCommand(commandArgs);
+    process.exit(code);
   }
 
   // Diagnostics to stderr
@@ -16,4 +22,7 @@ function main() {
   process.exit(0);
 }
 
-main();
+main().catch((err) => {
+  process.stderr.write(`Fatal error: ${err.message}\n`);
+  process.exit(1);
+});
