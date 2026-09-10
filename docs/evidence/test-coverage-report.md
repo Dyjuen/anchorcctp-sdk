@@ -45,116 +45,167 @@ Time:        4.207 s
 
 ---
 
-## 2. Detailed Test Suites Catalog & Purpose
+## 2. Detailed Test Suites Catalog & Code Snippets
 
-Here is the comprehensive breakdown of all 18 test suites in the monorepo, detailing what each test file asserts and how it validates system behavior:
+Here is the comprehensive breakdown of all 18 test suites in the monorepo, detailing what each test file asserts and including representative code snippets:
 
 ### A. `@anchor-cctp/core-sdk` Package Test Suites (13 Suites)
 
 1. **[`packages/core/test/decimals.test.ts`](file:///c:/Users/lunox/Documents/anchorcctp-sdk/packages/core/test/decimals.test.ts)** (PASS — 100% Coverage)
    - **Purpose**: Verifies lossless decimal conversion between 6-decimal CCTP USDC ($10^6$) and 7-decimal Stellar USDC stroops ($10^7$).
-   - **Asserted Behaviors**:
-     - Forward conversion ($6 \to 7$ decimals): $10C$, dust is $0n$.
-     - Reverse conversion ($7 \to 6$ decimals): $C = \lfloor S / 10 \rfloor$, sub-stroop dust $D = S \pmod{10}$.
-     - Throws `InvalidAmountError` on non-positive amounts ($\le 0n$).
+   - **Code Example**:
+     ```typescript
+     // 6 -> 7 decimals lossless scaling (stroops)
+     const { stellarAmount, dust } = convert6to7(1_000_000n);
+     expect(stellarAmount).toBe(10_000_000n); // Exact multiplication by 10n
+     expect(dust).toBe(0n);
+     ```
 
 2. **[`packages/core/test/replay.test.ts`](file:///c:/Users/lunox/Documents/anchorcctp-sdk/packages/core/test/replay.test.ts)** (PASS — 100% Coverage)
    - **Purpose**: Tests the idempotency store adapter to prevent double-crediting of burn transaction hashes.
-   - **Asserted Behaviors**:
-     - Marks newly processed `burnTxHash` values atomically.
-     - Rejects duplicate settlement attempts with `ReplayTransferError`.
-     - Ensures historical settlement records are stored and retrievable.
+   - **Code Example**:
+     ```typescript
+     // Replay store check & set idempotency
+     await store.markProcessed('0xburn_123', record);
+     const isDup = await store.isProcessed('0xburn_123');
+     expect(isDup).toBe(true);
+     ```
 
 3. **[`packages/core/test/attestation.test.ts`](file:///c:/Users/lunox/Documents/anchorcctp-sdk/packages/core/test/attestation.test.ts)** (PASS — 100% Coverage)
    - **Purpose**: Validates Circle Attestation API polling, backoff, jitter calculation, and cryptographic verification.
-   - **Asserted Behaviors**:
-     - State transitions (`pending` $\to$ `complete`).
-     - Exponential backoff algorithm and randomized jitter bounds.
-     - Throws `AttestationTimeoutError` after exhausting `maxRetries`.
-     - Cryptographic secp256k1 signature verification against message hash.
+   - **Code Example**:
+     ```typescript
+     // Polling Iris proof with exponential backoff & signature verification
+     const res = await client.pollAttestation('0xburn_tx_hash', onPoll);
+     expect(res.status).toBe('complete');
+     expect(client.verifyAttestation(res.message, res.signature)).toBe(true);
+     ```
 
 4. **[`packages/core/test/trustline.test.ts`](file:///c:/Users/lunox/Documents/anchorcctp-sdk/packages/core/test/trustline.test.ts)** (PASS — 100% Coverage)
    - **Purpose**: Asserts USDC trustline inspection and opt-in creation with spending cap safeguards.
-   - **Asserted Behaviors**:
-     - Detects existing trustlines on target Stellar accounts.
-     - Auto-creates trustlines when `allowTrustlineCreation = true`.
-     - Throws `TrustlineCreationError` when missing and `allowCreation = false`.
-     - Enforces XLM reserve spending cap bounds (`spendCapXlm`).
+   - **Code Example**:
+     ```typescript
+     // Auto-create trustline within XLM spend cap
+     await ensureTrustline({ destination, allowCreation: true, spendCapXlm: 2.0 });
+     expect(hasTrustline()).resolves.toBe(true);
+     ```
 
 5. **[`packages/core/test/domains.test.ts`](file:///c:/Users/lunox/Documents/anchorcctp-sdk/packages/core/test/domains.test.ts)** (PASS — 100% Coverage)
    - **Purpose**: Validates the official 26 CCTP domain ID registry (Ethereum=0, Base=6, Stellar=27, etc.).
-   - **Asserted Behaviors**:
-     - Correct metadata lookup by domain ID (chain name, EVM vs SVM vs Stellar).
-     - Domain assertion guard (`assertSupportedDomain`).
-     - Rejection of unknown or out-of-spec domain IDs with `InvalidDomainError`.
+   - **Code Example**:
+     ```typescript
+     // CCTP Domain Allowlist validation
+     expect(isSupportedDomain(27)).toBe(true); // Stellar
+     expect(getDomainMeta(6).chain).toBe('Base');
+     expect(() => assertSupportedDomain(9999)).toThrow(InvalidDomainError);
+     ```
 
 6. **[`packages/core/test/forwarder.test.ts`](file:///c:/Users/lunox/Documents/anchorcctp-sdk/packages/core/test/forwarder.test.ts)** (PASS — 95.83% Coverage)
    - **Purpose**: Tests EVM 32-byte hex address decoding into Stellar `G...` Strkeys and Soroban mint transaction submission.
-   - **Asserted Behaviors**:
-     - EVM bytes32 hex string decoding to Stellar public keys.
-     - Validation of destination account formats.
-     - Soroban contract invocation payload encoding.
-     - Invocation of delegated `SignerCallback`.
+   - **Code Example**:
+     ```typescript
+     // Address translation bytes32 -> G... strkey
+     const stellarAddr = translateToStellar('0x000...32byteHex');
+     expect(stellarAddr).toMatch(/^G[A-Z0-9]{55}$/);
+     ```
 
 7. **[`packages/core/test/receive.test.ts`](file:///c:/Users/lunox/Documents/anchorcctp-sdk/packages/core/test/receive.test.ts)** (PASS — 93.33% Coverage)
    - **Purpose**: Orchestration test suite for the complete 11-step `AnchorCCTP.receive()` lifecycle pipeline.
-   - **Asserted Behaviors**:
-     - Full end-to-end deposit settlement flow.
-     - Correct sequencing of events (`onReceiving` $\to$ `onSettled`).
-     - Dust collector address routing for non-zero remainders.
-     - Immediate abort on failed attestation or replay check.
+   - **Code Example**:
+     ```typescript
+     // Full unified receive() orchestration
+     const res = await sdk.receive({ sourceDomain: 6, burnTxHash: '0x1', destinationAddress: 'GB...' });
+     expect(res.settled).toBe(true);
+     expect(res.amount).toBe(10_000_000n);
+     ```
 
 8. **[`packages/core/test/events.test.ts`](file:///c:/Users/lunox/Documents/anchorcctp-sdk/packages/core/test/events.test.ts)** (PASS — 100% Coverage)
    - **Purpose**: Tests the typed event emitter (`onReceiving`, `onSettled`, `onDustCollected`, `onError`).
-   - **Asserted Behaviors**:
-     - Listener registration and teardown (`on`, `once`, `off`).
-     - Payload object type integrity.
-     - Non-blocking async event dispatching.
+   - **Code Example**:
+     ```typescript
+     // Strongly-typed lifecycle event stream
+     sdk.on('onSettled', ({ amount, txHash }) => {
+       expect(amount).toBeGreaterThan(0n);
+       expect(txHash).toBeDefined();
+     });
+     ```
 
 9. **[`packages/core/test/errors.test.ts`](file:///c:/Users/lunox/Documents/anchorcctp-sdk/packages/core/test/errors.test.ts)** (PASS — 100% Coverage)
    - **Purpose**: Asserts the standardized `AnchorCCTPError` base class hierarchy and actionable remediation strings.
-   - **Asserted Behaviors**:
-     - Correct error code assignment (`ATTESTATION_TIMEOUT`, `REPLAY_TRANSFER`, etc.).
-     - Human-readable actionable remediation advice on all errors.
+   - **Code Example**:
+     ```typescript
+     // Typed error codes & remediation guidance
+     const err = new ReplayTransferError('0xburn_tx');
+     expect(err.code).toBe('REPLAY_TRANSFER_DETECTED');
+     expect(err.remediation).toContain('already processed');
+     ```
 
 10. **[`packages/core/test/security.test.ts`](file:///c:/Users/lunox/Documents/anchorcctp-sdk/packages/core/test/security.test.ts)** (PASS)
     - **Purpose**: Asserts non-negotiable security checklist rules.
-    - **Asserted Behaviors**:
-      - Zero private key persistence or logging.
-      - Log parameter sanitization.
-      - Input validation against negative/zero/malformed amounts.
+    - **Code Example**:
+      ```typescript
+      // Zero secret persistence & log sanitization
+      const sanitized = sanitizeValue('sensitive_secret_token');
+      expect(sanitized).toBe('[REDACTED]');
+      ```
 
-11. **[`packages/core/test/config.test.ts`](file:///c:/Users/lunox/Documents/anchorcctp-sdk/packages/core/test/config.test.ts)** (PASS — 100% Coverage)
-    - **Purpose**: Tests SDK configuration loading and custom RPC/Horizon URL overrides.
+11. **[`packages/core/test/config.test.ts`](file:///c:/Users/lunox/Documents/anchorcctp-sdk/packages/core/test/config.test.ts) & [`logger.test.ts`](file:///c:/Users/lunox/Documents/anchorcctp-sdk/packages/core/test/logger.test.ts)** (PASS — 100% Coverage)
+    - **Purpose**: Tests SDK configuration loading and structured JSON logging.
+    - **Code Example**:
+      ```typescript
+      const sdk = createAnchorCCTP({ rpcUrl: 'https://soroban-mainnet.stellar.org' });
+      logger.info('Transfer settled', { amount: '10000000' });
+      ```
 
-12. **[`packages/core/test/logger.test.ts`](file:///c:/Users/lunox/Documents/anchorcctp-sdk/packages/core/test/logger.test.ts)** (PASS — 100% Coverage)
-    - **Purpose**: Asserts structured JSON logging sink format and level filtering (`debug`, `info`, `warn`, `error`).
-
-13. **[`packages/core/test/integration/attestation.test.ts`](file:///c:/Users/lunox/Documents/anchorcctp-sdk/packages/core/test/integration/attestation.test.ts)** (PASS)
+12. **[`packages/core/test/integration/attestation.test.ts`](file:///c:/Users/lunox/Documents/anchorcctp-sdk/packages/core/test/integration/attestation.test.ts)** (PASS)
     - **Purpose**: End-to-end integration test parsing realistic CCTP `MessageSent` events and attestation responses.
+    - **Code Example**:
+      ```typescript
+      const attResult = await mockIrisApi(burnMessagePayload);
+      expect(attResult.status).toBe('complete');
+      expect(attResult.signature).toBeDefined();
+      ```
 
 ---
 
 ### B. `@anchor-cctp/cli` Package Test Suites (5 Suites)
 
-14. **[`packages/cli/test/init.test.ts`](file:///c:/Users/lunox/Documents/anchorcctp-sdk/packages/cli/test/init.test.ts)** (PASS)
-    - **Purpose**: Tests `anchor-cctp init` CLI command.
-    - **Asserted Behaviors**: Generates valid `stellar.toml` CCTP configuration block and handles missing/invalid flags.
+13. **[`packages/cli/test/init.test.ts`](file:///c:/Users/lunox/Documents/anchorcctp-sdk/packages/cli/test/init.test.ts)** (PASS)
+    - **Code Example**:
+      ```typescript
+      const { stdout, code } = await runCli(['init', '--domain', '27', '--output', out]);
+      expect(code).toBe(0);
+      expect(JSON.parse(stdout).success).toBe(true);
+      ```
 
-15. **[`packages/cli/test/listen.test.ts`](file:///c:/Users/lunox/Documents/anchorcctp-sdk/packages/cli/test/listen.test.ts)** (PASS)
-    - **Purpose**: Tests `anchor-cctp listen <address>` CLI command.
-    - **Asserted Behaviors**: Streams NDJSON inbound deposit event objects to stdout.
+14. **[`packages/cli/test/listen.test.ts`](file:///c:/Users/lunox/Documents/anchorcctp-sdk/packages/cli/test/listen.test.ts)** (PASS)
+    - **Code Example**:
+      ```typescript
+      const { stdout, code } = await runCli(['listen', 'GBBD47...']);
+      const event = JSON.parse(stdout.trim().split('\n')[0]);
+      expect(event.event).toBe('inbound_burn_detected');
+      ```
 
-16. **[`packages/cli/test/verify.test.ts`](file:///c:/Users/lunox/Documents/anchorcctp-sdk/packages/cli/test/verify.test.ts)** (PASS)
-    - **Purpose**: Tests `anchor-cctp verify <txHash>` CLI command.
-    - **Asserted Behaviors**: Queries Iris attestation status and outputs machine-readable JSON.
+15. **[`packages/cli/test/verify.test.ts`](file:///c:/Users/lunox/Documents/anchorcctp-sdk/packages/cli/test/verify.test.ts)** (PASS)
+    - **Code Example**:
+      ```typescript
+      const { stdout, code } = await runCli(['verify', '0xcomplete_tx']);
+      expect(JSON.parse(stdout).attested).toBe(true);
+      ```
 
-17. **[`packages/cli/test/domains.test.ts`](file:///c:/Users/lunox/Documents/anchorcctp-sdk/packages/cli/test/domains.test.ts)** (PASS)
-    - **Purpose**: Tests `anchor-cctp domains` CLI command.
-    - **Asserted Behaviors**: Outputs JSON array of all 26 supported CCTP domains.
+16. **[`packages/cli/test/domains.test.ts`](file:///c:/Users/lunox/Documents/anchorcctp-sdk/packages/cli/test/domains.test.ts)** (PASS)
+    - **Code Example**:
+      ```typescript
+      const { stdout, code } = await runCli(['domains']);
+      expect(Array.isArray(JSON.parse(stdout))).toBe(true);
+      ```
 
-18. **[`packages/cli/test/usage.test.ts`](file:///c:/Users/lunox/Documents/anchorcctp-sdk/packages/cli/test/usage.test.ts)** (PASS)
-    - **Purpose**: Verifies CLI bin executable invocation and root usage options.
+17. **[`packages/cli/test/usage.test.ts`](file:///c:/Users/lunox/Documents/anchorcctp-sdk/packages/cli/test/usage.test.ts)** (PASS)
+    - **Code Example**:
+      ```typescript
+      const { stderr, code } = await runCli([]);
+      expect(stderr).toContain('Usage: anchor-cctp');
+      ```
 
 ---
 

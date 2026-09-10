@@ -6,7 +6,7 @@
   <title>AnchorCCTP SDK — Test Coverage & Formal Verification Report</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
       --bg-dark: #0a0c10;
@@ -298,8 +298,27 @@
     .suite-desc {
       font-size: 0.85rem;
       color: var(--text-muted);
-      margin-bottom: 1rem;
+      margin-bottom: 0.75rem;
     }
+
+    .code-snippet-box {
+      background: rgba(0, 0, 0, 0.5);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      border-radius: 8px;
+      padding: 0.65rem 0.85rem;
+      margin-bottom: 0.85rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      color: #38bdf8;
+      overflow-x: auto;
+      line-height: 1.45;
+    }
+
+    .code-snippet-box .kw { color: #f472b6; }
+    .code-snippet-box .fn { color: #60a5fa; }
+    .code-snippet-box .str { color: #a3e635; }
+    .code-snippet-box .num { color: #fb923c; }
+    .code-snippet-box .cmt { color: #64748b; font-style: italic; }
 
     .suite-details-list {
       list-style: none;
@@ -534,7 +553,7 @@
     </div>
 
     <!-- DETAILED TEST SUITES CATALOG -->
-    <h2 class="section-title">Monorepo Test Suites Catalog (18 Suites, 80 Specs)</h2>
+    <h2 class="section-title">Monorepo Test Suites Catalog & Code Lines (18 Suites, 80 Specs)</h2>
     <div class="suites-grid">
       
       <!-- Suite 1 -->
@@ -546,6 +565,12 @@
           </div>
           <div class="suite-name">decimals.test.ts</div>
           <div class="suite-desc">Verifies BigInt conversion between 6-decimal CCTP USDC ($10^6$) and 7-decimal Stellar stroops ($10^7$).</div>
+          <div class="code-snippet-box">
+<span class="cmt">// Lossless 6 -> 7 decimal scaling</span>
+<span class="kw">const</span> { stellarAmount, dust } = <span class="fn">convert6to7</span>(<span class="num">1_000_000n</span>);
+<span class="fn">expect</span>(stellarAmount).<span class="fn">toBe</span>(<span class="num">10_000_000n</span>);
+<span class="fn">expect</span>(dust).<span class="fn">toBe</span>(<span class="num">0n</span>);
+          </div>
         </div>
         <ul class="suite-details-list">
           <li>Exact 6 to 7 decimal scaling ($10C$) with zero dust</li>
@@ -564,6 +589,12 @@
           </div>
           <div class="suite-name">replay.test.ts</div>
           <div class="suite-desc">Tests the in-memory & adapter idempotency store to prevent transaction replay and double-crediting.</div>
+          <div class="code-snippet-box">
+<span class="cmt">// Replay store check & set idempotency</span>
+<span class="kw">await</span> store.<span class="fn">markProcessed</span>(<span class="str">'0xburn_123'</span>, record);
+<span class="kw">const</span> isDup = <span class="kw">await</span> store.<span class="fn">isProcessed</span>(<span class="str">'0xburn_123'</span>);
+<span class="fn">expect</span>(isDup).<span class="fn">toBe</span>(<span class="kw">true</span>);
+          </div>
         </div>
         <ul class="suite-details-list">
           <li>Marking new burnTxHash as processed</li>
@@ -582,6 +613,12 @@
           </div>
           <div class="suite-name">attestation.test.ts</div>
           <div class="suite-desc">Validates Circle Attestation API polling, exponential backoff, jitter calculation, and signature verification.</div>
+          <div class="code-snippet-box">
+<span class="cmt">// Polling Iris proof with backoff</span>
+<span class="kw">const</span> res = <span class="kw">await</span> client.<span class="fn">pollAttestation</span>(<span class="str">'0xtx'</span>, onPoll);
+<span class="fn">expect</span>(res.status).<span class="fn">toBe</span>(<span class="str">'complete'</span>);
+<span class="fn">expect</span>(client.<span class="fn">verifyAttestation</span>(res.message, res.signature)).<span class="fn">toBe</span>(<span class="kw">true</span>);
+          </div>
         </div>
         <ul class="suite-details-list">
           <li>Polling state transitions (pending &rarr; complete)</li>
@@ -600,6 +637,11 @@
           </div>
           <div class="suite-name">trustline.test.ts</div>
           <div class="suite-desc">Inspects destination accounts for active USDC trustlines and enforces opt-in creation with XLM reserve caps.</div>
+          <div class="code-snippet-box">
+<span class="cmt">// Auto-create trustline within XLM spend cap</span>
+<span class="kw">await</span> <span class="fn">ensureTrustline</span>({ destination, allowCreation: <span class="kw">true</span>, spendCapXlm: <span class="num">2.0</span> });
+<span class="fn">expect</span>(<span class="fn">hasTrustline</span>()).<span class="fn">resolves</span>.<span class="fn">toBe</span>(<span class="kw">true</span>);
+          </div>
         </div>
         <ul class="suite-details-list">
           <li>Existing trustline detection</li>
@@ -618,6 +660,12 @@
           </div>
           <div class="suite-name">domains.test.ts</div>
           <div class="suite-desc">Verifies official CCTP domain ID allow-list registry (26 domains: Ethereum=0, Base=6, Stellar=27).</div>
+          <div class="code-snippet-box">
+<span class="cmt">// CCTP Domain Allowlist validation</span>
+<span class="fn">expect</span>(<span class="fn">isSupportedDomain</span>(<span class="num">27</span>)).<span class="fn">toBe</span>(<span class="kw">true</span>); <span class="cmt">// Stellar</span>
+<span class="fn">expect</span>(<span class="fn">getDomainMeta</span>(<span class="num">6</span>).chain).<span class="fn">toBe</span>(<span class="str">'Base'</span>);
+<span class="fn">expect</span>(() => <span class="fn">assertSupportedDomain</span>(<span class="num">9999</span>)).<span class="fn">toThrow</span>(InvalidDomainError);
+          </div>
         </div>
         <ul class="suite-details-list">
           <li>Registry metadata lookup (chain, name, network)</li>
@@ -636,6 +684,11 @@
           </div>
           <div class="suite-name">forwarder.test.ts</div>
           <div class="suite-desc">Tests EVM 32-byte hexadecimal address translation to Stellar G... Strkeys & Soroban mint payload submission.</div>
+          <div class="code-snippet-box">
+<span class="cmt">// Address translation bytes32 -> G... strkey</span>
+<span class="kw">const</span> stellarAddr = <span class="fn">translateToStellar</span>(<span class="str">'0x000...32byteHex'</span>);
+<span class="fn">expect</span>(stellarAddr).<span class="fn">toMatch</span>(<span class="str">/^G[A-Z0-9]{55}$/</span>);
+          </div>
         </div>
         <ul class="suite-details-list">
           <li>EVM 32-byte bytes32 to Stellar G... Strkey decoding</li>
@@ -654,6 +707,12 @@
           </div>
           <div class="suite-name">receive.test.ts</div>
           <div class="suite-desc">Orchestration test suite covering the full 11-step AnchorCCTP.receive() settlement lifecycle.</div>
+          <div class="code-snippet-box">
+<span class="cmt">// Full receive() orchestration</span>
+<span class="kw">const</span> res = <span class="kw">await</span> sdk.<span class="fn">receive</span>({ sourceDomain: <span class="num">6</span>, burnTxHash: <span class="str">'0x1'</span>, destinationAddress: <span class="str">'GB...'</span> });
+<span class="fn">expect</span>(res.settled).<span class="fn">toBe</span>(<span class="kw">true</span>);
+<span class="fn">expect</span>(res.amount).<span class="fn">toBe</span>(<span class="num">10_000_000n</span>);
+          </div>
         </div>
         <ul class="suite-details-list">
           <li>End-to-end receive() happy path flow</li>
@@ -672,6 +731,13 @@
           </div>
           <div class="suite-name">events.test.ts</div>
           <div class="suite-desc">Validates typed event emitter payload structures (onReceiving, onSettled, onDustCollected, onError).</div>
+          <div class="code-snippet-box">
+<span class="cmt">// Strongly-typed lifecycle event stream</span>
+sdk.<span class="fn">on</span>(<span class="str">'onSettled'</span>, ({ amount, txHash }) => {
+  <span class="fn">expect</span>(amount).<span class="fn">toBeGreaterThan</span>(<span class="num">0n</span>);
+  <span class="fn">expect</span>(txHash).<span class="fn">toBeDefined</span>();
+});
+          </div>
         </div>
         <ul class="suite-details-list">
           <li>Listener registration (.on, .once, .off)</li>
@@ -690,6 +756,12 @@
           </div>
           <div class="suite-name">errors.test.ts</div>
           <div class="suite-desc">Asserts standard AnchorCCTPError base class hierarchy and actionable remediation strings.</div>
+          <div class="code-snippet-box">
+<span class="cmt">// Typed error codes & remediation guidance</span>
+<span class="kw">const</span> err = <span class="kw">new</span> <span class="fn">ReplayTransferError</span>(<span class="str">'0xburn_tx'</span>);
+<span class="fn">expect</span>(err.code).<span class="fn">toBe</span>(<span class="str">'REPLAY_TRANSFER_DETECTED'</span>);
+<span class="fn">expect</span>(err.remediation).<span class="fn">toContain</span>(<span class="str">'already processed'</span>);
+          </div>
         </div>
         <ul class="suite-details-list">
           <li>Typed error codes (ATTESTATION_TIMEOUT, etc.)</li>
@@ -708,6 +780,11 @@
           </div>
           <div class="suite-name">security.test.ts</div>
           <div class="suite-desc">Validates non-negotiable security checklist rules and zero secret/private key leakage in logs.</div>
+          <div class="code-snippet-box">
+<span class="cmt">// Zero secret persistence & log sanitization</span>
+<span class="kw">const</span> sanitized = <span class="fn">sanitizeValue</span>(<span class="str">'secret_token_123'</span>);
+<span class="fn">expect</span>(sanitized).<span class="fn">toBe</span>(<span class="str">'[REDACTED]'</span>);
+          </div>
         </div>
         <ul class="suite-details-list">
           <li>Sanitization of sensitive parameters in logs</li>
@@ -726,6 +803,11 @@
           </div>
           <div class="suite-name">config.test.ts & logger.test.ts</div>
           <div class="suite-desc">Verifies SDK configuration loading, environment overrides, and structured JSON logger output.</div>
+          <div class="code-snippet-box">
+<span class="cmt">// Custom configuration & JSON logger sink</span>
+<span class="kw">const</span> sdk = <span class="fn">createAnchorCCTP</span>({ rpcUrl: <span class="str">'https://soroban-mainnet.stellar.org'</span> });
+logger.<span class="fn">info</span>(<span class="str">'Transfer settled'</span>, { amount: <span class="str">'10000000'</span> });
+          </div>
         </div>
         <ul class="suite-details-list">
           <li>Default configuration instantiation</li>
@@ -744,6 +826,12 @@
           </div>
           <div class="suite-name">integration/attestation.test.ts</div>
           <div class="suite-desc">Integration suite simulating realistic CCTP burn message payloads & attestation API responses.</div>
+          <div class="code-snippet-box">
+<span class="cmt">// Realistic burn log & multi-attempt polling</span>
+<span class="kw">const</span> attResult = <span class="kw">await</span> <span class="fn">mockIrisApi</span>(burnMessagePayload);
+<span class="fn">expect</span>(attResult.status).<span class="fn">toBe</span>(<span class="str">'complete'</span>);
+<span class="fn">expect</span>(attResult.signature).<span class="fn">toBeDefined</span>();
+          </div>
         </div>
         <ul class="suite-details-list">
           <li>Realistic CCTP MessageSent log parsing</li>
@@ -762,6 +850,12 @@
           </div>
           <div class="suite-name">cli (init, listen, verify, domains, usage)</div>
           <div class="suite-desc">Terminal CLI command suite verifying stdout JSON/NDJSON outputs and flag handling.</div>
+          <div class="code-snippet-box">
+<span class="cmt">// CLI execution stdout JSON test</span>
+<span class="kw">const</span> { stdout, code } = <span class="kw">await</span> <span class="fn">runCli</span>([<span class="str">'init'</span>, <span class="str">'--domain'</span>, <span class="str">'27'</span>, <span class="str">'--output'</span>, out]);
+<span class="fn">expect</span>(code).<span class="fn">toBe</span>(<span class="num">0</span>);
+<span class="fn">expect</span>(JSON.<span class="fn">parse</span>(stdout).success).<span class="fn">toBe</span>(<span class="kw">true</span>);
+          </div>
         </div>
         <ul class="suite-details-list">
           <li><code>anchor-cctp init</code>: Writes stellar.toml CCTP config block</li>
