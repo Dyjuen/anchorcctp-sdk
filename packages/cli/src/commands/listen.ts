@@ -1,4 +1,4 @@
-import { CCTP_DOMAINS, translateToStellar } from '@anchor-cctp/core';
+import { CCTP_DOMAINS, translateToStellar } from '@anchor-cctp/core-sdk';
 
 export interface ListenOptions {
   address?: string;

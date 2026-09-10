@@ -7,7 +7,7 @@ AnchorCCTP is structured as a TypeScript monorepo using npm workspaces. The arch
 ```
 anchorcctp/
 ├── packages/
-│   ├── core/                      # @anchor-cctp/core (Pure TypeScript domain library)
+│   ├── core/                      # @anchor-cctp/core-sdk (Pure TypeScript domain library)
 │   │   ├── src/
 │   │   │   ├── receive.ts         # Public entrypoint AnchorCCTP.receive()
 │   │   │   ├── attestation/       # Circle Attestation API client & polling

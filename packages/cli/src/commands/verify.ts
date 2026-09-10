@@ -1,4 +1,4 @@
-import { AttestationClient, AnchorCCTPError } from '@anchor-cctp/core';
+import { AttestationClient, AnchorCCTPError } from '@anchor-cctp/core-sdk';
 
 export async function runVerifyCommand(args: string[]): Promise<number> {
   let txHash: string | undefined;

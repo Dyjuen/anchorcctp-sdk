@@ -1,4 +1,4 @@
-import { CCTP_DOMAINS } from '@anchor-cctp/core';
+import { CCTP_DOMAINS } from '@anchor-cctp/core-sdk';
 
 export async function runDomainsCommand(): Promise<number> {
   const domainsList = Object.values(CCTP_DOMAINS);

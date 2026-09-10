@@ -10,7 +10,7 @@
   "scripts": {
     "dev:demo": "npm run dev --workspace=@anchor-cctp/demo",
     "build:demo": "npm run build --workspace=@anchor-cctp/demo",
-    "build:core": "npm run build --workspace=@anchor-cctp/core",
+    "build:core": "npm run build --workspace=@anchor-cctp/core-sdk",
     "build:cli": "npm run build --workspace=@anchor-cctp/cli",
     "build": "npm run build --workspaces",
     "test": "jest --coverage",

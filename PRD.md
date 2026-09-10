@@ -34,7 +34,7 @@ No existing tool solves this at the anchor-integration layer: Anchor Platform (S
 
 | Metric | Target |
 |---|---|
-| `@anchor-cctp/core` published on npm | Yes, installable |
+| `@anchor-cctp/core-sdk` published on npm | Yes, installable |
 | `@anchor-cctp/cli` published on npm | Yes, installable |
 | Unit test line coverage | ≥ 90% |
 | End-to-end mainnet CCTP transfer | 1 real, verifiable tx |
@@ -55,7 +55,7 @@ No existing tool solves this at the anchor-integration layer: Anchor Platform (S
 
 ### 4.1 In Scope
 
-**Deliverable 1 — Core SDK `@anchor-cctp/core`**
+**Deliverable 1 — Core SDK `@anchor-cctp/core-sdk`**
 - Public API: `AnchorCCTP.receive(params)`
 - Attestation polling (Circle Attestation API, configurable retry/backoff)
 - Decimal conversion (7↔6, dust routed to configurable dust-collector address)

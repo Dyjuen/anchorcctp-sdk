@@ -1,6 +1,6 @@
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { CCTP_DOMAINS, getDomainMeta, InvalidDomainError } from '@anchor-cctp/core';
+import { CCTP_DOMAINS, getDomainMeta, InvalidDomainError } from '@anchor-cctp/core-sdk';
 
 export interface InitOptions {
   domain?: number;
