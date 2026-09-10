@@ -4,7 +4,7 @@ import { Copy, Check, Terminal, Code2 } from 'lucide-react';
 export const CodeSnippet: React.FC = () => {
   const [copied, setCopied] = useState(false);
 
-  const codeExample = `import { createAnchorCCTP } from '@anchor-cctp/core';
+  const codeExample = `import { createAnchorCCTP } from '@anchor-cctp/core-sdk';
 
 // 1. Initialize SDK with anchor configuration
 const cctp = createAnchorCCTP({

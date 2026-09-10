@@ -3,7 +3,7 @@ import {
   CCTP_DOMAINS,
   convert6to7,
   formatStellarUnits,
-} from '@anchor-cctp/core';
+} from '@anchor-cctp/core-sdk';
 import {
   ArrowRight,
   CheckCircle2,
