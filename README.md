@@ -22,7 +22,7 @@ AnchorCCTP is a production-grade TypeScript SDK, CLI, and Anchor integration sui
 ```
 anchorcctp-sdk/
 ├── packages/
-│   ├── core/              # @anchor-cctp/core SDK engine (98%+ test coverage)
+│   ├── core/              # @anchor-cctp/core-sdk Engine (98%+ test coverage)
 │   └── cli/               # @anchor-cctp/cli terminal command suite (96%+ test coverage)
 ├── apps/
 │   └── demo/              # Interactive Freighter-integrated CCTP deposit portal
@@ -39,7 +39,7 @@ anchorcctp-sdk/
 
 | Package | Version | Description |
 |---|---|---|
-| [`@anchor-cctp/core`](./packages/core) | `1.0.0` | Core SDK Engine — single async function `receive()` |
+| [`@anchor-cctp/core-sdk`](./packages/core) | `1.0.0` | Core SDK Engine — single async function `receive()` |
 | [`@anchor-cctp/cli`](./packages/cli) | `1.0.0` | Scriptable CLI suite for terminal & DevOps automation |
 | [`apps/demo`](./apps/demo) | `1.0.0` | Freighter-connected React web deposit portal |
 
@@ -50,13 +50,13 @@ anchorcctp-sdk/
 ### Installation
 
 ```bash
-npm install @anchor-cctp/core
+npm install @anchor-cctp/core-sdk
 ```
 
 ### TypeScript Usage
 
 ```ts
-import { createAnchorCCTP } from '@anchor-cctp/core';
+import { createAnchorCCTP } from '@anchor-cctp/core-sdk';
 
 // 1. Instantiate the SDK client
 const cctp = createAnchorCCTP({
