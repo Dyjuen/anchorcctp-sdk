@@ -86,10 +86,25 @@ export async function receive(
   ctx.logger.info('Starting CCTP attestation polling', { burnTxHash, sourceDomain });
   let attResult: AttestationResult;
 
-  if (ctx._test?.attestation) {
+  const onPollCallback = (attempt: number, elapsedMs: number) => {
+    ctx.emitter.emit('onReceiving', {
+      burnTxHash,
+      status: 'attesting',
+      attempt,
+      elapsedTimeMs: elapsedMs,
+      sourceDomain,
+    });
+  };
+
+  if (ctx._test?.pollAttestation) {
+    attResult = await (ctx._test.pollAttestation as (
+      burnTxHash: string,
+      onPoll: (attempt: number, elapsedMs: number) => void
+    ) => Promise<AttestationResult>)(burnTxHash, onPollCallback);
+  } else if (ctx._test?.attestation) {
     const rawMock = await ctx._test.attestation(burnTxHash);
     attResult = {
-      status: rawMock.status as any || 'complete',
+      status: (rawMock.status as any) || 'complete',
       attestation: rawMock.attestation || '0xatt_mock',
       message: rawMock.message || '0xmsg_mock',
       signature: rawMock.signature || '0xsig_mock',
@@ -99,15 +114,7 @@ export async function receive(
   } else {
     attResult = await ctx.attestationClient.pollAttestation(
       burnTxHash,
-      (attempt, elapsedMs) => {
-        ctx.emitter.emit('onReceiving', {
-          burnTxHash,
-          status: 'attesting',
-          attempt,
-          elapsedTimeMs: elapsedMs,
-          sourceDomain,
-        });
-      }
+      onPollCallback
     );
   }
 

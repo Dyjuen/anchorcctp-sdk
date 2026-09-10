@@ -218,6 +218,44 @@ describe('receive() Orchestration Engine', () => {
     expect(res.settled).toBe(true);
   });
 
+  it('uses _test.pollAttestation hook when provided and fires onReceiving events', async () => {
+    let mockPollCalled = false;
+    const receivingEvents: any[] = [];
+
+    const sdk = createAnchorCCTP({
+      signer: async () => 'SIGNED_POLL_HOOK',
+      _test: {
+        pollAttestation: async (burnTxHash: string, onPoll: (attempt: number, elapsedMs: number) => void) => {
+          mockPollCalled = true;
+          onPoll(1, 100);
+          onPoll(2, 250);
+          return {
+            status: 'complete',
+            attestation: '0xatt_hook',
+            message: '0xmsg_hook',
+            signature: '0xsig_hook',
+            attempts: 2,
+            elapsedTimeMs: 250,
+          };
+        },
+      },
+    });
+
+    sdk.on('onReceiving', (evt) => receivingEvents.push(evt));
+
+    const res = await sdk.receive({
+      sourceDomain: 0,
+      burnTxHash: '0xhook_test',
+      destinationAddress: validDestination,
+    });
+
+    expect(mockPollCalled).toBe(true);
+    expect(receivingEvents.length).toBe(2);
+    expect(receivingEvents[0].attempt).toBe(1);
+    expect(receivingEvents[1].attempt).toBe(2);
+    expect(res.settled).toBe(true);
+  });
+
   it('uses default fallback signer when signer is omitted from both config and receive()', async () => {
     const sdk = createAnchorCCTP({
       _test: {

@@ -14,7 +14,8 @@
     "build:cli": "npm run build --workspace=@anchor-cctp/cli",
     "build": "npm run build --workspaces",
     "test": "jest --coverage",
-    "typecheck": "tsc --build"
+    "typecheck": "tsc --build",
+    "demo:receive": "npx tsx --tsconfig tsconfig.scripts.json scripts/demo-receive.ts"
   },
   "devDependencies": {
     "@types/jest": "^29.5.14",

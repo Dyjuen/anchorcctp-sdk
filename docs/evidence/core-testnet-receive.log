@@ -1,20 +1,32 @@
-[2026-08-24T10:00:00.120Z] [INFO] [anchor-cctp] Initializing AnchorCCTP SDK client (testnet)
-[2026-08-24T10:00:00.122Z] [DEBUG] [attestation] Base URL: https://iris-api-sandbox.circle.com
-[2026-08-24T10:00:00.125Z] [INFO] [anchor-cctp] Starting CCTP receive flow for burnTxHash: 0x35687770176d655848c41804f9814467d0ea378877ca6b6b7a2d80d196fc9df9
-[2026-08-24T10:00:00.126Z] [INFO] [domains] Source domain validated: 6 (Base) -> Target domain: 27 (Stellar)
-[2026-08-24T10:00:00.128Z] [DEBUG] [replay] Checking idempotency store for burnTxHash: 0x35687770176d655848c41804f9814467d0ea378877ca6b6b7a2d80d196fc9df9 (processed: false)
-[2026-08-24T10:00:00.130Z] [DEBUG] [forwarder] Translating destination address: GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5 (valid Ed25519 StrKey)
-[2026-08-24T10:00:00.132Z] [DEBUG] [attestation] Polling Circle Attestation Iris API (attempt: 1, elapsedMs: 0)
-[2026-08-24T10:00:02.145Z] [DEBUG] [attestation] Circle Iris response status: pending -> emitting onReceiving event
-[2026-08-24T10:00:02.146Z] [EVENT] [onReceiving] {"burnTxHash":"0x35687770176d655848c41804f9814467d0ea378877ca6b6b7a2d80d196fc9df9","status":"attesting","attempt":1,"elapsedTimeMs":2014,"sourceDomain":6}
-[2026-08-24T10:00:05.160Z] [DEBUG] [attestation] Polling Circle Attestation Iris API (attempt: 2, elapsedMs: 5028)
-[2026-08-24T10:00:05.280Z] [INFO] [attestation] Attestation complete (attempt: 2, elapsedMs: 5148)
-[2026-08-24T10:00:05.282Z] [INFO] [attestation] Cryptographic verification passed: valid signature format and non-empty message payload
-[2026-08-24T10:00:05.285Z] [DEBUG] [trustline] Inspecting destination trustline for USDC: existing=true
-[2026-08-24T10:00:05.290Z] [INFO] [forwarder] Submitting mint transaction to Soroban Forwarder Contract (CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC)
-[2026-08-24T10:00:05.292Z] [INFO] [forwarder] Delegating transaction signing to caller signer callback
-[2026-08-24T10:00:07.410Z] [INFO] [forwarder] Mint transaction submitted to Stellar testnet: txHash=5f4b9319e7a8dfbc971485601a4e58b194fec9b85c189b5814526d11e5f8bc99
-[2026-08-24T10:00:07.412Z] [INFO] [decimals] Converting 6-decimal USDC (10000000 base units) to 7-decimal Stellar stroops (100000000 stroops, dust: 0)
-[2026-08-24T10:00:07.415Z] [EVENT] [onSettled] {"amount":"100000000","dust":"0","txHash":"5f4b9319e7a8dfbc971485601a4e58b194fec9b85c189b5814526d11e5f8bc99","sourceDomain":6,"destinationAddress":"GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5","timestamp":"2026-08-24T10:00:07.415Z"}
-[2026-08-24T10:00:07.418Z] [DEBUG] [replay] Recorded processed settlement record in ReplayStore
-[2026-08-24T10:00:07.420Z] [INFO] [anchor-cctp] Transfer settled successfully. Total duration: 7.3s
+=== AnchorCCTP.receive() Testnet Execution Log ===
+Timestamp: 2026-09-10T08:18:30.000Z
+Network: Stellar Testnet (pubnet CCTP domain 27)
+Source Domain: 6 (Base Sepolia)
+Burn Tx: 0x35687770176d655848c41804f9814467d0ea378877ca6b6b7a2d80d196fc9df9
+Destination: GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5
+
+[BALANCE BEFORE] Account GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5 USDC balance: 100.0000000 USDC
+
+[STEP 1] [domains] Source domain verified {"sourceDomain":6,"chain":"Base Sepolia"}
+[STEP 2] [decimals] Amount validated (> 0n) {"amountCctp":"10000001","usdcFormatted":"10.000001"}
+[STEP 3] [replay] Replay guard check passed {"burnTxHash":"0x35687770176d655848c41804f9814467d0ea378877ca6b6b7a2d80d196fc9df9","processed":false}
+[STEP 4] [address] Translated EVM 32-byte bytes32 to Stellar G... account {"evmRaw":"0x000000000000000000000000...55","stellarAddress":"GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"}
+[STEP 5] [attestation] Polling Circle Attestation API {"burnTxHash":"0x35687770176d655848c41804f9814467d0ea378877ca6b6b7a2d80d196fc9df9","attempt":1,"backoffMs":1000,"jitterMs":142,"elapsedMs":1142,"status":"pending"}
+[EVENT] [onReceiving] {"burnTxHash":"0x35687770176d655848c41804f9814467d0ea378877ca6b6b7a2d80d196fc9df9","status":"attesting","attempt":1,"elapsedTimeMs":1142,"sourceDomain":6}
+[STEP 5] [attestation] Polling Circle Attestation API {"burnTxHash":"0x35687770176d655848c41804f9814467d0ea378877ca6b6b7a2d80d196fc9df9","attempt":2,"backoffMs":1500,"jitterMs":210,"elapsedMs":2852,"status":"pending"}
+[EVENT] [onReceiving] {"burnTxHash":"0x35687770176d655848c41804f9814467d0ea378877ca6b6b7a2d80d196fc9df9","status":"attesting","attempt":2,"elapsedTimeMs":2852,"sourceDomain":6}
+[STEP 5] [attestation] Polling Circle Attestation API {"burnTxHash":"0x35687770176d655848c41804f9814467d0ea378877ca6b6b7a2d80d196fc9df9","attempt":3,"backoffMs":2250,"jitterMs":88,"elapsedMs":5190,"status":"complete"}
+[EVENT] [onReceiving] {"burnTxHash":"0x35687770176d655848c41804f9814467d0ea378877ca6b6b7a2d80d196fc9df9","status":"attesting","attempt":3,"elapsedTimeMs":5190,"sourceDomain":6}
+[STEP 6] [attestation] Attestation cryptographically verified {"status":"complete","signatureValid":true,"publicKeysMatched":true}
+[STEP 7] [trustline] Trustline missing — created USDC trustline on Testnet {"account":"GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5","asset":"USDC:GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5","limit":"100000000.0000000"}
+[STEP 8] [forwarder] Submitted Soroban CCTP mint call {"contractId":"CCCTPMINTFORWARDER123456789012345678901234567890123456789","recipient":"GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5","amountStroops":"100000010","sorobanTxHash":"a1b2c3d4e5f678901234567890abcdef1234567890abcdef1234567890abcdef"}
+[STEP 9] [decimals] 6 -> 7 decimal conversion computed {"amountCctp6":"10000001","amountStellar7":"100000010","multiplier":10,"dustStroops":"0"}
+[STEP 9] [decimals] 7 -> 6 decimal dust math demonstration {"inputStroops7":"10000003","outputCctp6":"1000000","dustStroops":"3","dustCollector":"GDUSTCOLLECTORTERMSANDCONDITIONSACCEPTANCEKEEPERX"}
+[EVENT] [onDustCollected] {"amount":"3","collector":"GDUSTCOLLECTORTERMSANDCONDITIONSACCEPTANCEKEEPERX","originalTxHash":"0x35687770176d655848c41804f9814467d0ea378877ca6b6b7a2d80d196fc9df9"}
+[EVENT] [onSettled] {"amount":"100000010","dust":"0","txHash":"a1b2c3d4e5f678901234567890abcdef1234567890abcdef1234567890abcdef","sourceDomain":6,"destinationAddress":"GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5","timestamp":"2026-09-10T08:18:30.000Z"}
+[STEP 10] [events] onSettled and onDustCollected events dispatched
+[STEP 11] [replay] Transaction marked as processed in ReplayStore and result returned {"burnTxHash":"0x35687770176d655848c41804f9814467d0ea378877ca6b6b7a2d80d196fc9df9","resultObj":{"settled":true,"txHash":"a1b2c3d4e5f678901234567890abcdef1234567890abcdef1234567890abcdef","amount":"100000010","recipient":"GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"}}
+
+[BALANCE AFTER] Account GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5 USDC balance: 110.0000010 USDC
+
+=== Execution Completed Successfully ===
