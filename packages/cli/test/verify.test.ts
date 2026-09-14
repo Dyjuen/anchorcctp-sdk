@@ -13,8 +13,8 @@ describe('anchor-cctp verify', () => {
         res.end(
           JSON.stringify({
             status: 'complete',
-            attestation: '0xmock_attestation_signature',
-            message: '0xmock_message_body',
+            attestation: '0x' + 'cd'.repeat(70),
+            message: '0x' + 'ab'.repeat(40),
           })
         );
       } else {
