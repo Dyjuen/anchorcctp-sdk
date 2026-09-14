@@ -1,4 +1,7 @@
 import { TrustlineMissingError, TrustlineCreationError } from '../errors/index.js';
+import { TransactionBuilder, Networks, Account, Operation, Asset } from '@stellar/stellar-sdk';
+
+export const TESTNET_USDC_ISSUER = 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5';
 
 export interface EnsureTrustlineParams {
   destination: string;
@@ -8,6 +11,28 @@ export interface EnsureTrustlineParams {
   requiredReserveXlm?: number;
   hasTrustline: () => Promise<boolean>;
   createTrustline?: (xdr: string) => Promise<string>;
+  usdcIssuer?: string;
+  networkPassphrase?: string;
+}
+
+export function buildChangeTrustXdr(
+  destination: string,
+  usdcIssuer: string = TESTNET_USDC_ISSUER,
+  networkPassphrase: string = Networks.TESTNET
+): string {
+  const source = new Account(destination, '0');
+  const tx = new TransactionBuilder(source, {
+    fee: '100',
+    networkPassphrase,
+  })
+    .addOperation(
+      Operation.changeTrust({
+        asset: new Asset('USDC', usdcIssuer),
+      })
+    )
+    .setTimeout(30)
+    .build();
+  return tx.toXDR();
 }
 
 /**
@@ -41,15 +66,12 @@ export async function ensureTrustline(
   }
 
   try {
-    const mockXdr = Buffer.from(
-      JSON.stringify({
-        action: 'change_trust',
-        destination: params.destination,
-        asset: params.asset || 'USDC',
-      })
-    ).toString('base64');
-
-    await params.createTrustline(mockXdr);
+    const xdr = buildChangeTrustXdr(
+      params.destination,
+      (params as any).usdcIssuer || TESTNET_USDC_ISSUER,
+      (params as any).networkPassphrase || Networks.TESTNET
+    );
+    await params.createTrustline(xdr);
     return { created: true };
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err);
