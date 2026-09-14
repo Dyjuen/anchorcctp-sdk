@@ -6,6 +6,8 @@ import {
   MintFailedError,
   TrustlineCreationError,
   ReplayTransferError,
+  AttestationVerificationError,
+  ForwarderContractError,
 } from '../src/index';
 
 describe('Typed Error Classes', () => {
@@ -65,6 +67,17 @@ describe('Typed Error Classes', () => {
     expect(rpErr.code).toBe('REPLAY_TRANSFER');
     expect(rpErr.burnTxHash).toBe('0xabc');
     expect(rpErr.remediation).toBeDefined();
+  });
+
+  it('AttestationVerificationError + ForwarderContractError have codes', () => {
+    const a = new AttestationVerificationError('0xabc', 'bad shape');
+    expect(a.code).toBe('ATTESTATION_VERIFICATION_FAILED');
+    expect(a.burnTxHash).toBe('0xabc');
+    expect(a.remediation).toBeDefined();
+
+    const f = new ForwarderContractError('CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC', 'build failed');
+    expect(f.code).toBe('FORWARDER_CONTRACT_ERROR');
+    expect(f.remediation).toBeDefined();
   });
 });
 

@@ -84,6 +84,30 @@ export class TrustlineCreationError extends AnchorCCTPError {
 }
 
 /**
+ * Thrown when an attestation fails cryptographic verification.
+ */
+export class AttestationVerificationError extends AnchorCCTPError {
+  readonly code = 'ATTESTATION_VERIFICATION_FAILED';
+  readonly remediation = 'Ensure burnTxHash is valid hex (>=66 chars) and attestation message signature is >=130 chars from Iris API.';
+
+  constructor(public readonly burnTxHash: string, public readonly reason?: string) {
+    super(`Attestation verification failed for burn transaction ${burnTxHash}${reason ? `: ${reason}` : ''}.`);
+  }
+}
+
+/**
+ * Thrown when a Soroban forwarder contract call fails.
+ */
+export class ForwarderContractError extends AnchorCCTPError {
+  readonly code = 'FORWARDER_CONTRACT_ERROR';
+  readonly remediation = 'Verify the forwarder contract is deployed and the contractId is correct.';
+
+  constructor(public readonly contractId: string, public readonly reason?: string) {
+    super(`Forwarder contract call failed for ${contractId}${reason ? `: ${reason}` : ''}.`);
+  }
+}
+
+/**
  * Thrown when a burn transaction hash has already been processed.
  */
 export class ReplayTransferError extends AnchorCCTPError {
