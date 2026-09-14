@@ -22,12 +22,16 @@ describe('Circle Attestation Client', () => {
     expect(r.signature).toBe('0xsig');
   });
 
-  it('verifyAttestation validates well-formed payload and rejects empty/malformed', () => {
+  it('verifyAttestation validates hex shape: empty/short false, valid true', () => {
     const c = new AttestationClient({ fetchImpl: okFetch as any, logger: () => {} });
-    expect(c.verifyAttestation('0xmsg', '0xsig')).toBe(true);
     expect(c.verifyAttestation('', '0xsig')).toBe(false);
     expect(c.verifyAttestation('0xmsg', '')).toBe(false);
     expect(c.verifyAttestation(null as any, '0xsig')).toBe(false);
+    expect(c.verifyAttestation('0x123', '0x' + 'ab'.repeat(65))).toBe(false);
+    expect(c.verifyAttestation('0x' + 'ab'.repeat(40), '0xshort')).toBe(false);
+    const goodMsg = '0x' + 'ab'.repeat(40);
+    const goodSig = '0x' + 'cd'.repeat(70);
+    expect(c.verifyAttestation(goodMsg, goodSig)).toBe(true);
   });
 
   it('poll throws AttestationTimeoutError after maxRetries', async () => {

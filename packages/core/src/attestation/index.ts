@@ -60,15 +60,19 @@ export class AttestationClient {
   }
 
   /**
-   * Cryptographically verifies the integrity and format of the attestation payload.
+   * Validates the hex shape of an attestation payload.
+   * Byte-shape check only — full on-chain verification is handled by the forwarder contract.
    */
   verifyAttestation(message: string, signature: string): boolean {
     if (!message || !signature || typeof message !== 'string' || typeof signature !== 'string') {
       return false;
     }
-    const trimmedMsg = message.trim();
-    const trimmedSig = signature.trim();
-    return trimmedMsg.length > 0 && trimmedSig.length > 0;
+    const msg = message.trim();
+    const sig = signature.trim();
+    if (!/^0x[0-9a-fA-F]+$/.test(msg) || !/^0x[0-9a-fA-F]+$/.test(sig)) return false;
+    if (msg.slice(2).length < 64 || msg.length < 66) return false;
+    if (sig.slice(2).length < 130 || sig.length < 132) return false;
+    return true;
   }
 
 
