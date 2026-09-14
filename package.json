@@ -15,7 +15,8 @@
     "build": "npm run build --workspaces",
     "test": "jest --coverage",
     "typecheck": "tsc --build",
-    "demo:receive": "npx tsx --tsconfig tsconfig.scripts.json scripts/demo-receive.ts"
+    "demo:receive": "npx tsx --tsconfig tsconfig.scripts.json scripts/demo-receive.ts",
+    "testnet:receive": "npx tsx --tsconfig tsconfig.scripts.json scripts/testnet-receive.ts"
   },
   "devDependencies": {
     "@types/jest": "^29.5.14",
