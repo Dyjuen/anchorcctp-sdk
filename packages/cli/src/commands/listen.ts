@@ -6,6 +6,7 @@ export interface ListenOptions {
   simulate?: boolean;
   pollIntervalMs?: number;
   rateLimitPerSec?: number;
+  horizonUrl?: string;
 }
 
 function sleep(ms: number): Promise<void> {
@@ -29,6 +30,8 @@ export async function runListenCommand(args: string[]): Promise<number> {
       options.rateLimitPerSec = Number.parseInt(args[++i], 10);
     } else if (arg === '--simulate') {
       options.simulate = true;
+    } else if (arg === '--horizon-url' && args[i + 1] !== undefined) {
+      options.horizonUrl = args[++i];
     } else if (!arg.startsWith('-') && !options.address) {
       options.address = arg;
     }
@@ -110,22 +113,28 @@ export async function runListenCommand(args: string[]): Promise<number> {
     return 0;
   }
 
-  // Live polling / event stream loop
-  const minIntervalBetweenEvents = 1000 / (options.rateLimitPerSec || 5);
-  let lastEventTime = 0;
-
-  // Poll loop until limit is reached or process is killed
-  while (count < maxEvents) {
-    const now = Date.now();
-    if (now - lastEventTime < minIntervalBetweenEvents) {
-      await sleep(minIntervalBetweenEvents - (now - lastEventTime));
+  // Live Horizon poll stub (full streaming deferred to week3)
+  const horizon = (options.horizonUrl || process.env.HORIZON_URL || 'https://horizon-testnet.stellar.org').replace(/\/+$/, '');
+  try {
+    const res = await fetch(`${horizon}/accounts/${stellarAddress}/effects?order=desc&limit=${Math.min(maxEvents - count, 10)}`);
+    if (res.ok) {
+      const data: any = await res.json();
+      const recs: any[] = data?._embedded?.records || [];
+      for (const r of recs.slice(0, maxEvents - count)) {
+        process.stdout.write(
+          JSON.stringify({
+            event: 'horizon_effect',
+            type: r.type,
+            account: stellarAddress,
+            timestamp: new Date().toISOString(),
+          }) + '\n'
+        );
+        count++;
+      }
     }
-    lastEventTime = Date.now();
-
-    // In a live environment without simulate flag, sleep poll interval or wait for signals
-    await sleep(options.pollIntervalMs || 1000);
-    break;
+  } catch {
+    // Network errors treated as zero events — non-fatal
   }
-
+  process.stderr.write(`[INFO] Live poll ${horizon} done, ${count} events.\n`);
   return 0;
 }

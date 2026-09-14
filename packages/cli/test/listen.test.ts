@@ -37,6 +37,33 @@ describe('anchor-cctp listen', () => {
     expect(event2.txHash).toBeDefined();
   });
 
+  test('live mode polls Horizon stub and exits 0 with --limit 1', async () => {
+    let stdoutData = '';
+    const writeStdoutSpy = jest.spyOn(process.stdout, 'write').mockImplementation((str) => {
+      stdoutData += str;
+      return true;
+    });
+    const writeStderrSpy = jest.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    const code = await runListenCommand([
+      validAddress,
+      '--limit', '1',
+      '--horizon-url', 'https://horizon-testnet.stellar.org',
+    ]);
+    writeStdoutSpy.mockRestore();
+    writeStderrSpy.mockRestore();
+
+    expect(code).toBe(0);
+    const lines = stdoutData.trim().split('\n').filter((l) => l.trim().length > 0);
+    expect(lines.length).toBeGreaterThanOrEqual(1);
+    if (lines.length > 0) {
+      const event = JSON.parse(lines[0]);
+      expect(event.event).toBe('horizon_effect');
+      expect(event.type).toBeDefined();
+      expect(event.account).toBe(validAddress);
+    }
+  }, 15000);
+
   test('runListenCommand direct function execution and address validation', async () => {
     let stdoutData = '';
     const writeStdoutSpy = jest.spyOn(process.stdout, 'write').mockImplementation((str) => {
