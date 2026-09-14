@@ -9,7 +9,8 @@ export interface DecimalConversionResult {
 
 /**
  * Converts 6-decimal CCTP USDC units to 7-decimal Stellar stroops.
- * 6 -> 7 decimals multiplication is exact (multiply by 10n). Dust is 0n.
+ * 6 -> 7 multiplication is exact (×10n), so dust is always 0n by design.
+ * Dust branch is inert for this direction — active only in {@link convert7to6}.
  */
 export function convert6to7(cctpAmountBase6: bigint): DecimalConversionResult {
   if (cctpAmountBase6 <= 0n) {

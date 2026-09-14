@@ -4,23 +4,25 @@ import {
   InvalidDomainError,
   InvalidAmountError,
   AnchorCCTPError,
+  AttestationVerificationError,
 } from '../src/errors/index.js';
 import { StrKey } from '@stellar/stellar-sdk';
 
 describe('receive() Orchestration Engine', () => {
   const validDestination = StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 0x55));
+  const goodMsg = '0x' + 'ab'.repeat(40);
+  const goodSig = '0x' + 'cd'.repeat(70);
 
   function makeSdk(over: any = {}) {
-
     return createAnchorCCTP({
       signer: async (x) => 'SIGNED_TX_123',
       dustCollectorAddress: validDestination,
       _test: {
         attestation: async () => ({
           status: 'complete',
-          attestation: '0xa',
-          message: '0xm',
-          signature: '0xs',
+          attestation: '0x' + 'ab'.repeat(40),
+          message: goodMsg,
+          signature: goodSig,
         }),
         ...over,
       },
@@ -122,6 +124,27 @@ describe('receive() Orchestration Engine', () => {
     ).rejects.toThrow(AnchorCCTPError);
   });
 
+  it('rejects invalid attestation shape with AttestationVerificationError', async () => {
+    const sdk = createAnchorCCTP({
+      signer: async () => 'SIGNED_X',
+      _test: {
+        attestation: async () => ({
+          status: 'complete',
+          message: '0xshort',
+          signature: '0xshort',
+        }),
+      },
+    } as any);
+
+    await expect(
+      sdk.receive({
+        sourceDomain: 6,
+        burnTxHash: '0xbadshape',
+        destinationAddress: validDestination,
+      })
+    ).rejects.toThrow(AttestationVerificationError);
+  });
+
   it('handles custom logger and real attestation client polling', async () => {
     const logs: string[] = [];
     const okFetch = async () =>
@@ -129,9 +152,9 @@ describe('receive() Orchestration Engine', () => {
         ok: true,
         json: async () => ({
           status: 'complete',
-          attestation: '0xatt_real',
-          message: '0xmsg_real',
-          signature: '0xsig_real',
+          attestation: '0x' + 'ab'.repeat(40),
+          message: '0x' + 'ab'.repeat(40),
+          signature: '0x' + 'cd'.repeat(70),
         }),
       } as unknown as Response);
 
@@ -165,8 +188,8 @@ describe('receive() Orchestration Engine', () => {
       _test: {
         attestation: async () => ({
           status: 'complete',
-          message: '0xmsg',
-          signature: '0xsig',
+          message: goodMsg,
+          signature: goodSig,
         }),
         hasTrustline: async () => false,
         createTrustline: async () => {
@@ -201,8 +224,8 @@ describe('receive() Orchestration Engine', () => {
       _test: {
         attestation: async () => ({
           status: 'complete',
-          message: '0xmsg',
-          signature: '0xsig',
+          message: goodMsg,
+          signature: goodSig,
         }),
       },
     });
@@ -231,9 +254,9 @@ describe('receive() Orchestration Engine', () => {
           onPoll(2, 250);
           return {
             status: 'complete',
-            attestation: '0xatt_hook',
-            message: '0xmsg_hook',
-            signature: '0xsig_hook',
+            attestation: '0x' + 'ab'.repeat(40),
+            message: '0x' + 'ab'.repeat(40),
+            signature: '0x' + 'cd'.repeat(70),
             attempts: 2,
             elapsedTimeMs: 250,
           };
@@ -261,8 +284,8 @@ describe('receive() Orchestration Engine', () => {
       _test: {
         attestation: async () => ({
           status: 'complete',
-          message: '0xmsg',
-          signature: '0xsig',
+          message: goodMsg,
+          signature: goodSig,
         }),
       },
     });

@@ -9,7 +9,7 @@ import { Logger } from './logger/index.js';
 import {
   ReplayTransferError,
   InvalidAmountError,
-  AnchorCCTPError,
+  AttestationVerificationError,
 } from './errors/index.js';
 
 export interface ReceiveParams {
@@ -124,10 +124,10 @@ export async function receive(
     attResult.signature
   );
   if (!isVerified || attResult.status !== 'complete') {
-    const error = new class extends AnchorCCTPError {
-      readonly code = 'ATTESTATION_VERIFICATION_FAILED';
-      readonly remediation = 'Ensure attestation message and signature are valid.';
-    }('Attestation signature or message failed cryptographic verification.');
+    const error = new AttestationVerificationError(
+      burnTxHash,
+      'message/signature byte shape invalid or status not complete'
+    );
     ctx.emitter.emit('onError', { error, burnTxHash });
     throw error;
   }

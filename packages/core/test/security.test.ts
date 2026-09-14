@@ -10,6 +10,8 @@ import { StrKey } from '@stellar/stellar-sdk';
 
 describe('Security Checklist Invariant Tests (PRD §7 & §8)', () => {
   const sampleStellarAddress = StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 0x77));
+  const goodMsg = '0x' + 'ab'.repeat(40);
+  const goodSig = '0x' + 'cd'.repeat(70);
 
   it('INVARIANT 1: Replay of same burnTxHash is rejected without double-crediting', async () => {
     const settledEvents: any[] = [];
@@ -19,8 +21,8 @@ describe('Security Checklist Invariant Tests (PRD §7 & §8)', () => {
       _test: {
         attestation: async () => ({
           status: 'complete',
-          message: '0xmsg_valid',
-          signature: '0xsig_valid',
+          message: goodMsg,
+          signature: goodSig,
         }),
       },
     });
@@ -51,7 +53,7 @@ describe('Security Checklist Invariant Tests (PRD §7 & §8)', () => {
     const sdk = createAnchorCCTP({
       signer: async () => 'TX',
       _test: {
-        attestation: async () => ({ status: 'complete', message: '0xm', signature: '0xs' }),
+        attestation: async () => ({ status: 'complete', message: goodMsg, signature: goodSig }),
       },
     });
 
@@ -97,8 +99,8 @@ describe('Security Checklist Invariant Tests (PRD §7 & §8)', () => {
       _test: {
         attestation: async () => ({
           status: 'pending',
-          message: '0xm',
-          signature: '',
+          message: '0x' + 'ab'.repeat(10),
+          signature: '0x' + 'cd'.repeat(20),
         }),
       },
     });
