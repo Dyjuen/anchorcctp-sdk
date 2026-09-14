@@ -1,6 +1,6 @@
-import { translateToStellar, submitMint } from '../src/forwarder/index.js';
-import { MintFailedError } from '../src/errors/index.js';
-import { StrKey } from '@stellar/stellar-sdk';
+import { translateToStellar, submitMint, buildMintAndForwardXdr } from '../src/forwarder/index.js';
+import { MintFailedError, ForwarderContractError } from '../src/errors/index.js';
+import { StrKey, TransactionBuilder } from '@stellar/stellar-sdk';
 
 describe('Forwarder & Address Translation', () => {
   it('translateToStellar returns a G... address for a 32-byte EVM address', () => {
@@ -32,22 +32,22 @@ describe('Forwarder & Address Translation', () => {
 
   it('submitMint delegates signing to caller callback with custom contract ID', async () => {
     const destination = StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 0x33));
-    let payload = '';
+    let captured = '';
     const signer = async (xdr: string) => {
-      payload = Buffer.from(xdr, 'base64').toString('utf-8');
+      captured = xdr;
       return 'TX_CUSTOM';
     };
     const r = await submitMint(
       {
-        message: '0xmsg',
-        signature: '0xsig',
+        message: '0x' + 'ab'.repeat(40),
+        signature: '0x' + 'cd'.repeat(70),
         destination,
-        forwarderContractId: 'CUSTOM_CONTRACT_ID',
+        forwarderContractId: 'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC',
       },
       signer
     );
     expect(r.txHash).toBe('TX_CUSTOM');
-    expect(payload).toContain('CUSTOM_CONTRACT_ID');
+    expect(() => (TransactionBuilder as any).fromXDR(captured, 'TESTNET')).not.toThrow();
   });
 
 
@@ -58,7 +58,7 @@ describe('Forwarder & Address Translation', () => {
       return 'SIGNED_' + xdr;
     };
     const r = await submitMint(
-      { message: '0xmsg', signature: '0xsig', destination },
+      { message: '0x' + 'ab'.repeat(40), signature: '0x' + 'cd'.repeat(70), destination },
       signer
     );
     expect(r.txHash).toMatch(/^SIGNED_/);
@@ -75,5 +75,48 @@ describe('Forwarder & Address Translation', () => {
         failingSigner
       )
     ).rejects.toThrow(MintFailedError);
+  });
+
+  it('buildMintAndForwardXdr builds parseable Stellar XDR', () => {
+    const destination = StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 0x33));
+    const xdr = buildMintAndForwardXdr({
+      message: '0x' + 'ab'.repeat(40),
+      signature: '0x' + 'cd'.repeat(70),
+      destination,
+      forwarderContractId: 'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC',
+    });
+    expect(typeof xdr).toBe('string');
+    const parsed: any = (TransactionBuilder as any).fromXDR(xdr, 'TESTNET');
+    expect(parsed.source).toBe(destination);
+  });
+
+  it('submitMint passes real XDR to signer', async () => {
+    const destination = StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 0x33));
+    let captured = '';
+    const r = await submitMint(
+      {
+        message: '0x' + 'ab'.repeat(40),
+        signature: '0x' + 'cd'.repeat(70),
+        destination,
+      },
+      async (x) => {
+        captured = x;
+        return 'TX_REAL';
+      }
+    );
+    expect(r.txHash).toBe('TX_REAL');
+    expect(() => (TransactionBuilder as any).fromXDR(captured, 'TESTNET')).not.toThrow();
+  });
+
+  it('buildMintAndForwardXdr throws ForwarderContractError for invalid contract ID', () => {
+    const destination = StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 0x33));
+    expect(() =>
+      buildMintAndForwardXdr({
+        message: '0x' + 'ab'.repeat(40),
+        signature: '0x' + 'cd'.repeat(70),
+        destination,
+        forwarderContractId: 'INVALID_CONTRACT',
+      })
+    ).toThrow(ForwarderContractError);
   });
 });

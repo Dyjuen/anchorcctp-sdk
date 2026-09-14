@@ -1,5 +1,5 @@
-import { StrKey } from '@stellar/stellar-sdk';
-import { MintFailedError } from '../errors/index.js';
+import { StrKey, Contract, TransactionBuilder, Networks, Account, Address, nativeToScVal } from '@stellar/stellar-sdk';
+import { MintFailedError, ForwarderContractError } from '../errors/index.js';
 
 export interface MintParams {
   message: string;
@@ -11,6 +11,42 @@ export interface MintParams {
 }
 
 export type SignerCallback = (xdr: string) => Promise<string>;
+
+export const DEFAULT_FORWARDER = 'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC';
+
+function hexToBytes(hex: string): Buffer {
+  const clean = hex.startsWith('0x') ? hex.slice(2) : hex;
+  return Buffer.from(clean, 'hex');
+}
+
+/**
+ * Builds a real Stellar Soroban XDR transaction that calls mint_and_forward on the forwarder contract.
+ */
+export function buildMintAndForwardXdr(params: MintParams): string {
+  const contractId = params.forwarderContractId || DEFAULT_FORWARDER;
+  const passphrase = params.networkPassphrase || Networks.TESTNET;
+  try {
+    const source = new Account(params.destination, '0');
+    const contract = new Contract(contractId);
+    const op = contract.call(
+      'mint_and_forward',
+      nativeToScVal(hexToBytes(params.message)),
+      nativeToScVal(hexToBytes(params.signature)),
+      new Address(params.destination).toScVal()
+    );
+    const tx = new TransactionBuilder(source, {
+      fee: '100',
+      networkPassphrase: passphrase,
+    })
+      .addOperation(op)
+      .setTimeout(30)
+      .build();
+    return tx.toXDR();
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    throw new ForwarderContractError(contractId, reason);
+  }
+}
 
 /**
  * Translates an EVM 20-byte or 32-byte hexadecimal address into a Stellar G... public key (strkey).
@@ -57,22 +93,11 @@ export async function submitMint(
   signer: SignerCallback
 ): Promise<{ txHash: string }> {
   try {
-    // Generate the serialized payload or simulated XDR representing the mint invocation
-    const mockXdr = Buffer.from(
-      JSON.stringify({
-        action: 'cctp_mint',
-        destination: params.destination,
-        message: params.message,
-        signature: params.signature,
-        contract: params.forwarderContractId || 'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC',
-      })
-    ).toString('base64');
-
-    const signedOutput = await signer(mockXdr);
-    return {
-      txHash: signedOutput,
-    };
+    const xdr = buildMintAndForwardXdr(params);
+    const signedOutput = await signer(xdr);
+    return { txHash: signedOutput };
   } catch (error) {
+    if (error instanceof ForwarderContractError) throw error;
     const reason = error instanceof Error ? error.message : String(error);
     throw new MintFailedError(params.message, reason);
   }
