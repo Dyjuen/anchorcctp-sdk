@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Copy, Check, Terminal, Code2 } from 'lucide-react';
+import { Copy, Check, Code2 } from 'lucide-react';
 
 export const CodeSnippet: React.FC = () => {
   const [copied, setCopied] = useState(false);

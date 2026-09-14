@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Copy, Check, FileText, Download } from 'lucide-react';
+import { Copy, Check, FileText } from 'lucide-react';
 
 export const TomlInspector: React.FC = () => {
   const [copied, setCopied] = useState(false);

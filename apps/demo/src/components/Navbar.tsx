@@ -1,5 +1,5 @@
 import React from 'react';
-import { Wallet, ShieldCheck, ExternalLink, Terminal, BookOpen } from 'lucide-react';
+import { Wallet } from 'lucide-react';
 import { WalletState } from '../wallet/freighter';
 
 interface NavbarProps {

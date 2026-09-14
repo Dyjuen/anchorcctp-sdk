@@ -8,8 +8,6 @@ import {
   ArrowRight,
   CheckCircle2,
   AlertCircle,
-  Clock,
-  ExternalLink,
   RefreshCw,
   Coins,
   Shield,
@@ -21,8 +19,6 @@ interface CctpDepositFlowProps {
   wallet: WalletState;
   onConnectWallet: () => void;
 }
-
-type StepStatus = 'idle' | 'in_progress' | 'complete' | 'failed';
 
 export const CctpDepositFlow: React.FC<CctpDepositFlowProps> = ({
   wallet,
@@ -95,7 +91,7 @@ export const CctpDepositFlow: React.FC<CctpDepositFlowProps> = ({
         })
       ).toString('base64');
 
-      const signedTx = await signWithFreighter(mockXdr);
+      await signWithFreighter(mockXdr);
       await new Promise((r) => setTimeout(r, 800));
 
       // Step 4: Settlement & Decimal Scaling (6 -> 7 decimals)
@@ -116,11 +112,11 @@ export const CctpDepositFlow: React.FC<CctpDepositFlowProps> = ({
         timeMs: Date.now() - startTime,
       });
       setIsProcessing(false);
-    } catch (err: any) {
+    } catch (err: unknown) {
       setIsProcessing(false);
       setErrorDetails({
         code: 'DEPOSIT_ERROR',
-        message: err?.message || 'Deposit workflow encountered an error.',
+        message: err instanceof Error ? err.message : 'Deposit workflow encountered an error.',
         remediation:
           'Ensure Freighter wallet is unlocked, trustline is allowed, or retry with a valid transaction hash.',
       });

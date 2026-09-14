@@ -10,8 +10,8 @@ export interface WalletState {
 
 export async function checkFreighterInstalled(): Promise<boolean> {
   try {
-    const isConnectedResult = await freighter.isConnected();
-    return !!isConnectedResult;
+    const { isConnected: connected } = await freighter.isConnected();
+    return connected;
   } catch {
     return false;
   }
@@ -30,10 +30,9 @@ export async function connectFreighter(): Promise<WalletState> {
       };
     }
 
-    const keyResult = await freighter.getPublicKey();
-    const address = typeof keyResult === 'string' ? keyResult : (keyResult as any)?.address || null;
+    const { address, error } = await freighter.getAddress();
 
-    if (!address) {
+    if (!address || error) {
       throw new Error('User declined wallet connection or no public key returned.');
     }
 
@@ -43,11 +42,11 @@ export async function connectFreighter(): Promise<WalletState> {
       network: 'TESTNET',
       isSimulated: false,
     };
-  } catch (err: any) {
+  } catch (err: unknown) {
     return {
       connected: false,
       address: null,
-      error: err?.message || 'Failed to connect to Freighter wallet.',
+      error: err instanceof Error ? err.message : 'Failed to connect to Freighter wallet.',
     };
   }
 }
@@ -60,13 +59,13 @@ export async function signWithFreighter(xdr: string): Promise<string> {
       return `MOCK_FREIGHTER_SIGNATURE_${Date.now()}_${Buffer.from(xdr.slice(0, 16)).toString('hex')}`;
     }
 
-    const signResult = await freighter.signTransaction(xdr, {
+    const { signedTxXdr, error } = await freighter.signTransaction(xdr, {
       networkPassphrase: 'Test SDF Network ; September 2015',
     });
 
-    const signedXdr = typeof signResult === 'string' ? signResult : (signResult as any)?.signedTxXdr || xdr;
-    return signedXdr;
-  } catch (err: any) {
-    throw new Error(`Freighter signing rejected: ${err.message}`);
+    if (error || !signedTxXdr) return xdr;
+    return signedTxXdr;
+  } catch (err: unknown) {
+    throw new Error(`Freighter signing rejected: ${err instanceof Error ? err.message : err}`, { cause: err });
   }
 }
