@@ -108,8 +108,17 @@ export class ForwarderContractError extends AnchorCCTPError {
 }
 
 /**
- * Thrown when a burn transaction hash has already been processed.
+ * Thrown when a public JSON config file is missing, malformed, or unsafe.
+ * Config files must never contain secrets — secrets live in env vars only.
  */
+export class InvalidConfigError extends AnchorCCTPError {
+  readonly code = 'INVALID_CONFIG';
+  readonly remediation = 'Fix config/testnet.public.json (public addresses only) and keep secrets in .env.testnet.';
+
+  constructor(public readonly reason: string) {
+    super(`Invalid testnet config: ${reason}.`);
+  }
+}
 export class ReplayTransferError extends AnchorCCTPError {
   readonly code = 'REPLAY_TRANSFER';
   readonly remediation = 'This burn transaction has already been processed and settled. Check existing settlement records.';
