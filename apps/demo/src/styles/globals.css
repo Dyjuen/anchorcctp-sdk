@@ -1,61 +1,126 @@
 @import "tailwindcss";
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
 @theme {
-  --color-background: #FDFCFB;
-  --color-foreground: #1A0508;
-  --color-accent: #550C18;
-  --color-accent-light: #FF4D6D;
-  --color-muted: #6B7280;
-  --color-border: #E5E7EB;
+  --color-background: #070C18;
+  --color-surface: #0B132B;
+  --color-brand-blue: #3E6BFF;
+  --color-brand-purple: #7C3AED;
+  --color-brand-cyan: #06B6D4;
+  --color-border-dark: rgba(255, 255, 255, 0.1);
 
-  --font-display: "Playfair Display", serif;
-  --font-sans: "Inter", sans-serif;
-
-  --font-size-display-xl: 7.5rem;
-  --font-size-display-xl--line-height: 0.9;
-  --font-size-display-xl--letter-spacing: -0.02em;
-
-  --font-size-heading-l: 2.5rem;
-  --font-size-heading-l--line-height: 1.1;
-  --font-size-heading-l--letter-spacing: 0.05em;
-
-  --font-size-caption-s: 0.75rem;
-  --font-size-caption-s--line-height: 1.2;
-  --font-size-caption-s--letter-spacing: 0.1em;
-
-  --ease-circ-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --font-sans: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
 }
 
 @layer base {
   html {
     scroll-behavior: smooth;
+    color-scheme: dark;
   }
 
   body {
-    @apply bg-background text-foreground font-sans antialiased overflow-x-hidden;
-    background-color: #FDFCFB;
+    background-color: #070C18;
+    color: #F8FAFC;
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
   }
 
-  /* Custom Selection */
   ::selection {
-    @apply bg-accent text-white;
+    background-color: #3E6BFF;
+    color: #FFFFFF;
   }
 
-  /* Scrollbar */
   ::-webkit-scrollbar {
     width: 6px;
   }
   ::-webkit-scrollbar-track {
-    background: #FDFCFB;
+    background: #070C18;
   }
   ::-webkit-scrollbar-thumb {
-    background: #E5E7EB;
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #3E6BFF;
   }
 }
 
-@layer components {
-  .text-display {
-    @apply font-display uppercase leading-[0.85] tracking-tighter;
-  }
+/* Ambient Glow & Grid Backgrounds */
+.bg-grid-lines {
+  background-size: 40px 40px;
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+}
+
+.bg-mesh-glow {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 800px;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.bg-blob-1 {
+  position: absolute;
+  top: -100px;
+  left: 15%;
+  width: 500px;
+  height: 500px;
+  background: radial-gradient(circle, rgba(62, 107, 255, 0.15) 0%, rgba(7, 12, 24, 0) 70%);
+  filter: blur(60px);
+}
+
+.bg-blob-2 {
+  position: absolute;
+  top: 100px;
+  right: 10%;
+  width: 600px;
+  height: 600px;
+  background: radial-gradient(circle, rgba(124, 58, 237, 0.12) 0%, rgba(7, 12, 24, 0) 70%);
+  filter: blur(80px);
+}
+
+/* Dark Card Utility Classes */
+.arch-card {
+  background: rgba(11, 19, 43, 0.8);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.37);
+}
+
+.arch-card-interactive {
+  background: rgba(11, 19, 43, 0.8);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.37);
+  transition: all 250ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.arch-card-interactive:hover {
+  border-color: rgba(62, 107, 255, 0.5);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 30px rgba(62, 107, 255, 0.15);
+}
+
+.arch-nav {
+  background: rgba(7, 12, 24, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+@keyframes float-subtle {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-8px); }
+}
+
+.animate-float {
+  animation: float-subtle 4s ease-in-out infinite;
 }

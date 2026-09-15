@@ -12,6 +12,7 @@ import {
   Coins,
   Shield,
   Layers,
+  Sparkles,
 } from 'lucide-react';
 import { WalletState, signWithFreighter } from '../wallet/freighter';
 
@@ -71,7 +72,7 @@ export const CctpDepositFlow: React.FC<CctpDepositFlowProps> = ({
     const startTime = Date.now();
 
     try {
-      // Simulate/Trigger Step 1: Source Burn Detection
+      // Step 1: Source Burn Detection
       await new Promise((r) => setTimeout(r, 600));
 
       // Step 2: Circle Iris Attestation Polling
@@ -83,13 +84,12 @@ export const CctpDepositFlow: React.FC<CctpDepositFlowProps> = ({
 
       // Step 3: Soroban Mint Signing & Submission
       setCurrentStep(3);
-      const mockXdr = Buffer.from(
-        JSON.stringify({
-          action: 'cctp_mint',
-          destination: wallet.address,
-          burnTxHash,
-        })
-      ).toString('base64');
+      const jsonPayload = JSON.stringify({
+        action: 'cctp_mint',
+        destination: wallet.address,
+        burnTxHash,
+      });
+      const mockXdr = btoa(encodeURIComponent(jsonPayload));
 
       await signWithFreighter(mockXdr);
       await new Promise((r) => setTimeout(r, 800));
@@ -124,39 +124,42 @@ export const CctpDepositFlow: React.FC<CctpDepositFlowProps> = ({
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8">
+    <div id="demo" className="max-w-6xl mx-auto space-y-8 scroll-mt-24 px-4 sm:px-6 lg:px-8">
       {/* Title / Intro */}
       <div className="text-center space-y-2">
-        <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight sm:text-4xl">
-          Universal Cross-Chain USDC Deposit
-        </h1>
-        <p className="text-gray-600 max-w-2xl mx-auto text-base">
-          Accept USDC natively from any Circle CCTP-connected blockchain directly onto Stellar
-          with atomic attestation verification and 6-to-7 decimal precision.
+        <div className="inline-flex items-center px-3.5 py-1 rounded-full text-xs font-extrabold bg-[#3E6BFF]/15 border border-[#3E6BFF]/30 text-[#3E6BFF] shadow-sm">
+          <Sparkles className="w-3.5 h-3.5 mr-1.5 text-[#3E6BFF]" />
+          Interactive Settlement Portal
+        </div>
+        <h2 className="text-3xl font-black text-white tracking-tight sm:text-4xl">
+          Execute Cross-Chain USDC Deposit
+        </h2>
+        <p className="text-slate-300 max-w-2xl mx-auto text-sm sm:text-base font-medium leading-relaxed">
+          Test real-time Circle Iris attestation, Soroban mint execution, and 6-to-7 decimal precision scaling.
         </p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         {/* Deposit Configuration Panel */}
-        <div className="lg:col-span-6 bg-white border border-gray-200 rounded-2xl p-6 shadow-sm space-y-6">
-          <h2 className="text-lg font-bold text-gray-900 flex items-center">
-            <Coins className="w-5 h-5 mr-2 text-red-900" />
+        <div className="lg:col-span-6 arch-card rounded-2xl p-6 sm:p-8 space-y-6 bg-slate-900/80 border border-slate-800">
+          <h3 className="text-lg font-extrabold text-white flex items-center border-b border-slate-800 pb-4">
+            <Coins className="w-5 h-5 mr-2.5 text-[#3E6BFF]" />
             Deposit Parameters
-          </h2>
+          </h3>
 
           {/* Source Chain Selector */}
           <div className="space-y-2">
-            <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider">
+            <label className="block text-xs font-extrabold text-slate-300 uppercase tracking-wider">
               Source Blockchain (CCTP Domain)
             </label>
             <select
               value={sourceDomainId}
               onChange={(e) => setSourceDomainId(Number(e.target.value))}
               disabled={isProcessing}
-              className="w-full bg-gray-50 border border-gray-300 rounded-xl px-4 py-2.5 text-sm text-gray-900 font-medium focus:ring-2 focus:ring-red-900 focus:outline-none"
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-xs font-bold text-white focus:ring-2 focus:ring-[#3E6BFF] focus:border-[#3E6BFF] focus:outline-none transition-all"
             >
               {Object.values(CCTP_DOMAINS).map((d) => (
-                <option key={d.domainId} value={d.domainId}>
+                <option key={d.domainId} value={d.domainId} className="bg-slate-900 text-white">
                   {d.name} (Domain ID: {d.domainId} • {d.networkType})
                 </option>
               ))}
@@ -165,7 +168,7 @@ export const CctpDepositFlow: React.FC<CctpDepositFlowProps> = ({
 
           {/* USDC Amount */}
           <div className="space-y-2">
-            <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider">
+            <label className="block text-xs font-extrabold text-slate-300 uppercase tracking-wider">
               Amount (USDC)
             </label>
             <div className="relative">
@@ -176,13 +179,13 @@ export const CctpDepositFlow: React.FC<CctpDepositFlowProps> = ({
                 value={usdcAmount}
                 onChange={(e) => setUsdcAmount(e.target.value)}
                 disabled={isProcessing}
-                className="w-full bg-gray-50 border border-gray-300 rounded-xl px-4 py-2.5 text-sm text-gray-900 font-medium focus:ring-2 focus:ring-red-900 focus:outline-none"
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-xs font-bold text-white focus:ring-2 focus:ring-[#3E6BFF] focus:border-[#3E6BFF] focus:outline-none transition-all"
               />
-              <span className="absolute right-4 top-2.5 text-xs font-bold text-gray-500">
+              <span className="absolute right-4 top-3 text-xs font-extrabold text-slate-400">
                 USDC
               </span>
             </div>
-            <p className="text-xs text-gray-500">
+            <p className="text-[11px] text-slate-400 font-medium">
               Converts 6 EVM decimals → 7 Stellar Stroop decimals (+1 decimal scale)
             </p>
           </div>
@@ -190,17 +193,17 @@ export const CctpDepositFlow: React.FC<CctpDepositFlowProps> = ({
           {/* Source Burn Transaction Hash */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider">
+              <label className="block text-xs font-extrabold text-slate-300 uppercase tracking-wider">
                 Source Burn Transaction Hash
               </label>
               <button
                 type="button"
                 onClick={handleRandomTxHash}
                 disabled={isProcessing}
-                className="text-xs text-red-900 hover:text-red-700 font-medium flex items-center"
+                className="text-xs text-[#3E6BFF] hover:underline font-bold flex items-center transition-colors cursor-pointer"
               >
                 <RefreshCw className="w-3 h-3 mr-1" />
-                Generate Sample Hash
+                Randomize Hash
               </button>
             </div>
             <input
@@ -208,13 +211,13 @@ export const CctpDepositFlow: React.FC<CctpDepositFlowProps> = ({
               value={burnTxHash}
               onChange={(e) => setBurnTxHash(e.target.value)}
               disabled={isProcessing}
-              className="w-full bg-gray-50 border border-gray-300 rounded-xl px-4 py-2.5 text-xs font-mono text-gray-900 focus:ring-2 focus:ring-red-900 focus:outline-none"
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-xs font-mono font-medium text-white focus:ring-2 focus:ring-[#3E6BFF] focus:border-[#3E6BFF] focus:outline-none transition-all"
             />
           </div>
 
           {/* Destination Stellar Account */}
           <div className="space-y-2">
-            <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider">
+            <label className="block text-xs font-extrabold text-slate-300 uppercase tracking-wider">
               Destination Stellar Address
             </label>
             <input
@@ -223,19 +226,19 @@ export const CctpDepositFlow: React.FC<CctpDepositFlowProps> = ({
               value={
                 wallet.connected && wallet.address
                   ? wallet.address
-                  : 'Connect Freighter Wallet above...'
+                  : 'Connect Freighter Wallet to set destination...'
               }
-              className="w-full bg-gray-100 border border-gray-300 rounded-xl px-4 py-2.5 text-xs font-mono text-gray-700 cursor-not-allowed"
+              className="w-full bg-slate-950/60 border border-slate-800 rounded-xl px-4 py-3 text-xs font-mono text-slate-400 cursor-not-allowed"
             />
           </div>
 
           {/* Trustline Auto-Creation Toggle */}
-          <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-200">
+          <div className="flex items-center justify-between p-4 bg-slate-950/60 rounded-xl border border-slate-800">
             <div className="flex items-center space-x-3">
-              <Shield className="w-5 h-5 text-emerald-600" />
+              <Shield className="w-5 h-5 text-emerald-400" />
               <div>
-                <p className="text-xs font-semibold text-gray-900">Auto-Create USDC Trustline</p>
-                <p className="text-xs text-gray-500">Capped at 2 XLM sponsorship reserve</p>
+                <p className="text-xs font-extrabold text-white">Auto-Create USDC Trustline</p>
+                <p className="text-[11px] text-slate-400 font-medium">Capped at 2 XLM sponsorship reserve</p>
               </div>
             </div>
             <input
@@ -243,7 +246,7 @@ export const CctpDepositFlow: React.FC<CctpDepositFlowProps> = ({
               checked={allowTrustline}
               onChange={(e) => setAllowTrustline(e.target.checked)}
               disabled={isProcessing}
-              className="w-4 h-4 text-red-900 rounded focus:ring-red-900"
+              className="w-4 h-4 text-[#3E6BFF] rounded focus:ring-[#3E6BFF] cursor-pointer"
             />
           </div>
 
@@ -251,10 +254,10 @@ export const CctpDepositFlow: React.FC<CctpDepositFlowProps> = ({
           <button
             onClick={wallet.connected ? handleStartDeposit : onConnectWallet}
             disabled={isProcessing}
-            className={`w-full py-3 px-4 rounded-xl font-semibold text-sm shadow-md transition-all flex items-center justify-center space-x-2 ${
+            className={`w-full py-4 px-4 rounded-xl font-extrabold text-xs sm:text-sm shadow-md transition-all duration-200 flex items-center justify-center space-x-2 cursor-pointer ${
               isProcessing
-                ? 'bg-gray-400 text-white cursor-wait'
-                : 'bg-red-900 hover:bg-red-950 text-white'
+                ? 'bg-slate-800 text-slate-500 cursor-wait'
+                : 'bg-[#3E6BFF] hover:bg-[#345CE0] text-white active:scale-[0.99]'
             }`}
           >
             {isProcessing ? (
@@ -268,43 +271,43 @@ export const CctpDepositFlow: React.FC<CctpDepositFlowProps> = ({
                 <ArrowRight className="w-4 h-4 ml-1" />
               </>
             ) : (
-              <span>Connect Wallet to Deposit</span>
+              <span>Connect Freighter Wallet to Start</span>
             )}
           </button>
         </div>
 
         {/* Real-time Lifecycle Visualization */}
-        <div className="lg:col-span-6 bg-white border border-gray-200 rounded-2xl p-6 shadow-sm space-y-6 flex flex-col justify-between">
+        <div className="lg:col-span-6 arch-card rounded-2xl p-6 sm:p-8 space-y-6 flex flex-col justify-between bg-slate-900/80 border border-slate-800">
           <div className="space-y-6">
-            <h2 className="text-lg font-bold text-gray-900 flex items-center">
-              <Layers className="w-5 h-5 mr-2 text-red-900" />
+            <h3 className="text-lg font-extrabold text-white flex items-center border-b border-slate-800 pb-4">
+              <Layers className="w-5 h-5 mr-2.5 text-[#3E6BFF]" />
               Live Settlement Lifecycle
-            </h2>
+            </h3>
 
             {/* Steps Timeline */}
-            <div className="space-y-4">
+            <div className="space-y-3.5">
               {/* Step 1: Burn Confirmation */}
               <div
-                className={`flex items-start space-x-3 p-3 rounded-xl border transition-all ${
+                className={`flex items-start space-x-3.5 p-4 rounded-xl border transition-all duration-300 ${
                   currentStep >= 1
-                    ? 'border-emerald-200 bg-emerald-50/50'
-                    : 'border-gray-200 bg-gray-50/50'
+                    ? 'border-emerald-500/40 bg-emerald-500/10'
+                    : 'border-slate-800 bg-slate-950/60'
                 }`}
               >
                 <div className="mt-0.5">
                   {currentStep >= 1 ? (
-                    <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                    <CheckCircle2 className="w-5 h-5 text-emerald-400" />
                   ) : (
-                    <div className="w-5 h-5 rounded-full border-2 border-gray-300 flex items-center justify-center text-xs font-bold text-gray-400">
+                    <div className="w-5 h-5 rounded-full border-2 border-slate-600 flex items-center justify-center text-xs font-bold text-slate-400">
                       1
                     </div>
                   )}
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-gray-900">
+                  <p className="text-xs sm:text-sm font-extrabold text-white">
                     Source Burn Verified
                   </p>
-                  <p className="text-xs text-gray-500 font-mono">
+                  <p className="text-[11px] text-slate-400 font-mono">
                     Chain: {selectedDomain.name} (Domain {selectedDomain.domainId})
                   </p>
                 </div>
@@ -312,30 +315,30 @@ export const CctpDepositFlow: React.FC<CctpDepositFlowProps> = ({
 
               {/* Step 2: Iris Attestation */}
               <div
-                className={`flex items-start space-x-3 p-3 rounded-xl border transition-all ${
+                className={`flex items-start space-x-3.5 p-4 rounded-xl border transition-all duration-300 ${
                   currentStep === 2
-                    ? 'border-blue-300 bg-blue-50/60'
+                    ? 'border-[#3E6BFF]/60 bg-[#3E6BFF]/15'
                     : currentStep > 2
-                    ? 'border-emerald-200 bg-emerald-50/50'
-                    : 'border-gray-200 bg-gray-50/50'
+                    ? 'border-emerald-500/40 bg-emerald-500/10'
+                    : 'border-slate-800 bg-slate-950/60'
                 }`}
               >
                 <div className="mt-0.5">
                   {currentStep > 2 ? (
-                    <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                    <CheckCircle2 className="w-5 h-5 text-emerald-400" />
                   ) : currentStep === 2 ? (
-                    <RefreshCw className="w-5 h-5 text-blue-600 animate-spin" />
+                    <RefreshCw className="w-5 h-5 text-[#3E6BFF] animate-spin" />
                   ) : (
-                    <div className="w-5 h-5 rounded-full border-2 border-gray-300 flex items-center justify-center text-xs font-bold text-gray-400">
+                    <div className="w-5 h-5 rounded-full border-2 border-slate-600 flex items-center justify-center text-xs font-bold text-slate-400">
                       2
                     </div>
                   )}
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-gray-900">
+                  <p className="text-xs sm:text-sm font-extrabold text-white">
                     Circle Iris Attestation
                   </p>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-[11px] text-slate-400 font-medium">
                     {currentStep === 2
                       ? `Polling Iris proof (Attempt ${attestationAttempts})...`
                       : currentStep > 2
@@ -347,30 +350,30 @@ export const CctpDepositFlow: React.FC<CctpDepositFlowProps> = ({
 
               {/* Step 3: Soroban Mint */}
               <div
-                className={`flex items-start space-x-3 p-3 rounded-xl border transition-all ${
+                className={`flex items-start space-x-3.5 p-4 rounded-xl border transition-all duration-300 ${
                   currentStep === 3
-                    ? 'border-blue-300 bg-blue-50/60'
+                    ? 'border-[#3E6BFF]/60 bg-[#3E6BFF]/15'
                     : currentStep > 3
-                    ? 'border-emerald-200 bg-emerald-50/50'
-                    : 'border-gray-200 bg-gray-50/50'
+                    ? 'border-emerald-500/40 bg-emerald-500/10'
+                    : 'border-slate-800 bg-slate-950/60'
                 }`}
               >
                 <div className="mt-0.5">
                   {currentStep > 3 ? (
-                    <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                    <CheckCircle2 className="w-5 h-5 text-emerald-400" />
                   ) : currentStep === 3 ? (
-                    <RefreshCw className="w-5 h-5 text-blue-600 animate-spin" />
+                    <RefreshCw className="w-5 h-5 text-[#3E6BFF] animate-spin" />
                   ) : (
-                    <div className="w-5 h-5 rounded-full border-2 border-gray-300 flex items-center justify-center text-xs font-bold text-gray-400">
+                    <div className="w-5 h-5 rounded-full border-2 border-slate-600 flex items-center justify-center text-xs font-bold text-slate-400">
                       3
                     </div>
                   )}
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-gray-900">
+                  <p className="text-xs sm:text-sm font-extrabold text-white">
                     Soroban Mint Submission
                   </p>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-[11px] text-slate-400 font-medium">
                     {currentStep === 3
                       ? 'Submitting delegated transaction via Forwarder...'
                       : currentStep > 3
@@ -382,26 +385,26 @@ export const CctpDepositFlow: React.FC<CctpDepositFlowProps> = ({
 
               {/* Step 4: Stellar Settlement */}
               <div
-                className={`flex items-start space-x-3 p-3 rounded-xl border transition-all ${
+                className={`flex items-start space-x-3.5 p-4 rounded-xl border transition-all duration-300 ${
                   currentStep >= 4
-                    ? 'border-emerald-300 bg-emerald-50'
-                    : 'border-gray-200 bg-gray-50/50'
+                    ? 'border-emerald-500/40 bg-emerald-500/15'
+                    : 'border-slate-800 bg-slate-950/60'
                 }`}
               >
                 <div className="mt-0.5">
                   {currentStep >= 4 ? (
-                    <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                    <CheckCircle2 className="w-5 h-5 text-emerald-400" />
                   ) : (
-                    <div className="w-5 h-5 rounded-full border-2 border-gray-300 flex items-center justify-center text-xs font-bold text-gray-400">
+                    <div className="w-5 h-5 rounded-full border-2 border-slate-600 flex items-center justify-center text-xs font-bold text-slate-400">
                       4
                     </div>
                   )}
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-gray-900">
+                  <p className="text-xs sm:text-sm font-extrabold text-white">
                     Stellar USDC Settlement
                   </p>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-[11px] text-slate-400 font-medium">
                     {currentStep >= 4
                       ? 'Tokens credited to destination account'
                       : 'Awaiting Soroban mint execution'}
@@ -412,12 +415,12 @@ export const CctpDepositFlow: React.FC<CctpDepositFlowProps> = ({
 
             {/* Error Display */}
             {errorDetails && (
-              <div className="p-4 bg-red-50 border border-red-200 rounded-xl space-y-2">
-                <div className="flex items-center text-red-900 font-bold text-xs">
-                  <AlertCircle className="w-4 h-4 mr-1 text-red-600" />
+              <div className="p-4 bg-rose-950/40 border border-rose-800/60 rounded-xl space-y-2">
+                <div className="flex items-center text-rose-300 font-extrabold text-xs">
+                  <AlertCircle className="w-4 h-4 mr-1.5 text-rose-400 shrink-0" />
                   [{errorDetails.code}] {errorDetails.message}
                 </div>
-                <p className="text-xs text-red-800 font-medium">
+                <p className="text-xs text-rose-400 font-medium">
                   Remediation: {errorDetails.remediation}
                 </p>
               </div>
@@ -425,27 +428,27 @@ export const CctpDepositFlow: React.FC<CctpDepositFlowProps> = ({
 
             {/* Settlement Receipt */}
             {settlementResult && (
-              <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl space-y-3">
+              <div className="p-5 bg-emerald-950/30 border border-emerald-500/40 rounded-xl space-y-3 shadow-sm">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-emerald-900 uppercase">
+                  <span className="text-xs font-extrabold text-emerald-400 uppercase tracking-wider">
                     Settlement Summary
                   </span>
-                  <span className="text-xs font-mono text-emerald-700">
+                  <span className="text-xs font-mono font-bold text-emerald-300 bg-emerald-500/20 px-2.5 py-0.5 rounded-full border border-emerald-500/30">
                     Settled in {settlementResult.timeMs}ms
                   </span>
                 </div>
-                <div className="text-xs space-y-1 font-mono text-emerald-950">
+                <div className="text-xs space-y-1.5 font-mono text-white">
                   <div className="flex justify-between">
-                    <span>Credited Amount:</span>
-                    <span className="font-bold">{settlementResult.stellarAmount} USDC</span>
+                    <span className="text-slate-400">Credited Amount:</span>
+                    <span className="font-extrabold text-emerald-400">{settlementResult.stellarAmount} USDC</span>
                   </div>
                   <div className="flex justify-between">
-                    <span>Dust Sweep:</span>
-                    <span>{settlementResult.dust} base units</span>
+                    <span className="text-slate-400">Dust Sweep:</span>
+                    <span className="font-medium text-white">{settlementResult.dust} base units</span>
                   </div>
-                  <div className="pt-2 border-t border-emerald-200 flex justify-between items-center">
-                    <span>Stellar Tx Hash:</span>
-                    <span className="text-emerald-700 truncate max-w-[180px]">
+                  <div className="pt-2 border-t border-emerald-800/50 flex justify-between items-center">
+                    <span className="text-slate-400">Stellar Tx Hash:</span>
+                    <span className="text-emerald-300 font-bold truncate max-w-[180px]">
                       {settlementResult.mintTxHash}
                     </span>
                   </div>
@@ -454,9 +457,9 @@ export const CctpDepositFlow: React.FC<CctpDepositFlowProps> = ({
             )}
           </div>
 
-          <div className="pt-4 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
+          <div className="pt-4 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400 font-bold">
             <span>Powered by @anchor-cctp/core</span>
-            <span className="font-mono">Circle Iris API v1</span>
+            <span className="font-mono text-slate-400">Circle Iris API v1</span>
           </div>
         </div>
       </div>

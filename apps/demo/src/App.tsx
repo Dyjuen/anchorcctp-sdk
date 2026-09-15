@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Navbar } from './components/Navbar';
+import { HeroSection } from './components/HeroSection';
+import { FeaturesSection } from './components/FeaturesSection';
 import { CctpDepositFlow } from './components/CctpDepositFlow';
-import { TomlInspector } from './components/TomlInspector';
-import { CodeSnippet } from './components/CodeSnippet';
+import { DevPlaygroundSection } from './components/DevPlaygroundSection';
+import { ArchitectureDocsSection } from './components/ArchitectureDocsSection';
+import { FaqSection } from './components/FaqSection';
 import { Footer } from './components/Footer';
 import { WalletState, connectFreighter } from './wallet/freighter';
 
@@ -11,7 +14,7 @@ export function App() {
     connected: false,
     address: null,
   });
-  const [activeTab, setActiveTab] = useState<'deposit' | 'toml' | 'code'>('deposit');
+  const [activeSection, setActiveSection] = useState<string>('hero');
 
   const handleConnectWallet = async () => {
     const res = await connectFreighter();
@@ -19,7 +22,6 @@ export function App() {
   };
 
   useEffect(() => {
-    // Attempt auto-connect on mount if previously connected
     connectFreighter().then((res) => {
       if (res.connected) {
         setWallet(res);
@@ -27,24 +29,49 @@ export function App() {
     });
   }, []);
 
+  const scrollToDemo = () => {
+    setActiveSection('demo');
+    document.getElementById('demo')?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  const scrollToDocs = () => {
+    setActiveSection('playground');
+    document.getElementById('playground')?.scrollIntoView({ behavior: 'smooth' });
+  };
+
   return (
-    <div className="min-h-screen flex flex-col bg-[#FDFCFB] text-gray-900">
+    <div className="relative min-h-screen flex flex-col bg-[#070C18] text-slate-100 selection:bg-[#3E6BFF] selection:text-white bg-grid-lines font-sans">
+      {/* Background Ambient Glows */}
+      <div className="bg-mesh-glow">
+        <div className="bg-blob-1" />
+        <div className="bg-blob-2" />
+      </div>
+
       <Navbar
         wallet={wallet}
         onConnect={handleConnectWallet}
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
+        activeSection={activeSection}
+        setActiveSection={setActiveSection}
       />
 
-      <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 w-full">
-        {activeTab === 'deposit' && (
-          <CctpDepositFlow
-            wallet={wallet}
-            onConnectWallet={handleConnectWallet}
-          />
-        )}
-        {activeTab === 'toml' && <TomlInspector />}
-        {activeTab === 'code' && <CodeSnippet />}
+      <main className="relative z-10 flex-1 space-y-16 pb-16">
+        <HeroSection
+          onExploreDemo={scrollToDemo}
+          onExploreDocs={scrollToDocs}
+        />
+
+        <CctpDepositFlow
+          wallet={wallet}
+          onConnectWallet={handleConnectWallet}
+        />
+
+        <FeaturesSection />
+
+        <DevPlaygroundSection />
+
+        <ArchitectureDocsSection />
+
+        <FaqSection />
       </main>
 
       <Footer />

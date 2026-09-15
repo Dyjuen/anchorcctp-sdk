@@ -56,7 +56,10 @@ export async function signWithFreighter(xdr: string): Promise<string> {
     const installed = await checkFreighterInstalled();
     if (!installed) {
       // Simulated signature for sandbox / demo mode
-      return `MOCK_FREIGHTER_SIGNATURE_${Date.now()}_${Buffer.from(xdr.slice(0, 16)).toString('hex')}`;
+      const hex = Array.from(new TextEncoder().encode(xdr.slice(0, 16)))
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join('');
+      return `MOCK_FREIGHTER_SIGNATURE_${Date.now()}_${hex}`;
     }
 
     const { signedTxXdr, error } = await freighter.signTransaction(xdr, {
