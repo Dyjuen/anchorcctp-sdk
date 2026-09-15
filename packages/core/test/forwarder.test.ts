@@ -1,4 +1,4 @@
-import { translateToStellar, submitMint, buildMintAndForwardXdr } from '../src/forwarder/index.js';
+import { translateToStellar, submitMint, buildMintAndForwardXdr, resolveForwarder, TESTNET_FORWARDER, MAINNET_FORWARDER } from '../src/forwarder/index.js';
 import { MintFailedError, ForwarderContractError } from '../src/errors/index.js';
 import { StrKey, TransactionBuilder } from '@stellar/stellar-sdk';
 
@@ -118,5 +118,15 @@ describe('Forwarder & Address Translation', () => {
         forwarderContractId: 'INVALID_CONTRACT',
       })
     ).toThrow(ForwarderContractError);
+  });
+});
+
+describe('Forwarder network selection', () => {
+  it('resolveForwarder returns testnet CA66.. by default and mainnet CBZL.. on request', async () => {
+    expect(TESTNET_FORWARDER).toBe('CA66Q2WFBND6V4UEB7RD4SAXSVIWMD6RA4X3U32ELVFGXV5PJK4T4VSZ');
+    expect(MAINNET_FORWARDER).toBe('CBZL2IH7F6BIDAA3WBNXYKIXSATJGMSW7K5P5MJ6STX5RXN47TZJDF5T');
+    expect(resolveForwarder('testnet')).toBe(TESTNET_FORWARDER);
+    expect(resolveForwarder('mainnet')).toBe(MAINNET_FORWARDER);
+    expect(resolveForwarder(undefined)).toBe(TESTNET_FORWARDER);
   });
 });
