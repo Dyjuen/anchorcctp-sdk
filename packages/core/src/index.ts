@@ -64,8 +64,11 @@ export * from './testnet-config.js';
 export * from './testnet/account.js';
 export * from './testnet/forwarder-check.js';
 
-
-
+/**
+ * EVM burn helpers (testnet scripts): hook encoders + burn planner/executor.
+ */
+export * from './evm/hook.js';
+export * from './evm/burn.js';
 
 
 
