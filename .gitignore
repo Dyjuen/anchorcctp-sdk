@@ -8,6 +8,7 @@ packages/*/coverage/
 .env.*
 !.env.example
 .DS_Store
+.worktrees/
 /stellar.toml
 docs/superpowers/
 docs/evidence/testnet-auto.processed.json
