@@ -12,7 +12,14 @@ export interface MintParams {
 
 export type SignerCallback = (xdr: string) => Promise<string>;
 
-export const DEFAULT_FORWARDER = 'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC';
+export const TESTNET_FORWARDER = 'CA66Q2WFBND6V4UEB7RD4SAXSVIWMD6RA4X3U32ELVFGXV5PJK4T4VSZ';
+export const MAINNET_FORWARDER = 'CBZL2IH7F6BIDAA3WBNXYKIXSATJGMSW7K5P5MJ6STX5RXN47TZJDF5T';
+export const DEFAULT_FORWARDER = TESTNET_FORWARDER;
+
+export function resolveForwarder(network?: 'testnet' | 'mainnet'): string {
+  if (network === 'mainnet') return MAINNET_FORWARDER;
+  return TESTNET_FORWARDER;
+}
 
 function hexToBytes(hex: string): Buffer {
   const clean = hex.startsWith('0x') ? hex.slice(2) : hex;

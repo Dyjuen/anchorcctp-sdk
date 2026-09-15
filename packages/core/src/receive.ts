@@ -23,6 +23,7 @@ export interface ReceiveParams {
   signer?: SignerCallback;
   allowTrustlineCreation?: boolean;
   spendCapXlm?: number;
+  forwarderContractId?: string;
 }
 
 export interface ReceiveResult {
@@ -43,6 +44,7 @@ export interface ReceiveContext {
     allowCreation: boolean;
     spendCapXlm?: number;
   };
+  defaultForwarderContractId?: string;
   _test?: {
     attestation?: (burnTxHash: string) => Promise<Partial<AttestationResult>>;
     hasTrustline?: () => Promise<boolean>;
@@ -158,11 +160,14 @@ export async function receive(
   });
 
   // 8. Soroban Forwarder Mint Submission
+  const forwarderContractId =
+    params.forwarderContractId ?? ctx.defaultForwarderContractId;
   const mintResult = await submitMint(
     {
       message: attResult.message,
       signature: attResult.signature,
       destination: stellarDestination,
+      forwarderContractId,
     },
     effectiveSigner
   );

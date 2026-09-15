@@ -9,7 +9,7 @@ import {
 } from './events/index.js';
 import { createLogger, Logger } from './logger/index.js';
 import { receive, ReceiveParams, ReceiveResult, ReceiveContext } from './receive.js';
-import { SignerCallback } from './forwarder/index.js';
+import { SignerCallback, resolveForwarder } from './forwarder/index.js';
 
 export interface TrustlineConfig {
   allowCreation: boolean;
@@ -26,6 +26,8 @@ export interface AnchorCCTPConfig {
   trustline?: TrustlineConfig;
   logger?: Logger | ((msg: string) => void);
   replayStore?: ReplayStore;
+  network?: 'testnet' | 'mainnet';
+  forwarderContractId?: string;
   _test?: Record<string, unknown>;
 }
 
@@ -67,6 +69,8 @@ export function createAnchorCCTP(config: AnchorCCTPConfig): AnchorCCTP {
   const replayStore = config.replayStore || new ReplayStore();
   const emitter: AnchorCCTPEventEmitter = createEventEmitter();
 
+  const defaultForwarderContractId = config.forwarderContractId ?? resolveForwarder(config.network);
+
   const ctx: ReceiveContext = {
     attestationClient,
     replayStore,
@@ -75,6 +79,7 @@ export function createAnchorCCTP(config: AnchorCCTPConfig): AnchorCCTP {
     defaultSigner: config.signer,
     defaultDustCollector: config.dustCollectorAddress,
     defaultTrustline: config.trustline,
+    defaultForwarderContractId,
     _test: config._test as any,
   };
 
