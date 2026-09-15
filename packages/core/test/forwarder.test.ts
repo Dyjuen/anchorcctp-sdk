@@ -143,3 +143,45 @@ describe('Forwarder network selection', () => {
     expect(resolveForwarder(undefined)).toBe(TESTNET_FORWARDER);
   });
 });
+
+describe('Forwarder branch coverage', () => {
+  it('translateToStellar rejects non-string input', () => {
+    expect(() => translateToStellar(123 as any)).toThrow('Address must be a string');
+  });
+
+  it('translateToStellar rejects invalid hex with0x prefix', () => {
+    expect(() => translateToStellar('0xZZZ')).toThrow('Invalid address format');
+  });
+
+  it('translateToStellar rejects hex with wrong length', () => {
+    expect(() => translateToStellar('0x' + 'ab'.repeat(10))).toThrow('Invalid address format');
+  });
+
+  it('submitMint re-throws ForwarderContractError as-is', async () => {
+    const destination = StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 0x22));
+    await expect(
+      submitMint(
+        {
+          message: '0x' + 'ab'.repeat(40),
+          signature: '0x' + 'cd'.repeat(70),
+          destination,
+          forwarderContractId: 'INVALID_CONTRACT',
+        },
+        async () => 'x',
+      )
+    ).rejects.toThrow(ForwarderContractError);
+  });
+
+  it('submitMint wraps non-ForwarderContractError in MintFailedError', async () => {
+    const destination = StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 0x44));
+    const failingSigner = async () => {
+      throw new Error('wallet rejected');
+    };
+    await expect(
+      submitMint(
+        { message: '0x' + 'ab'.repeat(40), signature: '0x' + 'cd'.repeat(70), destination },
+        failingSigner,
+      )
+    ).rejects.toMatchObject({ code: 'MINT_FAILED' });
+  });
+});

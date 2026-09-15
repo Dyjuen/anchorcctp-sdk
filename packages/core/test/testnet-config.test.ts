@@ -60,6 +60,75 @@ describe('testnet public config loader', () => {
   });
 });
 
+describe('parseTestnetConfig branch coverage', () => {
+  it('rejects non-object root', () => {
+    expect(() => parseTestnetConfig(null as any)).toThrow(InvalidConfigError);
+    expect(() => parseTestnetConfig('string' as any)).toThrow(InvalidConfigError);
+    expect(() => parseTestnetConfig(42 as any)).toThrow(InvalidConfigError);
+  });
+
+  it('rejects array root', () => {
+    expect(() => parseTestnetConfig([] as any)).toThrow(InvalidConfigError);
+  });
+
+  it('rejects non-https horizonUrl', () => {
+    expect(() => parseTestnetConfig({ ...valid(), horizonUrl: 'http://x' })).toThrow(
+      InvalidConfigError
+    );
+  });
+
+  it('rejects non-https sorobanRpcUrl', () => {
+    expect(() => parseTestnetConfig({ ...valid(), sorobanRpcUrl: 'http://x' })).toThrow(
+      InvalidConfigError
+    );
+  });
+
+  it('rejects non-https attestationBaseUrl', () => {
+    expect(() => parseTestnetConfig({ ...valid(), attestationBaseUrl: 'http://x' })).toThrow(
+      InvalidConfigError
+    );
+  });
+
+  it('rejects bad forwarderContractId', () => {
+    expect(() => parseTestnetConfig({ ...valid(), forwarderContractId: 'GBAD' })).toThrow(
+      InvalidConfigError
+    );
+  });
+
+  it('rejects bad usdcIssuer', () => {
+    expect(() => parseTestnetConfig({ ...valid(), usdcIssuer: 'GBAD' })).toThrow(
+      InvalidConfigError
+    );
+  });
+
+  it('rejects bad dustCollectorAddress', () => {
+    expect(() => parseTestnetConfig({ ...valid(), dustCollectorAddress: 'GBAD' })).toThrow(
+      InvalidConfigError
+    );
+  });
+
+  it('rejects non-testnet network', () => {
+    expect(() => parseTestnetConfig({ ...valid(), network: 'mainnet' })).toThrow(
+      InvalidConfigError
+    );
+  });
+});
+
+describe('loadTestnetConfigFromFile branch coverage', () => {
+  it('rejects missing file', () => {
+    expect(() => loadTestnetConfigFromFile('/tmp/cctp-does-not-exist-123.json')).toThrow(
+      InvalidConfigError
+    );
+  });
+
+  it('rejects invalid JSON', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'cctp-'));
+    const p = join(dir, 'bad.json');
+    writeFileSync(p, '{not valid json');
+    expect(() => loadTestnetConfigFromFile(p)).toThrow(InvalidConfigError);
+  });
+});
+
 describe('createAnchorCCTPFromEnv', () => {
   it('builds public-only client without secret', () => {
     const r = createAnchorCCTPFromEnv({ STELLAR_DESTINATION: dest } as any);
@@ -84,6 +153,41 @@ describe('createAnchorCCTPFromEnv', () => {
     );
     expect(() =>
       createAnchorCCTPFromEnv({ STELLAR_DESTINATION: dest, STELLAR_SECRET: 'NOPE' } as any)
+    ).toThrow(InvalidConfigError);
+  });
+
+  it('rejects non-testnet/mainnet network', () => {
+    expect(() =>
+      createAnchorCCTPFromEnv({ STELLAR_NETWORK: 'devnet', STELLAR_DESTINATION: dest } as any)
+    ).toThrow(InvalidConfigError);
+  });
+
+  it('rejects bad DUST_COLLECTOR_ADDRESS', () => {
+    expect(() =>
+      createAnchorCCTPFromEnv({ STELLAR_DESTINATION: dest, DUST_COLLECTOR_ADDRESS: 'GBAD' } as any)
+    ).toThrow(InvalidConfigError);
+  });
+
+  it('rejects bad FORWARDER_CONTRACT_ID', () => {
+    expect(() =>
+      createAnchorCCTPFromEnv({ STELLAR_DESTINATION: dest, FORWARDER_CONTRACT_ID: 'GBAD' } as any)
+    ).toThrow(InvalidConfigError);
+  });
+
+  it('rejects secret not matching destination', () => {
+    const kp = Keypair.random();
+    const kp2 = Keypair.random();
+    expect(() =>
+      createAnchorCCTPFromEnv({
+        STELLAR_DESTINATION: kp.publicKey(),
+        STELLAR_SECRET: kp2.secret(),
+      } as any)
+    ).toThrow(InvalidConfigError);
+  });
+
+  it('rejects invalid STELLAR_SECRET format', () => {
+    expect(() =>
+      createAnchorCCTPFromEnv({ STELLAR_DESTINATION: dest, STELLAR_SECRET: 'INVALID_SECRET' } as any)
     ).toThrow(InvalidConfigError);
   });
 });
