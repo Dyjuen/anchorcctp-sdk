@@ -8,7 +8,21 @@ describe('anchor-cctp verify', () => {
 
   beforeAll((done) => {
     server = createServer((req, res) => {
-      if (req.url?.includes('/v1/attestations/0xcomplete_tx')) {
+      const url = req.url || '';
+      if (url.includes('/v2/messages/') && url.includes('0xcomplete_tx')) {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(
+          JSON.stringify({
+            messages: [
+              {
+                message: '0x' + 'ab'.repeat(40),
+                attestation: '0x' + 'cd'.repeat(70),
+                status: 'complete',
+              },
+            ],
+          })
+        );
+      } else if (req.url?.includes('/v1/attestations/0xcomplete_tx')) {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(
           JSON.stringify({
