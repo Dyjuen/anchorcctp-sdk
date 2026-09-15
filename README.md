@@ -122,7 +122,20 @@ source .env.testnet                             # 2. load secret into env
 npm run testnet:auto -- --skip-burn 0xABC123...  # 3. receive + balance-delta receipt
 ```
 
-Burn hash supplied externally via `--skip-burn` (EVM burn automation = Full phase). Requires `STELLAR_DESTINATION` + `STELLAR_SECRET` (real Keypair submitter). Balance-delta receipt emitted on stdout as JSON.
+Burn hash supplied externally via `--skip-burn` (EVM burn automation = Full phase, below). Requires `STELLAR_DESTINATION` + `STELLAR_SECRET` (real Keypair submitter). Balance-delta receipt emitted on stdout as JSON.
+
+## testnet:auto (Full)
+
+Self-serve burn: omit `--skip-burn` → script burns on Base Sepolia itself, then settles.
+
+```bash
+# 1. Base Sepolia ETH (gas) via coinbase/alchemy faucet
+# 2. Base Sepolia USDC via faucet.circle.com → your EVM address
+# 3. EVM key into .env.testnet (NEVER commit): EVM_PRIVATE_KEY=0x...
+env (cat .env.testnet) npm run testnet:auto -- --amount 1000000 --log docs/evidence/testnet-auto.log
+```
+
+Flow: chain-pin (testnet allowlist only) → gas/USDC checks → approve-if-needed (exact amount) → `depositForBurnWithHook` (mintRecipient + destinationCaller = forwarder, recipient in hookData) → Iris attest → Phase 1 settle → balance-delta receipt with `evmBurnTxHash`. `--skip-burn` path unchanged. Crash after burn but before settle → resume with `--skip-burn <evmBurnTxHash-from-log>` (re-run would burn again).
 
 ---
 
