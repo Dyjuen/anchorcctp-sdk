@@ -1,5 +1,6 @@
 import { createAnchorCCTP } from '../src/config.js';
 import * as forwarderMod from '../src/forwarder/index.js';
+import { resolveDustCollector } from '../src/receive.js';
 import {
   ReplayTransferError,
   InvalidDomainError,
@@ -209,34 +210,19 @@ describe('receive() Orchestration Engine', () => {
     expect(trustlineCreated).toBe(true);
   });
 
-  it('handles dust routing and emits onDustCollected when dust > 0', async () => {
-
-    const dustCollected: any[] = [];
+  it('documents that 6->7 conversion yields zero dust (no onDustCollected)', async () => {
+    const dustCollected: unknown[] = [];
     const sdk = makeSdk();
     sdk.on('onDustCollected', (p) => dustCollected.push(p));
-
-    // When amount produces dust if converted or custom mock
-    const customDustSdk = createAnchorCCTP({
-      signer: async () => 'TX_DUST',
-      dustCollectorAddress: validDestination,
-      _test: {
-        attestation: async () => ({
-          status: 'complete',
-          message: goodMsg,
-          signature: goodSig,
-        }),
-      },
-    });
-    customDustSdk.on('onDustCollected', (p) => dustCollected.push(p));
-
-    // convert7to6 and dust simulation
-    const res = await customDustSdk.receive({
+    const res = await sdk.receive({
       sourceDomain: 0,
-      burnTxHash: '0xdust_burn',
+      burnTxHash: '0xdust_documents_zero',
       destinationAddress: validDestination,
       amount: 1000000n,
     });
     expect(res.settled).toBe(true);
+    expect(res.dust).toBe(0n);
+    expect(dustCollected).toHaveLength(0);
   });
 
   it('uses _test.pollAttestation hook when provided and fires onReceiving events', async () => {
@@ -323,6 +309,15 @@ describe('receive() Orchestration Engine', () => {
     const callParams = spy.mock.calls[0][0];
     expect(callParams.sourceSequence).toBe('424242');
     spy.mockRestore();
+  });
+});
+
+describe('resolveDustCollector', () => {
+  const dest = 'GDEST';
+  it('prefers param over config over destination', () => {
+    expect(resolveDustCollector({ dest, param: 'GPARAM', cfg: 'GCFG' })).toBe('GPARAM');
+    expect(resolveDustCollector({ dest, cfg: 'GCFG' })).toBe('GCFG');
+    expect(resolveDustCollector({ dest })).toBe(dest);
   });
 });
 

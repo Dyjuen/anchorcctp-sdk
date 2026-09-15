@@ -55,6 +55,17 @@ export interface ReceiveContext {
 }
 
 /**
+ * Dust-collector precedence: param → cfg → dest.
+ */
+export function resolveDustCollector(args: {
+  dest: string;
+  param?: string;
+  cfg?: string;
+}): string {
+  return args.param || args.cfg || args.dest;
+}
+
+/**
  * Orchestrates the full CCTP receive lifecycle on Stellar.
  */
 export async function receive(
@@ -177,10 +188,11 @@ export async function receive(
   // 9. Decimal Conversion (6 -> 7 decimals) & Dust Routing
   const { stellarAmount, dust } = convert6to7(amount);
 
-  const effectiveDustCollector =
-    params.dustCollectorAddress ||
-    ctx.defaultDustCollector ||
-    stellarDestination;
+  const effectiveDustCollector = resolveDustCollector({
+    dest: stellarDestination,
+    param: params.dustCollectorAddress,
+    cfg: ctx.defaultDustCollector,
+  });
 
   // 10. Emit Lifecycle Events
   const timestamp = new Date().toISOString();
