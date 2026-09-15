@@ -4,7 +4,7 @@
 export * from './errors/index.js';
 
 /**
- * CCTP Domain ID Registry and metadata mappings for 26 mainnet/testnet chains.
+ * CCTP Domain ID Registry and metadata mappings for 30 live CCTP chains.
  */
 export * from './domains/index.js';
 
