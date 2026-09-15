@@ -41,3 +41,34 @@ export function convert7to6(stellarAmountStroops: bigint): { cctpAmount: bigint;
     dust,
   };
 }
+
+/**
+ * Formats a 7-decimal Stellar stroops amount as a human-readable decimal string.
+ * e.g. 1_000_000_000n -> "100.0000000"
+ */
+export function formatStellarUnits(stellarAmountStroops: bigint): string {
+  const isNegative = stellarAmountStroops < 0n;
+  const absVal = isNegative ? -stellarAmountStroops : stellarAmountStroops;
+  const whole = absVal / 10_000_000n;
+  const fraction = absVal % 10_000_000n;
+  const paddedFraction = fraction.toString().padStart(7, '0');
+  return `${isNegative ? '-' : ''}${whole.toString()}.${paddedFraction}`;
+}
+
+/**
+ * Parses a decimal string representation of Stellar units into 7-decimal stroops (bigint).
+ * e.g. "100.0000000" -> 1_000_000_000n
+ */
+export function parseStellarUnits(val: string): bigint {
+  const trimmed = val.trim();
+  if (!trimmed || !/^-?\d+(\.\d{1,7})?$/.test(trimmed)) {
+    throw new InvalidAmountError(`Invalid Stellar unit string format: "${val}". Expected integer or up to 7 decimal places.`);
+  }
+  const isNegative = trimmed.startsWith('-');
+  const unsigned = isNegative ? trimmed.slice(1) : trimmed;
+  const [wholePart, fracPart = ''] = unsigned.split('.');
+  const paddedFrac = fracPart.padEnd(7, '0');
+  const stroops = BigInt(wholePart) * 10_000_000n + BigInt(paddedFrac);
+  return isNegative ? -stroops : stroops;
+}
+

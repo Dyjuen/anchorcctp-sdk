@@ -1,4 +1,3 @@
-import { EventEmitter } from 'events';
 
 export interface ReceivingPayload {
   burnTxHash: string;
@@ -45,29 +44,58 @@ export interface AnchorCCTPEventEmitter {
   emit<K extends EventKey>(event: K, payload: AnchorCCTPEvents[K]): boolean;
 }
 
+interface ListenerWrapper {
+  fn: (payload: unknown) => void;
+  once: boolean;
+}
+
 /**
  * Creates a strongly-typed lifecycle event emitter for AnchorCCTP.
+ * Universal zero-dependency implementation compatible with Node, browsers, and Edge runtimes.
  */
 export function createEventEmitter(): AnchorCCTPEventEmitter {
-  const ee = new EventEmitter();
+  const listeners = new Map<EventKey, ListenerWrapper[]>();
 
   const typedEmitter: AnchorCCTPEventEmitter = {
     on<K extends EventKey>(event: K, handler: EventHandler<K>) {
-      ee.on(event, handler as (...args: unknown[]) => void);
+      const list = listeners.get(event) || [];
+      list.push({ fn: handler as (payload: unknown) => void, once: false });
+      listeners.set(event, list);
       return typedEmitter;
     },
     once<K extends EventKey>(event: K, handler: EventHandler<K>) {
-      ee.once(event, handler as (...args: unknown[]) => void);
+      const list = listeners.get(event) || [];
+      list.push({ fn: handler as (payload: unknown) => void, once: true });
+      listeners.set(event, list);
       return typedEmitter;
     },
     off<K extends EventKey>(event: K, handler: EventHandler<K>) {
-      ee.off(event, handler as (...args: unknown[]) => void);
+      const list = listeners.get(event);
+      if (list) {
+        listeners.set(
+          event,
+          list.filter((wrapper) => wrapper.fn !== (handler as (payload: unknown) => void))
+        );
+      }
       return typedEmitter;
     },
-    emit<K extends EventKey>(event: K, payload: AnchorCCTPEvents[K]) {
-      return ee.emit(event, payload);
+    emit<K extends EventKey>(event: K, payload: AnchorCCTPEvents[K]): boolean {
+      const list = listeners.get(event);
+      if (!list || list.length === 0) {
+        return false;
+      }
+      const copy = [...list];
+      listeners.set(
+        event,
+        list.filter((w) => !w.once)
+      );
+      for (const wrapper of copy) {
+        wrapper.fn(payload);
+      }
+      return true;
     },
   };
 
   return typedEmitter;
 }
+
