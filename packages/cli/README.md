@@ -25,7 +25,7 @@ npx @anchor-cctp/cli --help
 
 ### 1. `anchor-cctp domains`
 
-Lists all 26 supported CCTP domain IDs and chain mappings.
+Lists all 30 supported CCTP domain IDs and chain mappings.
 
 ```bash
 anchor-cctp domains

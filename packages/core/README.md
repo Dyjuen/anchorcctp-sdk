@@ -22,7 +22,7 @@
 - 🔐 **Zero Private Key Storage**: All transaction signing is strictly delegated to caller-supplied callbacks or sponsor secret managers.
 - 🛡️ **Cryptographic Replay Guards**: Pluggable idempotency store prevents double-crediting of burn transaction hashes.
 - 🔢 **Lossless BigInt Arithmetic**: $6 \to 7$ decimal scaling ($10^6 \to 10^7$) with sub-stroop dust rounding.
-- 🌐 **Full 26 CCTP Chain Registry**: Built-in support for Ethereum (`0`), Solana (`5`), Base (`6`), Arbitrum (`3`), Stellar (`27`), and more.
+- 🌐 **Full 30 CCTP Chain Registry**: Built-in support for Ethereum (`0`), Solana (`5`), Base (`6`), Arbitrum (`3`), Stellar (`27`), and more.
 - 📡 **Typed Lifecycle Event Pipeline**: Real-time event streams (`onReceiving`, `onSettled`, `onDustCollected`, `onError`).
 
 ---
@@ -186,7 +186,7 @@ try {
 | **27** | **Stellar** | **Stellar (Classic & Soroban)** | **7** |
 | **37** | X Layer | EVM | 6 |
 
-*(All 26 mainnet & testnet domains included)*
+*(All 30 mainnet & testnet domains included)*
 
 ---
 

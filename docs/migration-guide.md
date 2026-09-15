@@ -14,7 +14,7 @@ Previously, anchors accepting cross-chain USDC relied on:
 
 ### AnchorCCTP Native Flow
 With AnchorCCTP:
-- Direct 1:1 burn-and-mint settlement using Circle's Iris protocol across 26+ chains.
+- Direct 1:1 burn-and-mint settlement using Circle's Iris protocol across 30 chains.
 - Universal domain routing with deterministic address translation.
 - Single unified SDK interface (`receive()`) with built-in replay protection and decimal math.
 
@@ -96,7 +96,7 @@ Ensure your internal accounting ledger reflects 7-decimal Stroop quantities ($1 
 
 | Feature | Legacy Rails | AnchorCCTP SDK |
 |---|---|---|
-| **Supported Chains** | 1–3 custom integrations | 26 CCTP chains out of the box |
+| **Supported Chains** | 1–3 custom integrations | 30 CCTP chains out of the box |
 | **Finality Time** | 10–30 mins (bridge dependent) | Circle Iris finality (~1–3 mins) |
 | **Trust Model** | Custodial / Bridge multi-sig | Circle native mint + Soroban contract |
 | **Replay Protection**| Custom DB tracking | Built-in cryptographic idempotency |

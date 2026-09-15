@@ -72,7 +72,7 @@ const result: ReceiveResult = await client.receive(params: ReceiveParams);
 
 ## 3. Domain Registry (`CCTP_DOMAINS`)
 
-Official CCTP Domain ID Mapping for 26 mainnet and testnet blockchains.
+Official CCTP Domain ID Mapping for 30 mainnet and testnet blockchains.
 
 ```ts
 import { CCTP_DOMAINS, getDomainMeta, isSupportedDomain, DomainMeta } from '@anchor-cctp/core';

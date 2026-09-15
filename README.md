@@ -8,7 +8,7 @@ AnchorCCTP is a production-grade TypeScript SDK, CLI, and Anchor integration sui
 
 ## Key Capabilities
 
-- **Universal CCTP Routing**: Built-in registry covering all 26 mainnet and testnet CCTP domains.
+- **Universal CCTP Routing**: Built-in registry covering all 30 mainnet and testnet CCTP domains.
 - **Automated Decimal Alignment**: Lossless 6-to-7 decimal integer scaling ($10^{-6} \to 10^{-7}$) with sub-stroop dust routing.
 - **Cryptographic Attestation & Replay Protection**: Automatic Iris proof polling, cryptographic signature verification, and idempotency store.
 - **Deterministic Address Translation**: Automatic translation between EVM 20/32-byte hexadecimal addresses and Stellar Ed25519 public keys (`G...`).
