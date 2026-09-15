@@ -1,0 +1,10 @@
+{
+  "network": "testnet",
+  "horizonUrl": "https://horizon-testnet.stellar.org",
+  "sorobanRpcUrl": "https://soroban-testnet.stellar.org",
+  "attestationBaseUrl": "https://iris-api-sandbox.circle.com",
+  "forwarderContractId": "CA66Q2WFBND6V4UEB7RD4SAXSVIWMD6RA4X3U32ELVFGXV5PJK4T4VSZ",
+  "usdcIssuer": "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+  "destinationAddress": "GCX2EQXSPCHMBSEGYZRVTZWOIDRXWRWYEFRTCNVOZPYXE4QEFPKNUF3V",
+  "dustCollectorAddress": "GCX2EQXSPCHMBSEGYZRVTZWOIDRXWRWYEFRTCNVOZPYXE4QEFPKNUF3V"
+}
