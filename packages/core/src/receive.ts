@@ -24,6 +24,7 @@ export interface ReceiveParams {
   allowTrustlineCreation?: boolean;
   spendCapXlm?: number;
   forwarderContractId?: string;
+  sourceSequence?: string;
 }
 
 export interface ReceiveResult {
@@ -168,6 +169,7 @@ export async function receive(
       signature: attResult.signature,
       destination: stellarDestination,
       forwarderContractId,
+      ...(params.sourceSequence === undefined ? {} : { sourceSequence: params.sourceSequence }),
     },
     effectiveSigner
   );

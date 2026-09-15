@@ -1,4 +1,5 @@
 import { createAnchorCCTP } from '../src/config.js';
+import * as forwarderMod from '../src/forwarder/index.js';
 import {
   ReplayTransferError,
   InvalidDomainError,
@@ -294,6 +295,34 @@ describe('receive() Orchestration Engine', () => {
     });
     expect(res.settled).toBe(true);
     expect(res.txHash).toContain('SIGNED_');
+  });
+
+  it('receive forwards sourceSequence to the mint XDR', async () => {
+    const spy = jest.spyOn(forwarderMod, 'submitMint');
+    const sdk = createAnchorCCTP({
+      signer: async (x) => 'SIGNED_SEQ_TX',
+      _test: {
+        attestation: async () => ({
+          status: 'complete',
+          message: goodMsg,
+          signature: goodSig,
+        }),
+        hasTrustline: async () => true,
+      },
+    });
+
+    await sdk.receive({
+      sourceDomain: 6,
+      burnTxHash: '0xseqplumb',
+      destinationAddress: validDestination,
+      amount: 1000000n,
+      sourceSequence: '424242',
+    });
+
+    expect(spy).toHaveBeenCalledTimes(1);
+    const callParams = spy.mock.calls[0][0];
+    expect(callParams.sourceSequence).toBe('424242');
+    spy.mockRestore();
   });
 });
 

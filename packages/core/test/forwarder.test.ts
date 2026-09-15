@@ -121,6 +121,19 @@ describe('Forwarder & Address Translation', () => {
   });
 });
 
+describe('Forwarder sourceSequence', () => {
+  it('buildMintAndForwardXdr honors sourceSequence', () => {
+    const destination = StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 0x33));
+    const msg = '0x' + 'ab'.repeat(32);
+    const sig = '0x' + 'cd'.repeat(64);
+    const xdrNoSeq = buildMintAndForwardXdr({ message: msg, signature: sig, destination });
+    const xdrWithSeq = buildMintAndForwardXdr({ message: msg, signature: sig, destination, sourceSequence: '987654' });
+    expect(xdrNoSeq).not.toBe(xdrWithSeq);
+    const tx: any = TransactionBuilder.fromXDR(xdrWithSeq, 'Test SDF Network ; September 2015');
+    expect(String(tx.sequence)).toBe('987655');
+  });
+});
+
 describe('Forwarder network selection', () => {
   it('resolveForwarder returns testnet CA66.. by default and mainnet CBZL.. on request', async () => {
     expect(TESTNET_FORWARDER).toBe('CA66Q2WFBND6V4UEB7RD4SAXSVIWMD6RA4X3U32ELVFGXV5PJK4T4VSZ');

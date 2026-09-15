@@ -53,6 +53,17 @@ export * from './config.js';
  */
 export * from './receive.js';
 
+/**
+ * Public-only testnet JSON config loader (no secrets — env vars only).
+ */
+export * from './testnet-config.js';
+
+/**
+ * Testnet-only helpers: account state reads + forwarder liveness checks.
+ */
+export * from './testnet/account.js';
+export * from './testnet/forwarder-check.js';
+
 
 
 

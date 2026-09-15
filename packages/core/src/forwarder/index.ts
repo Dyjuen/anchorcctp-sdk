@@ -8,6 +8,7 @@ export interface MintParams {
   forwarderContractId?: string;
   horizonUrl?: string;
   networkPassphrase?: string;
+  sourceSequence?: string;
 }
 
 export type SignerCallback = (xdr: string) => Promise<string>;
@@ -33,7 +34,7 @@ export function buildMintAndForwardXdr(params: MintParams): string {
   const contractId = params.forwarderContractId || DEFAULT_FORWARDER;
   const passphrase = params.networkPassphrase || Networks.TESTNET;
   try {
-    const source = new Account(params.destination, '0');
+    const source = new Account(params.destination, params.sourceSequence ?? '0');
     const contract = new Contract(contractId);
     const op = contract.call(
       'mint_and_forward',
