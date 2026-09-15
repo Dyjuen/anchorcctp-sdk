@@ -191,3 +191,10 @@ describe('createAnchorCCTPFromEnv', () => {
     ).toThrow(InvalidConfigError);
   });
 });
+
+describe('parseTestnetConfig secret guard', () => {
+  it('rejects secret-like keys and S... values', () => {
+    expect(() => parseTestnetConfig({ ...valid(), apiSecret: 'x' })).toThrow('secret-like key');
+    expect(() => parseTestnetConfig({ ...valid(), note: 'S' + 'A'.repeat(55) })).toThrow('secret-like value');
+  });
+});

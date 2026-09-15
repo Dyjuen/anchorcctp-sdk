@@ -184,4 +184,16 @@ describe('Forwarder branch coverage', () => {
       )
     ).rejects.toMatchObject({ code: 'MINT_FAILED' });
   });
+
+  it('resolveForwarder returns mainnet id starting with C', () => {
+    expect(resolveForwarder('mainnet')).toMatch(/^C/);
+    expect(resolveForwarder('mainnet')).not.toBe(resolveForwarder('testnet'));
+  });
+
+  it('buildMintAndForwardXdr throws ForwarderContractError on bad contract', () => {
+    expect(() => buildMintAndForwardXdr({
+      message: '0xab', signature: '0xcd', destination: StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 0x33)),
+      forwarderContractId: 'CINVALID',
+    })).toThrow();
+  });
 });
