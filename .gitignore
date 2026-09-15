@@ -4,6 +4,11 @@ coverage/
 packages/*/coverage/
 *.tsbuildinfo
 *.local
+.env
+.env.*
+!.env.example
 .DS_Store
 /stellar.toml
 docs/superpowers/
+docs/evidence/testnet-auto.processed.json
+scripts/dist/

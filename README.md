@@ -108,6 +108,22 @@ anchor-cctp verify 0x9a8f4c...
 anchor-cctp listen GBBD47IF6... --limit 10
 ```
 
+## testnet:auto (Phase 1)
+
+Fresh testnet account → settled USDC in one command. Flow: env identity → fund check (friendbot) → forwarder liveness → trustline ensure (opt-in, capped) → receive() → Soroban prepare/send → balance-delta assert → receipt JSON on stdout.
+
+```bash
+# One command: pass an external EVM burn tx hash
+npm run testnet:auto -- --skip-burn 0xABC123... --amount 1000000 --source-domain 6
+
+# Full lifecycle
+npm run testnet:deploy                          # 1. create account + .env.testnet
+source .env.testnet                             # 2. load secret into env
+npm run testnet:auto -- --skip-burn 0xABC123...  # 3. receive + balance-delta receipt
+```
+
+Burn hash supplied externally via `--skip-burn` (EVM burn automation = Full phase). Requires `STELLAR_DESTINATION` + `STELLAR_SECRET` (real Keypair submitter). Balance-delta receipt emitted on stdout as JSON.
+
 ---
 
 ## Documentation & Standards
