@@ -188,7 +188,7 @@ All errors inherit from `AnchorCCTPError` and include structured `code` and `rem
 
 | Command | Description | Output |
 |---|---|---|
-| `anchor-cctp domains` | Lists 26 supported CCTP domain IDs and chain names. | JSON array to `stdout` |
+| `anchor-cctp domains` | Lists 30 supported CCTP domain IDs and chain names. | JSON array to `stdout` |
 | `anchor-cctp init` | Generates standard `stellar.toml` CCTP block. | JSON config summary to `stdout` |
 | `anchor-cctp verify <txHash>` | Queries and verifies Circle Iris attestation status. | JSON attestation status to `stdout` |
 | `anchor-cctp listen <address>` | Streams inbound CCTP transfers for a Stellar address. | NDJSON event stream to `stdout` |
