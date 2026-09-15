@@ -6,6 +6,7 @@
  * balance-delta assert → receipt JSON on stdout.
  *
  * Burn hash supplied externally via --skip-burn (EVM burn automation = Full phase).
+ * No --skip-burn: burns on Base Sepolia itself (needs EVM_PRIVATE_KEY + EVM_RPC_URL).
  * Requires STELLAR_DESTINATION + STELLAR_SECRET (real Keypair submitter).
  *
  * Usage:
@@ -18,13 +19,17 @@ import { checkForwarderDeployed } from '../packages/core/src/testnet/forwarder-c
 import { TESTNET_USDC_ISSUER } from '../packages/core/src/trustline/index.js';
 import { convert6to7 } from '../packages/core/src/decimals/index.js';
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { createPublicClient, createWalletClient, http } from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
+import { baseSepolia } from 'viem/chains';
+import { BurnError, executeBurn, planBurn } from '../packages/core/src/evm/burn.js';
 
 function arg(name: string): string | undefined {
   const i = process.argv.indexOf(name);
   return i >= 0 ? process.argv[i + 1] : undefined;
 }
 
-const burnTxHash = arg('--skip-burn') ?? '';
+let burnTxHash = arg('--skip-burn') ?? '';
 const amountRaw = arg('--amount') ?? '1000000';
 const sourceDomain = Number(arg('--source-domain') ?? 6);
 const destOverride = arg('--destination');
@@ -41,8 +46,12 @@ function fail(code: string, error: string, next: string): never {
   process.exit(1);
 }
 
+function parseMaxFee(raw: string): bigint {
+  if (!/^\d+$/.test(raw)) fail('INVALID_CONFIG', `EVM_MAX_FEE=${raw} is not a positive integer.`, 'Set EVM_MAX_FEE to e.g. 5000 (6-dec units).');
+  return BigInt(raw);
+}
+
 async function main(): Promise<void> {
-  if (!burnTxHash) fail('MISSING_ARGUMENT', 'Missing --skip-burn <0x...>.', 'Do one manual EVM burn, pass its tx hash.');
   if (!/^\d+$/.test(amountRaw) || BigInt(amountRaw) <= 0n) {
     fail('INVALID_ARGUMENT', '--amount must be a positive integer (base units, BigInt).', 'Pass e.g. --amount 1000000.');
   }
@@ -74,6 +83,53 @@ async function main(): Promise<void> {
   const dest = env.destinationAddress;
   const rpcUrl = process.env.SOROBAN_RPC_URL ?? 'https://soroban-testnet.stellar.org';
   const keypair = Keypair.fromSecret((process.env.STELLAR_SECRET ?? process.env.STELLAR_TESTNET_SECRET ?? '').trim());
+
+  let evmBurnTxHash: string | undefined;
+  if (!burnTxHash) {
+    const evmKey = (process.env.EVM_PRIVATE_KEY ?? '').trim();
+    if (!evmKey) {
+      fail('MISSING_BURN_SOURCE', 'No --skip-burn and no EVM_PRIVATE_KEY.', 'Pass --skip-burn 0x... (Phase 1) or set EVM_PRIVATE_KEY + EVM_RPC_URL (Full).');
+    }
+    if (!/^0x[0-9a-fA-F]{64}$/.test(evmKey)) {
+      fail('INVALID_CONFIG', 'EVM_PRIVATE_KEY malformed (want 0x + 64 hex).', 'Export the raw hex key, 0x-prefixed, into .env.testnet only.');
+    }
+    const evmRpc = (process.env.EVM_RPC_URL ?? 'https://sepolia.base.org').trim();
+    const expectedChainId = Number(process.env.EVM_CHAIN_ID ?? 84532);
+    const account = privateKeyToAccount(evmKey as `0x${string}`);
+    log(`[STEP] [burn] evm=${account.address} chain=${expectedChainId} amount=${amount.toString()}`);
+    try {
+      const chain = { ...baseSepolia, ...(process.env.EVM_RPC_URL ? { rpcUrls: { default: { http: [evmRpc] } } } : {}) };
+      const publicClient = createPublicClient({ chain, transport: http(evmRpc) });
+      const walletClient = createWalletClient({ account, chain, transport: http(evmRpc) });
+      const plan = planBurn({
+        amount,
+        stellarDestination: dest,
+        forwarderContractId: process.env.FORWARDER_CONTRACT_ID ?? 'CA66Q2WFBND6V4UEB7RD4SAXSVIWMD6RA4X3U32ELVFGXV5PJK4T4VSZ',
+        ...(process.env.EVM_USDC_ADDRESS ? { burnToken: process.env.EVM_USDC_ADDRESS as `0x${string}` } : {}),
+        ...(process.env.EVM_MESSENGER_ADDRESS ? { messenger: process.env.EVM_MESSENGER_ADDRESS as `0x${string}` } : {}),
+        ...(process.env.EVM_MAX_FEE ? { maxFee: parseMaxFee(process.env.EVM_MAX_FEE) } : {}),
+      });
+      const r = await executeBurn({ publicClient, walletClient, account: account.address, plan, expectedChainId });
+      burnTxHash = r.burnTxHash;
+      evmBurnTxHash = r.burnTxHash;
+      log(`[EVENT] [burn] txHash=${burnTxHash}`);
+    } catch (err) {
+      if (err instanceof BurnError) {
+        const nexts: Record<string, string> = {
+          EVM_CHAIN_PIN: 'Set EVM_CHAIN_ID=84532 + EVM_RPC_URL=https://sepolia.base.org; never mainnet.',
+          INSUFFICIENT_GAS: 'Fund Base Sepolia ETH (coinbase/alchemy faucet), re-run.',
+          INSUFFICIENT_USDC: 'Get Base Sepolia USDC at faucet.circle.com, re-run.',
+          APPROVE_FAILED: 'Check USDC contract + balance, re-run (idempotent).',
+          BURN_FAILED: 'Burn reverted — check messenger address + hook args, re-run.',
+        };
+        fail(err.code, err.message, nexts[err.code]);
+      }
+      if (err instanceof Error && /maxFee exceeds amount/.test(err.message)) {
+        fail('INVALID_CONFIG', err.message, 'Lower EVM_MAX_FEE at or below --amount.');
+      }
+      throw err;
+    }
+  }
 
   let state = await readAccountState({ horizonUrl, address: dest });
   if (!state.exists) {
@@ -160,6 +216,7 @@ async function main(): Promise<void> {
       balanceAfter: after,
       delta: delta.toString(),
       burnTxHash,
+      ...(evmBurnTxHash ? { evmBurnTxHash } : {}),
       sourceDomain,
       destination: dest,
     }) + '\n'
