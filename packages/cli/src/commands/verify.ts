@@ -6,6 +6,7 @@ export async function runVerifyCommand(args: string[]): Promise<number> {
   let baseUrl: string | undefined;
   let maxRetries = 30;
   let pollIntervalMs = 1000;
+  let testnet = false;
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
@@ -19,6 +20,8 @@ export async function runVerifyCommand(args: string[]): Promise<number> {
       pollIntervalMs = Number.parseInt(args[++i], 10);
     } else if (arg === '--tx-hash' && args[i + 1] !== undefined) {
       txHash = args[++i];
+    } else if (arg === '--testnet') {
+      testnet = true;
     } else if (!arg.startsWith('-') && !txHash) {
       txHash = arg;
     }
@@ -40,15 +43,16 @@ export async function runVerifyCommand(args: string[]): Promise<number> {
     return 1;
   }
 
+  const resolvedBase = baseUrl ?? (testnet ? 'https://iris-api-sandbox.circle.com' : undefined);
   const client = new AttestationClient({
-    baseUrl,
+    baseUrl: resolvedBase,
     maxRetries,
     pollIntervalMs,
   });
 
   try {
     process.stderr.write(`[INFO] Polling attestation for ${txHash}...\n`);
-    const result = await client.pollAttestation(txHash, (attempt, elapsedMs) => {
+    const result = await client.pollAttestationByTx(sourceDomain, txHash, (attempt, elapsedMs) => {
       process.stderr.write(`[DEBUG] Attempt ${attempt} (${elapsedMs}ms elapsed)...\n`);
     });
 
