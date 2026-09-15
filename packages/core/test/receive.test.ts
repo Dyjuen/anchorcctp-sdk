@@ -151,10 +151,7 @@ describe('receive() Orchestration Engine', () => {
       ({
         ok: true,
         json: async () => ({
-          status: 'complete',
-          attestation: '0x' + 'ab'.repeat(40),
-          message: '0x' + 'ab'.repeat(40),
-          signature: '0x' + 'cd'.repeat(70),
+          messages: [{ message: '0x' + 'ab'.repeat(40), attestation: '0x' + 'cd'.repeat(70), status: 'complete' }],
         }),
       } as unknown as Response);
 

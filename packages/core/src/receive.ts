@@ -112,7 +112,8 @@ export async function receive(
       elapsedTimeMs: 10,
     };
   } else {
-    attResult = await ctx.attestationClient.pollAttestation(
+    attResult = await ctx.attestationClient.pollAttestationByTx(
+      sourceDomain,
       burnTxHash,
       onPollCallback
     );

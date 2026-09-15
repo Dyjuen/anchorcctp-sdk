@@ -184,4 +184,57 @@ describe('Circle Attestation Client', () => {
   });
 });
 
+describe('AttestationClient v2 by-txHash (testnet path)', () => {
+  it('pollAttestationByTx hits /v2/messages/{domain}?transactionHash= on sandbox and returns message+attestation', async () => {
+    let capturedUrl = '';
+    const okFetch = async (url: any) =>
+      ({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          messages: [
+            {
+              message: '0x' + 'ab'.repeat(40),
+              attestation: '0x' + 'cd'.repeat(70),
+              status: 'complete',
+            },
+          ],
+        }),
+      } as unknown as Response);
+    const wrappedFetch = async (url: any, init?: any) => {
+      capturedUrl = String(url);
+      return okFetch(url);
+    };
+    const client = new AttestationClient({
+      baseUrl: 'https://iris-api-sandbox.circle.com',
+      fetchImpl: wrappedFetch as any,
+      pollIntervalMs: 1,
+      maxRetries: 2,
+    });
+    const res = await (client as any).pollAttestationByTx(6, '0xburn123');
+    expect(capturedUrl).toBe(
+      'https://iris-api-sandbox.circle.com/v2/messages/6?transactionHash=0xburn123'
+    );
+    expect(res.status).toBe('complete');
+    expect(res.message).toBe('0x' + 'ab'.repeat(40));
+  });
+
+  it('pollAttestationByTx keeps polling on PENDING then resolves', async () => {
+    let calls = 0;
+    const flakyFetch = async () =>
+      ({
+        ok: true,
+        status: 200,
+        json: async () => {
+          calls++;
+          if (calls === 1) return { messages: [{ message: '0x' + 'ab'.repeat(40), attestation: 'PENDING', status: 'pending_confirmations' }] };
+          return { messages: [{ message: '0x' + 'ab'.repeat(40), attestation: '0x' + 'cd'.repeat(70), status: 'complete' }] };
+        },
+      } as unknown as Response);
+    const client = new AttestationClient({ fetchImpl: flakyFetch as any, pollIntervalMs: 1, maxRetries: 3 });
+    const res = await (client as any).pollAttestationByTx(0, '0xabc');
+    expect(res.status).toBe('complete');
+    expect(calls).toBe(2);
+  });
+});
 

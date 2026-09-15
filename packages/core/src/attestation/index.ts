@@ -151,4 +151,56 @@ export class AttestationClient {
 
     throw new AttestationTimeoutError(burnTxHash, totalElapsedMs);
   }
+
+  async pollAttestationByTx(
+    sourceDomain: number,
+    txHash: string,
+    onPoll?: (attempt: number, elapsedMs: number) => void
+  ): Promise<AttestationResult> {
+    const startTime = Date.now();
+    const base = this.baseUrl.replace(/\/+$/, '');
+    const url = `${base}/v2/messages/${sourceDomain}?transactionHash=${txHash}`;
+
+    for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
+      const elapsedMs = Date.now() - startTime;
+      this.logger.debug('Polling CCTP v2 messages', { sourceDomain, txHash, attempt, elapsedMs });
+
+      try {
+        const res = await this.fetchImpl(url, {
+          headers: { Accept: 'application/json' },
+        });
+
+        if (res.ok) {
+          const data = (await res.json()) as {
+            messages?: Array<{ message?: string; attestation?: string; status?: string }>;
+          };
+          const msg = data.messages?.[0];
+          if (msg?.message && msg.attestation && msg.attestation !== 'PENDING' && msg.status === 'complete') {
+            return {
+              status: 'complete',
+              attestation: msg.attestation,
+              message: msg.message,
+              signature: msg.attestation,
+              attempts: attempt,
+              elapsedTimeMs: elapsedMs,
+            };
+          }
+        }
+      } catch {
+        // Retry on network drops or non-200 responses
+      }
+
+      onPoll?.(attempt, elapsedMs);
+      if (attempt === this.maxRetries) break;
+      const backoffInterval = Math.min(
+        this.pollIntervalMs * Math.pow(1.5, attempt - 1),
+        this.maxIntervalMs
+      );
+      await sleep(backoffInterval);
+    }
+
+    const totalElapsedMs = Date.now() - startTime;
+    this.logger.error('Attestation v2 polling timed out', { txHash, sourceDomain, attempts: this.maxRetries, totalElapsedMs });
+    throw new AttestationTimeoutError(txHash, totalElapsedMs);
+  }
 }
