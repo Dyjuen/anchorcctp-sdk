@@ -6,3 +6,4 @@ packages/*/coverage/
 *.local
 .DS_Store
 /stellar.toml
+docs/superpowers/
