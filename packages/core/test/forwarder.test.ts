@@ -149,7 +149,7 @@ describe('Forwarder branch coverage', () => {
     expect(() => translateToStellar(123 as any)).toThrow('Address must be a string');
   });
 
-  it('translateToStellar rejects invalid hex with0x prefix', () => {
+  it('translateToStellar rejects invalid hex with 0x prefix', () => {
     expect(() => translateToStellar('0xZZZ')).toThrow('Invalid address format');
   });
 
@@ -194,6 +194,6 @@ describe('Forwarder branch coverage', () => {
     expect(() => buildMintAndForwardXdr({
       message: '0xab', signature: '0xcd', destination: StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 0x33)),
       forwarderContractId: 'CINVALID',
-    })).toThrow();
+    })).toThrow(ForwarderContractError);
   });
 });
