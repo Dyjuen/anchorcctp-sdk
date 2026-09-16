@@ -47,13 +47,16 @@ console.log('Credited Stellar Amount:', result.amount, 'Dust:', result.dust);`;
 npm install -g @anchor-cctp/cli
 
 # 1. Initialize Anchor CCTP Configuration & stellar.toml
-anchorcctp init --network testnet --forwarder CDLZFC...
+anchor-cctp init --domain 27 --usdc-issuer GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5 --forwarder CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC --dust-collector GDDUSTCOLLECTOR00000000000000000000000000000000000000000000 --output ./stellar.toml
 
 # 2. Inspect Supported Circle CCTP Domains
-anchorcctp domains --json
+anchor-cctp domains
 
-# 3. Live Poll Circle Iris API & Execute Soroban Minting
-anchorcctp listen --source-domain 0 --tx-hash 0x9a8f4c2e... --destination GBBD47...
+# 3. Stream inbound transfers for an address (simulated)
+anchor-cctp listen GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5 --simulate
+
+# 4. Check burn-to-mint attestation status
+anchor-cctp verify 0x9a8f4c2e1b3d7a8c6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d --testnet
 `;
 
   const getCurrentText = () => {
