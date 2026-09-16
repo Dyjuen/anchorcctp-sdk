@@ -27,6 +27,14 @@ export async function connectFreighter(opts?: { allowSimulated?: boolean }): Pro
     }
 
     if (!connected) {
+      if (opts?.allowSimulated) {
+        return {
+          connected: true,
+          address: 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5',
+          network: 'TESTNET',
+          isSimulated: true,
+        };
+      }
       return {
         connected: false,
         address: null,
@@ -62,9 +70,12 @@ export async function connectFreighter(opts?: { allowSimulated?: boolean }): Pro
   }
 }
 
-export async function signWithFreighter(xdr: string): Promise<string> {
+export async function signWithFreighter(
+  xdr: string,
+  expectedPassphrase: string = 'Test SDF Network ; September 2015',
+): Promise<string> {
   const { signedTxXdr, error } = await freighter.signTransaction(xdr, {
-    networkPassphrase: 'Test SDF Network ; September 2015',
+    networkPassphrase: expectedPassphrase,
   });
 
   if (error || !signedTxXdr) {
