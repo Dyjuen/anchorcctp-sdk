@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   CCTP_DOMAINS,
   convert6to7,
@@ -13,8 +13,15 @@ import {
   Shield,
   Layers,
   Sparkles,
+  Wifi,
+  WifiOff,
 } from 'lucide-react';
-import { WalletState, signWithFreighter } from '../wallet/freighter';
+import {
+  WalletState,
+  signWithFreighter,
+  getAccountBalances,
+  checkNetworkMatch,
+} from '../wallet/freighter';
 
 interface CctpDepositFlowProps {
   wallet: WalletState;
@@ -48,7 +55,75 @@ export const CctpDepositFlow: React.FC<CctpDepositFlowProps> = ({
     remediation: string;
   } | null>(null);
 
+  // Balance + network state
+  const [xlmBalance, setXlmBalance] = useState<string | null>(null);
+  const [usdcBalance, setUsdcBalance] = useState<string | null>(null);
+  const [networkOk, setNetworkOk] = useState<boolean | null>(null);
+  const [networkLabel, setNetworkLabel] = useState<string>('');
+  const [simError, setSimError] = useState<string>('none');
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+
+  const TESTNET_PASSPHRASE = 'Test SDF Network ; September 2015';
+  const MAINNET_PASSPHRASE = 'Public Global Stellar Network ; September 2015';
+  const HORIZON_TESTNET = 'https://horizon-testnet.stellar.org';
+
   const selectedDomain = CCTP_DOMAINS[sourceDomainId] || CCTP_DOMAINS[0];
+
+  const refreshBalances = useCallback(async () => {
+    if (!wallet.address) return;
+    setIsRefreshing(true);
+    try {
+      const balances = await getAccountBalances(wallet.address, HORIZON_TESTNET);
+      let xlm: string | null = null;
+      let usdc: string | null = null;
+      for (const b of balances) {
+        if (b.asset_type === 'native') {
+          xlm = b.balance;
+        } else if (
+          b.asset_type === 'credit_alphanum12' &&
+          'asset_code' in b &&
+          (b as { asset_code?: string }).asset_code === 'USDC'
+        ) {
+          usdc = b.balance;
+        }
+      }
+      setXlmBalance(xlm);
+      setUsdcBalance(usdc);
+    } catch (err: unknown) {
+      setXlmBalance(null);
+      setUsdcBalance(null);
+      setErrorDetails({
+        code: 'BALANCE_FETCH',
+        message: err instanceof Error ? err.message : 'Failed to fetch balances',
+        remediation: 'Ensure account is funded on testnet.',
+      });
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [wallet.address]);
+
+  const checkNetwork = useCallback(async () => {
+    try {
+      await checkNetworkMatch(TESTNET_PASSPHRASE);
+      setNetworkOk(true);
+      setNetworkLabel('TESTNET');
+    } catch (err: unknown) {
+      setNetworkOk(false);
+      setNetworkLabel(err instanceof Error ? err.message : 'Network mismatch');
+    }
+  }, []);
+
+  useEffect(() => {
+    if (wallet.connected && wallet.address) {
+      refreshBalances();
+      checkNetwork();
+    } else {
+      setXlmBalance(null);
+      setUsdcBalance(null);
+      setNetworkOk(null);
+      setNetworkLabel('');
+    }
+  }, [wallet.connected, wallet.address, refreshBalances, checkNetwork]);
 
   const handleRandomTxHash = () => {
     const randomHex =
@@ -68,21 +143,64 @@ export const CctpDepositFlow: React.FC<CctpDepositFlowProps> = ({
     setIsProcessing(true);
     setErrorDetails(null);
     setSettlementResult(null);
-    setCurrentStep(1); // Step 1: Burn Verified
+    setCurrentStep(0);
+
+    // Handle error simulation modes
+    if (simError === 'rejected-signing') {
+      try {
+        const reviewXdr = btoa(JSON.stringify({ action: 'cctp_mint', destination: wallet.address, burnTxHash }));
+        await signWithFreighter(reviewXdr, TESTNET_PASSPHRASE);
+        setIsProcessing(false);
+        setErrorDetails({
+          code: 'SIGNING_REJECTED',
+          message: 'Freighter signing rejected',
+          remediation: 'Unlock Freighter wallet and approve the transaction.',
+        });
+      } catch (err: unknown) {
+        setIsProcessing(false);
+        setErrorDetails({
+          code: 'SIGNING_REJECTED',
+          message: err instanceof Error ? err.message : 'Freighter signing rejected',
+          remediation: 'Unlock Freighter wallet and approve the transaction.',
+        });
+      }
+      return;
+    }
+
+    if (simError === 'insufficient-xlm') {
+      setIsProcessing(false);
+      const xlm = xlmBalance ? parseFloat(xlmBalance) : 0;
+      if (xlm < 2) {
+        setErrorDetails({
+          code: 'INSUFFICIENT_XLM',
+          message: `Trustline would fail — current XLM balance: ${xlmBalance ?? 'unknown'}`,
+          remediation: 'Fund with testnet friendbot: https://friendbot.stellar.org',
+        });
+      } else {
+        setErrorDetails({
+          code: 'BALANCE_CHECK_PASSED',
+          message: `XLM balance ${xlmBalance} ≥ 2 XLM — trustline would succeed`,
+          remediation: 'No error to simulate: balance is sufficient.',
+        });
+      }
+      return;
+    }
+
+    const signPassphrase =
+      simError === 'network-mismatch' ? MAINNET_PASSPHRASE : TESTNET_PASSPHRASE;
+
+    setCurrentStep(1);
     const startTime = Date.now();
 
     try {
-      // Step 1: Source Burn Detection
       await new Promise((r) => setTimeout(r, 600));
 
-      // Step 2: Circle Iris Attestation Polling
       setCurrentStep(2);
       for (let attempt = 1; attempt <= 3; attempt++) {
         setAttestationAttempts(attempt);
         await new Promise((r) => setTimeout(r, 700));
       }
 
-      // Step 3: Soroban Mint Signing & Submission
       setCurrentStep(3);
       const jsonPayload = JSON.stringify({
         action: 'cctp_mint',
@@ -91,10 +209,9 @@ export const CctpDepositFlow: React.FC<CctpDepositFlowProps> = ({
       });
       const mockXdr = btoa(encodeURIComponent(jsonPayload));
 
-      await signWithFreighter(mockXdr);
+      await signWithFreighter(mockXdr, signPassphrase);
       await new Promise((r) => setTimeout(r, 800));
 
-      // Step 4: Settlement & Decimal Scaling (6 -> 7 decimals)
       setCurrentStep(4);
       const rawUnits = BigInt(Math.floor(parseFloat(usdcAmount) * 1_000_000));
       const { stellarAmount, dust } = convert6to7(rawUnits);
@@ -249,6 +366,83 @@ export const CctpDepositFlow: React.FC<CctpDepositFlowProps> = ({
               className="w-4 h-4 text-[#3E6BFF] rounded focus:ring-[#3E6BFF] cursor-pointer"
             />
           </div>
+
+          {/* Balance Display + Network Badge */}
+          {wallet.connected && wallet.address && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between p-3 bg-slate-950/60 rounded-xl border border-slate-800">
+                <div className="flex items-center space-x-4 text-xs font-mono">
+                  <span className="text-slate-400">
+                    XLM <span className="text-white font-bold">{xlmBalance ?? '…'}</span>
+                  </span>
+                  <span className="text-slate-600">·</span>
+                  <span className="text-slate-400">
+                    USDC <span className="text-white font-bold">{usdcBalance ?? '…'}</span>
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={refreshBalances}
+                  disabled={isRefreshing}
+                  className="text-xs text-[#3E6BFF] hover:underline font-bold flex items-center transition-colors cursor-pointer"
+                >
+                  <RefreshCw className={`w-3 h-3 mr-1 ${isRefreshing ? 'animate-spin' : ''}`} />
+                  Refresh
+                </button>
+              </div>
+              <div className="flex items-center space-x-2">
+                {networkOk === true ? (
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-emerald-500/15 border border-emerald-500/30 text-emerald-400">
+                    <Wifi className="w-3 h-3 mr-1" />
+                    TESTNET ✓
+                  </span>
+                ) : networkOk === false ? (
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-rose-500/15 border border-rose-500/30 text-rose-400">
+                    <WifiOff className="w-3 h-3 mr-1" />
+                    {networkLabel}
+                  </span>
+                ) : null}
+              </div>
+            </div>
+          )}
+
+          {/* Error Simulation */}
+          {wallet.connected && (
+            <div className="space-y-2">
+              <label className="block text-xs font-extrabold text-slate-300 uppercase tracking-wider">
+                Simulate Error
+              </label>
+              <select
+                value={simError}
+                onChange={(e) => setSimError(e.target.value)}
+                disabled={isProcessing}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-xs font-bold text-white focus:ring-2 focus:ring-[#3E6BFF] focus:border-[#3E6BFF] focus:outline-none transition-all"
+              >
+                <option value="none" className="bg-slate-900 text-white">None</option>
+                <option value="rejected-signing" className="bg-slate-900 text-white">Freighter signing rejected</option>
+                <option value="insufficient-xlm" className="bg-slate-900 text-white">Insufficient XLM balance</option>
+                <option value="network-mismatch" className="bg-slate-900 text-white">Network mismatch (mainnet)</option>
+              </select>
+            </div>
+          )}
+
+          {/* Review Line */}
+          {wallet.connected && (
+            <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800 text-xs font-mono space-y-1">
+              <div className="flex justify-between">
+                <span className="text-slate-400">Amount:</span>
+                <span className="text-white font-bold">{usdcAmount} USDC</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Destination:</span>
+                <span className="text-white font-bold truncate max-w-[200px]">{wallet.address}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Network:</span>
+                <span className="text-white font-bold">{TESTNET_PASSPHRASE}</span>
+              </div>
+            </div>
+          )}
 
           {/* Action CTA */}
           <button
