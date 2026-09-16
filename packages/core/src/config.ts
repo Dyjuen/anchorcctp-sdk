@@ -2,7 +2,6 @@ import { AttestationClient } from './attestation/index.js';
 import { ReplayStore } from './replay/index.js';
 import {
   createEventEmitter,
-  AnchorCCTPEvents,
   EventKey,
   EventHandler,
   AnchorCCTPEventEmitter,
@@ -59,7 +58,7 @@ export function createAnchorCCTP(config: AnchorCCTPConfig): AnchorCCTP {
 
   const attestationClient = new AttestationClient({
     baseUrl: config.attestationBaseUrl,
-    fetchImpl: config.fetchImpl || (config._test?.fetchImpl as any),
+    fetchImpl: config.fetchImpl || (config._test?.fetchImpl as typeof fetch),
     pollIntervalMs: config.pollIntervalMs,
     maxRetries: config.maxRetries,
     logger,
@@ -80,7 +79,7 @@ export function createAnchorCCTP(config: AnchorCCTPConfig): AnchorCCTP {
     defaultDustCollector: config.dustCollectorAddress,
     defaultTrustline: config.trustline,
     defaultForwarderContractId,
-    _test: config._test as any,
+    _test: config._test,
   };
 
   const client: AnchorCCTP = {

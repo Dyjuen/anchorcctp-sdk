@@ -44,7 +44,7 @@ export class AttestationClient {
       (typeof process !== 'undefined' && process.env?.CIRCLE_ATTESTATION_BASE_URL) ||
       'https://iris-api.circle.com';
 
-    this.fetchImpl = options.fetchImpl || (typeof fetch !== 'undefined' ? fetch : (null as any));
+    this.fetchImpl = options.fetchImpl || (typeof fetch !== 'undefined' ? fetch : (null as unknown as typeof fetch));
     this.pollIntervalMs = options.pollIntervalMs ?? 2000;
     this.maxIntervalMs = options.maxIntervalMs ?? 15000;
     this.maxRetries = options.maxRetries ?? 60;

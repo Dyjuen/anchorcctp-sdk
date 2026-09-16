@@ -85,13 +85,13 @@ export async function runInitCommand(args: string[]): Promise<number> {
     process.stdout.write(JSON.stringify(result, null, 2) + '\n');
     process.stderr.write(`[INFO] stellar.toml CCTP block generated at ${outputPath}\n`);
     return 0;
-  } catch (err: any) {
+  } catch (err: unknown) {
     process.stdout.write(JSON.stringify({
-      error: `Failed to write file: ${err.message}`,
+      error: `Failed to write file: ${(err as Error).message}`,
       code: 'WRITE_ERROR',
       remediation: 'Check output directory permissions and path.'
     }, null, 2) + '\n');
-    process.stderr.write(`[ERROR] Failed to write file: ${err.message}\n`);
+    process.stderr.write(`[ERROR] Failed to write file: ${(err as Error).message}\n`);
     return 1;
   }
 }

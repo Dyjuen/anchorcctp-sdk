@@ -68,8 +68,8 @@ export async function ensureTrustline(
   try {
     const xdr = buildChangeTrustXdr(
       params.destination,
-      (params as any).usdcIssuer || TESTNET_USDC_ISSUER,
-      (params as any).networkPassphrase || Networks.TESTNET
+      params.usdcIssuer || TESTNET_USDC_ISSUER,
+      params.networkPassphrase || Networks.TESTNET
     );
     await params.createTrustline(xdr);
     return { created: true };

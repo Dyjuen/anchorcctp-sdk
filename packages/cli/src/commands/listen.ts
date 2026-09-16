@@ -56,11 +56,11 @@ export async function runListenCommand(args: string[]): Promise<number> {
   let stellarAddress: string;
   try {
     stellarAddress = translateToStellar(options.address);
-  } catch (err: any) {
+  } catch (err: unknown) {
     process.stdout.write(
       JSON.stringify(
         {
-          error: `Invalid address: ${err.message}`,
+          error: `Invalid address: ${(err as Error).message}`,
           code: 'INVALID_ADDRESS',
           remediation: 'Provide a valid Stellar G... public key or 20/32-byte hex address.',
         },
@@ -68,7 +68,7 @@ export async function runListenCommand(args: string[]): Promise<number> {
         2
       ) + '\n'
     );
-    process.stderr.write(`[ERROR] Invalid address: ${err.message}\n`);
+    process.stderr.write(`[ERROR] Invalid address: ${(err as Error).message}\n`);
     return 1;
   }
 
@@ -118,9 +118,9 @@ export async function runListenCommand(args: string[]): Promise<number> {
   try {
     const res = await fetch(`${horizon}/accounts/${stellarAddress}/effects?order=desc&limit=${Math.min(maxEvents - count, 10)}`);
     if (res.ok) {
-      const data: any = await res.json();
-      const recs: any[] = data?._embedded?.records || [];
-      for (const r of recs.slice(0, maxEvents - count)) {
+      const data = (await res.json()) as { _embedded?: { records?: unknown[] } };
+      const recs: unknown[] = data?._embedded?.records || [];
+      for (const r of recs.slice(0, maxEvents - count) as Record<string, unknown>[]) {
         process.stdout.write(
           JSON.stringify({
             event: 'horizon_effect',

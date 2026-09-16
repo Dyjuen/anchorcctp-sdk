@@ -118,7 +118,7 @@ export async function receive(
   } else if (ctx._test?.attestation) {
     const rawMock = await ctx._test.attestation(burnTxHash);
     attResult = {
-      status: (rawMock.status as any) || 'complete',
+      status: (rawMock.status as AttestationResult['status']) || 'complete',
       attestation: rawMock.attestation || '0xatt_mock',
       message: rawMock.message || '0xmsg_mock',
       signature: rawMock.signature || '0xsig_mock',

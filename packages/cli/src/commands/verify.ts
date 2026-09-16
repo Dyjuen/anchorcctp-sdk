@@ -70,7 +70,7 @@ export async function runVerifyCommand(args: string[]): Promise<number> {
 
     process.stdout.write(JSON.stringify(output, null, 2) + '\n');
     return 0;
-  } catch (err: any) {
+  } catch (err: unknown) {
     if (err instanceof AnchorCCTPError) {
       process.stdout.write(
         JSON.stringify(
@@ -83,14 +83,14 @@ export async function runVerifyCommand(args: string[]): Promise<number> {
           2
         ) + '\n'
       );
-      process.stderr.write(`[ERROR] ${err.message}\n`);
+    process.stderr.write(`[ERROR] ${err instanceof Error ? err.message : String(err)}\n`);
       return 1;
     }
 
     process.stdout.write(
       JSON.stringify(
         {
-          error: err.message || String(err),
+          error: err instanceof Error ? err.message : String(err),
           code: 'VERIFY_FAILED',
           remediation: 'Verify Circle Iris API availability or check burn transaction hash.',
         },
@@ -98,7 +98,7 @@ export async function runVerifyCommand(args: string[]): Promise<number> {
         2
       ) + '\n'
     );
-    process.stderr.write(`[ERROR] ${err.message}\n`);
+    process.stderr.write(`[ERROR] ${err instanceof Error ? err.message : String(err)}\n`);
     return 1;
   }
 }
