@@ -1,34 +1,30 @@
 import React, { useState } from 'react';
-import { ChevronDown, Sparkles } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Plus, Minus } from 'lucide-react';
 
 export const FaqSection: React.FC = () => {
-  const [openIndex, setOpenIndex] = useState<number | null>(0);
+  const [openIndex, setOpenIndex] = useState<number | null>(2); // Default to middle element
 
   const faqs = [
     {
-      question: 'What is AnchorCCTP and SEP-CCTP?',
-      answer:
-        'AnchorCCTP is an open-source TypeScript SDK and CLI suite developed for Stellar Anchors to accept native 1:1 cross-chain USDC deposits from 26+ Circle CCTP connected blockchains directly onto Stellar. SEP-CCTP defines the standardized metadata extension for stellar.toml.',
+      question: 'Apa itu AnchorCCTP?',
+      answer: 'AnchorCCTP adalah TypeScript SDK open-source untuk menerima deposit USDC cross-chain 1:1 dari 26+ blockchain Circle CCTP langsung ke ekosistem Stellar tanpa batas.'
     },
     {
-      question: 'How does the 6-to-7 decimal precision scaling work?',
-      answer:
-        'Circle CCTP on EVM and SVM networks uses 6 decimal places for USDC, whereas Stellar asset precision uses 7 decimal places (Stroop units). AnchorCCTP scales raw units mathematically (base units * 10) without floating-point precision loss.',
+      question: 'Desimal 6 ke 7 Stroop',
+      answer: 'Circle CCTP menggunakan 6 desimal untuk USDC, sedangkan Stellar menggunakan 7 desimal (Stroop). AnchorCCTP melakukan skala matematis otomatis presisi tinggi tanpa kerugian.'
     },
     {
-      question: 'Which Circle CCTP source domain IDs are supported?',
-      answer:
-        'AnchorCCTP supports all 26 registered Circle CCTP mainnet and testnet domains, including Ethereum (0), Solana (5), Arbitrum (3), Optimism (2), Polygon (7), Base (6), Avalanche (1), and Stellar (27).',
+      question: '26+ Domain Circle CCTP',
+      answer: 'Mendukung semua domain mainnet Circle CCTP, termasuk Ethereum, Solana, Arbitrum, Optimism, Polygon, Base, Avalanche, dan tentunya Stellar (Domain 27).'
     },
     {
-      question: 'What is the role of the Soroban Forwarder Contract?',
-      answer:
-        'The Soroban Forwarder contract acts as a delegated minting proxy on Stellar. It verifies Circle Iris attestation signatures, checks idempotency replay protection, creates destination USDC trustlines if missing (capped at 2 XLM reserve), and mints USDC.',
+      question: 'Soroban Forwarder',
+      answer: 'Bertindak sebagai proxy minting di Stellar yang memverifikasi tanda tangan atestasi Circle Iris dan membuat trustline USDC tujuan secara otomatis (dibatasi 2 XLM).'
     },
     {
-      question: 'How does idempotency and replay protection operate?',
-      answer:
-        'Every incoming deposit tracks the source chain burn transaction hash in a persistent store before balance allocation. Duplicate submissions of already-processed burn transactions return a typed REPLAY_TRANSFER error.',
+      question: 'Status Pesanan Deposit',
+      answer: 'Setiap transaksi memiliki hash burn yang divalidasi dan disimpan di idempotency store. Anda dapat memantaunya langsung secara on-chain real-time.'
     },
   ];
 
@@ -37,51 +33,104 @@ export const FaqSection: React.FC = () => {
   };
 
   return (
-    <section id="faq" className="py-16 relative border-t border-slate-800/80 bg-slate-950/40">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
-        <div className="text-center space-y-2">
-          <div className="inline-flex items-center px-3.5 py-1 rounded-full text-xs font-extrabold bg-[#3E6BFF]/15 border border-[#3E6BFF]/30 text-[#3E6BFF] shadow-sm">
-            <Sparkles className="w-3.5 h-3.5 mr-1.5 text-[#3E6BFF]" />
-            Frequently Asked Questions
-          </div>
-          <h2 className="text-3xl font-black text-white tracking-tight sm:text-4xl">
-            Protocol & SDK FAQ
-          </h2>
-          <p className="text-slate-300 text-sm font-medium">
-            Everything you need to know about SEP-CCTP integration.
+    <section id="faq" className="py-24 relative bg-[#03060c] w-full border-t border-slate-800/60 font-sans overflow-hidden">
+      <div className="w-full max-w-[1500px] mx-auto px-4 sm:px-6 lg:px-16 space-y-16">
+        
+        {/* Header */}
+        <motion.div
+          initial={{ opacity: 0, y: 15 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="space-y-4 text-left max-w-3xl"
+        >
+          <p className="font-mono text-xs font-bold uppercase tracking-widest text-slate-500">
+            // PERTANYAAN UMUM
           </p>
-        </div>
+          <h2 className="text-5xl md:text-6xl font-black text-white tracking-tighter">
+            Ada pertanyaan?
+          </h2>
+        </motion.div>
 
-        {/* Accordion List */}
-        <div className="space-y-4">
-          {faqs.map((faq, idx) => {
-            const isOpen = openIndex === idx;
-            return (
-              <div
-                key={idx}
-                className="arch-card rounded-2xl overflow-hidden transition-all duration-200 bg-slate-900/80 border border-slate-800"
-              >
-                <button
+        {/* Responsive Horizontal/Vertical Accordion (Naleka Style) */}
+        <motion.div 
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="mt-10 lg:mt-16"
+        >
+          <div className="flex flex-col lg:flex-row w-full h-auto lg:h-[600px] border border-slate-800/80 rounded-[2rem] overflow-hidden bg-[#070C18]">
+            {faqs.map((faq, idx) => {
+              const isOpen = openIndex === idx;
+              return (
+                <motion.div
+                  key={idx}
+                  layout
                   onClick={() => toggleFaq(idx)}
-                  className="w-full px-6 py-5 flex items-center justify-between text-left font-extrabold text-white text-sm sm:text-base hover:text-[#3E6BFF] transition-colors cursor-pointer"
+                  className={`group relative flex flex-col transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] cursor-pointer overflow-hidden border-b lg:border-b-0 lg:border-r border-slate-800 last:border-0 ${
+                    isOpen ? 'lg:flex-[3] bg-slate-900/50 h-[500px] lg:h-full' : 'lg:flex-[0.5] hover:bg-slate-800/30 h-[80px] lg:h-full'
+                  }`}
                 >
-                  <span>{faq.question}</span>
-                  <ChevronDown
-                    className={`w-5 h-5 text-slate-400 transition-transform duration-200 shrink-0 ml-4 ${
-                      isOpen ? 'rotate-180 text-[#3E6BFF]' : ''
-                    }`}
-                  />
-                </button>
-
-                {isOpen && (
-                  <div className="px-6 pb-6 text-xs sm:text-sm text-slate-300 leading-relaxed font-medium border-t border-slate-800/80 pt-4 bg-slate-950/40">
-                    {faq.answer}
+                  {/* Desktop Closed State (Vertical Text) */}
+                  <div className={`hidden lg:flex w-full h-full flex-col items-center justify-between py-10 absolute inset-0 transition-opacity duration-300 ${isOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+                    <div className="flex-1 flex items-center justify-center">
+                      <h3 
+                        className="text-lg font-bold text-slate-400 whitespace-nowrap tracking-wide group-hover:text-white transition-colors"
+                        style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
+                      >
+                        {faq.question}
+                      </h3>
+                    </div>
+                    <div className="text-slate-500 group-hover:text-[#3E6BFF] transition-colors">
+                      <Plus className="w-6 h-6" strokeWidth={2} />
+                    </div>
                   </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+
+                  {/* Mobile Closed State (Horizontal Text) */}
+                  <div className={`lg:hidden w-full h-full flex items-center justify-between px-6 absolute inset-0 transition-opacity duration-300 ${isOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+                    <h3 className="text-base font-bold text-slate-400 group-hover:text-white transition-colors">
+                      {faq.question}
+                    </h3>
+                    <Plus className="w-5 h-5 text-slate-500" />
+                  </div>
+
+                  {/* Opened State Content */}
+                  <div className={`w-full h-full flex flex-col justify-between p-8 md:p-12 relative z-10 transition-opacity duration-700 delay-100 ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+                    
+                    {/* Top Content: Question & Answer */}
+                    <div className="flex flex-col lg:flex-row justify-between items-start gap-8">
+                      <div className="max-w-2xl">
+                        <h3 className="text-3xl md:text-5xl font-black text-white leading-[1.1] tracking-tight">
+                          {faq.question}
+                        </h3>
+                        <p className="mt-6 text-lg md:text-xl text-slate-400 font-medium leading-relaxed max-w-xl">
+                          {faq.answer}
+                        </p>
+                      </div>
+                      
+                      {/* Close Button */}
+                      <button className="hidden lg:flex items-center gap-3 text-rose-500 text-xs font-bold tracking-widest uppercase hover:text-white transition-colors">
+                        TUTUP <Minus className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    {/* Bottom Content: Logo Visual (1.5x Larger) */}
+                    <div className="self-center lg:self-end mt-12 lg:mt-auto relative w-full lg:w-auto flex justify-center lg:justify-end">
+                      <div className="absolute inset-0 bg-[#3E6BFF]/20 blur-[100px] rounded-full pointer-events-none" />
+                      <div className="relative flex items-center justify-center w-72 h-72 lg:w-[30rem] lg:h-[30rem]">
+                        <img 
+                          src="/assets/img/final.svg" 
+                          alt="Logo" 
+                          className="w-64 h-64 lg:w-[26rem] lg:h-[26rem] object-contain drop-shadow-[0_0_40px_rgba(62,107,255,0.5)] relative z-10 hover:scale-105 transition-transform duration-500"
+                        />
+                      </div>
+                    </div>
+
+                  </div>
+                </motion.div>
+              );
+            })}
+          </div>
+        </motion.div>
       </div>
     </section>
   );

@@ -1,0 +1,339 @@
+import React, { useState } from 'react';
+import { motion } from 'framer-motion';
+import {
+  ArrowRight,
+  Shield,
+  Layers,
+  Cpu,
+  RefreshCcw,
+  Sparkles,
+  ExternalLink,
+  CheckCircle2,
+  Lock,
+  Compass,
+} from 'lucide-react';
+
+interface StandardCardProps {
+  id: string;
+  title: string;
+  subtitle: string;
+  tag: string;
+  frontDescription: string;
+  backDetails: string[];
+  ctaLabel: string;
+}
+
+export const ShowcaseSection: React.FC = () => {
+  const [flippedCards, setFlippedCards] = useState<Record<string, boolean>>({});
+
+  const toggleFlip = (id: string) => {
+    setFlippedCards((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const standards: StandardCardProps[] = [
+    {
+      id: 'std-1',
+      title: 'Soroban Forwarder Mint',
+      subtitle: 'Smart Contract Automation',
+      tag: 'CCTP Domain 27',
+      frontDescription: 'Pencetakan token terdelegasi dengan pembuatan Trustline otomatis tanpa batas interaksi manual.',
+      backDetails: [
+        'Batas cadangan XLM ≤ 2 XLM',
+        'Eksekusi atomik Soroban SDK',
+        'Validasi domain ID & Iris proof',
+      ],
+      ctaLabel: 'Lihat Kontrak Soroban',
+    },
+    {
+      id: 'std-2',
+      title: 'Attestation Poller v1',
+      subtitle: 'Circle Iris Proof Engine',
+      tag: 'Kriptografi Verified',
+      frontDescription: 'Polling otomatis dengan exponential backoff dan verifikasi tanda tangan kriptografi 64-byte.',
+      backDetails: [
+        'Fast-path attestation retrieval',
+        'Dukungan 26+ domain CCTP',
+        'Automatic retry on pending proof',
+      ],
+      ctaLabel: 'Lihat Log Proof Iris',
+    },
+    {
+      id: 'std-3',
+      title: 'Decimal Precision Scaler',
+      subtitle: '6 → 7 Stroop Conversion',
+      tag: 'Presisi Tinggi',
+      frontDescription: 'Pengubah desimal 6 (EVM/SVM) ke 7 Stroop (Stellar) tanpa kehilangan fraksi atau floating-point rounding.',
+      backDetails: [
+        'Pengolahan BigInt presisi',
+        'Pencatatan sisa dust otomatis',
+        'Format unit standar Soroban',
+      ],
+      ctaLabel: 'Uji Kalkulator Desimal',
+    },
+    {
+      id: 'std-4',
+      title: 'Replay Attack Protection',
+      subtitle: 'Idempotency Persistence Store',
+      tag: 'Keamanan On-Chain',
+      frontDescription: 'Setiap hash transaksi burn dicatat di append-only store untuk mencegah klaim berulang.',
+      backDetails: [
+        'Unique hash registry',
+        'Pencegahan double-minting',
+        'Audit trail real-time',
+      ],
+      ctaLabel: 'Cek Idempotency Hash',
+    },
+  ];
+
+  return (
+    <div className="space-y-16 py-8">
+      {/* SECTION 1: HUTS-STYLE ALTERNATING BACK-AND-FORTH SHOWCASE */}
+      <section className="relative px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto space-y-16">
+        {/* Back-and-Forth Block #1: Media Left, Content Right */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+          <motion.div
+            initial={{ opacity: 0, x: -30 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+            className="lg:col-span-6 relative"
+          >
+            <div className="relative rounded-3xl overflow-hidden border border-emerald-500/30 bg-gradient-to-br from-[#0C310A]/60 via-[#071913] to-slate-950 p-8 shadow-2xl space-y-6">
+              <div className="flex items-center justify-between border-b border-emerald-500/20 pb-4">
+                <span className="font-mono text-xs text-emerald-400 font-bold uppercase tracking-widest">
+                  // HUTS ARCHITECTURE #01
+                </span>
+                <span className="text-xs px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/40">
+                  Domain ID 27 Live
+                </span>
+              </div>
+
+              <div className="space-y-4">
+                <h3 className="text-2xl font-black text-white leading-tight">
+                  Infrastruktur Ingesting Anchor Stellar Tanpa Friction
+                </h3>
+                <p className="text-slate-300 text-sm font-medium leading-relaxed">
+                  Gabungan otomatisasi Soroban smart contract dengan Circle CCTP untuk kemudahan deposit cross-chain dari 26+ blockchain.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 pt-4 border-t border-emerald-500/20">
+                <div className="p-4 rounded-2xl bg-slate-950/70 border border-emerald-500/20 space-y-1">
+                  <p className="text-[10px] font-mono text-emerald-400 uppercase font-bold">Respon Time</p>
+                  <p className="text-xl font-black text-white">&lt; 3 Detik</p>
+                </div>
+                <div className="p-4 rounded-2xl bg-slate-950/70 border border-emerald-500/20 space-y-1">
+                  <p className="text-[10px] font-mono text-emerald-400 uppercase font-bold">Trustline Cost</p>
+                  <p className="text-xl font-black text-white">0 XLM (Auto)</p>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, x: 30 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+            className="lg:col-span-6 space-y-6 text-left"
+          >
+            <p className="font-mono text-xs font-bold uppercase tracking-widest text-[#3E6BFF]">
+              // HUTS BACK-AND-FORTH SECTION
+            </p>
+            <h2 className="text-3xl font-black text-white tracking-tight sm:text-4xl">
+              Proses Terstruktur Seperti Standar Arsitektur Modern
+            </h2>
+            <p className="text-slate-300 text-base font-medium leading-relaxed">
+              Kami membangun <strong className="text-white">AnchorCCTP SDK</strong> dengan standar modular yang fleksibel. Setiap modul berjalan secara terisolasi namun terkoordinasi dengan presisi.
+            </p>
+            <div className="space-y-3 pt-2">
+              <div className="flex items-center space-x-3 text-sm font-bold text-slate-200">
+                <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+                <span>Otomatisasi pembuatan Trustline Soroban untuk user baru</span>
+              </div>
+              <div className="flex items-center space-x-3 text-sm font-bold text-slate-200">
+                <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+                <span>Pengawalan batas cadangan XLM hingga maksimal 2 XLM</span>
+              </div>
+              <div className="flex items-center space-x-3 text-sm font-bold text-slate-200">
+                <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+                <span>Dukungan file metadata standar SEP-CCTP (stellar.toml)</span>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+
+        {/* CUSTOM INLINE SVG SECTION DIVIDER (divider-arrow from huts.com) */}
+        <div className="flex items-center justify-center py-6">
+          <div className="flex items-center space-x-4 opacity-70">
+            <div className="h-[1px] w-24 bg-gradient-to-r from-transparent via-[#3E6BFF] to-transparent" />
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" className="text-[#3E6BFF] animate-bounce">
+              <path d="M12 5V19M12 19L5 12M12 19L19 12" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            <div className="h-[1px] w-24 bg-gradient-to-r from-transparent via-[#3E6BFF] to-transparent" />
+          </div>
+        </div>
+
+        {/* Back-and-Forth Block #2: Content Left, Media Right (REVERSE DIRECTION) */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+          <motion.div
+            initial={{ opacity: 0, x: -30 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+            className="lg:col-span-6 space-y-6 text-left order-2 lg:order-1"
+          >
+            <p className="font-mono text-xs font-bold uppercase tracking-widest text-[#3E6BFF]">
+              // HUTS REVERSE DIRECTION SECTION
+            </p>
+            <h2 className="text-3xl font-black text-white tracking-tight sm:text-4xl">
+              Circle Iris Proof Engine Terverifikasi Kriptografi
+            </h2>
+            <p className="text-slate-300 text-base font-medium leading-relaxed">
+              Polling bukti atestasi dilakukan melalui algoritma exponential backoff otomatis. Mencegah kegagalan koneksi jaringan saat lalu lintas transaksi melonjak tinggi.
+            </p>
+            <div className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-3">
+              <div className="flex items-center justify-between text-xs font-mono">
+                <span className="text-slate-400">Iris API Endpoint:</span>
+                <span className="text-white font-bold">iris-api.circle.com/v1</span>
+              </div>
+              <div className="flex items-center justify-between text-xs font-mono">
+                <span className="text-slate-400">Proof Status:</span>
+                <span className="text-emerald-400 font-bold">COMPLETE (Attested)</span>
+              </div>
+            </div>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, x: 30 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+            className="lg:col-span-6 relative order-1 lg:order-2"
+          >
+            <div className="relative rounded-3xl overflow-hidden border border-[#3E6BFF]/30 bg-gradient-to-br from-[#0D1527] via-slate-900 to-slate-950 p-8 shadow-2xl space-y-6">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+                <span className="font-mono text-xs text-[#3E6BFF] font-bold uppercase tracking-widest">
+                  // ATTENTION ENGINE
+                </span>
+                <span className="text-xs px-3 py-1 rounded-full bg-[#3E6BFF]/20 text-[#3E6BFF] font-bold border border-[#3E6BFF]/40">
+                  Circle Iris v1
+                </span>
+              </div>
+
+              <div className="space-y-4">
+                <h3 className="text-2xl font-black text-white leading-tight">
+                  Verifikasi Tanpa Celah Sebelum Settlement
+                </h3>
+                <p className="text-slate-300 text-sm font-medium leading-relaxed">
+                  SDK memastikan pesan burn dari Ethereum, Arbitrum, Solana, atau Cosmos memiliki byte signature sah sebelum dikirim ke Soroban.
+                </p>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 text-xs font-mono text-slate-300 space-y-1">
+                <p className="text-emerald-400 font-bold">// Iris Attestation Payload</p>
+                <p className="truncate text-slate-400">0x0000000000000000000000000000000000000000000000000000000000000000</p>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      </section>
+
+      {/* SECTION 2: HUTS-STYLE INTERACTIVE 3D FLIP CARD SLIDER / GRID */}
+      <section className="relative py-16 bg-[#091526]/80 border-t border-b border-slate-800/80">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
+          {/* Header */}
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-slate-800 pb-6">
+            <div className="space-y-2 text-left">
+              <p className="font-mono text-xs font-bold uppercase tracking-widest text-[#3E6BFF]">
+                // HUTS INTERACTIVE STANDARDS
+              </p>
+              <h2 className="text-3xl font-black text-white tracking-tight sm:text-4xl">
+                Semuanya Berawal dari Standar Kami...
+              </h2>
+              <p className="text-slate-300 max-w-xl text-sm font-medium">
+                Klik tiap kartu untuk memutar (3D Flip) dan melihat detail arsitektur di balik layar.
+              </p>
+            </div>
+
+            <div className="flex items-center space-x-2 text-xs font-extrabold text-slate-400">
+              <Compass className="w-4 h-4 text-[#3E6BFF]" />
+              <span>Tekan kartu untuk melihat sisi belakang</span>
+            </div>
+          </div>
+
+          {/* 3D Flip Card Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {standards.map((std) => {
+              const isFlipped = !!flippedCards[std.id];
+              return (
+                <div
+                  key={std.id}
+                  onClick={() => toggleFlip(std.id)}
+                  className="perspective-1000 h-[340px] cursor-pointer group"
+                >
+                  <motion.div
+                    animate={{ rotateY: isFlipped ? 180 : 0 }}
+                    transition={{ duration: 0.6, ease: [0.23, 1, 0.32, 1] }}
+                    className="relative w-full h-full preserve-3d"
+                  >
+                    {/* CARD FRONT SIDE */}
+                    <div className="absolute inset-0 backface-hidden p-6 rounded-2xl bg-slate-900 border border-slate-800 flex flex-col justify-between shadow-xl group-hover:border-[#3E6BFF]/60 transition-colors">
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-extrabold uppercase px-2.5 py-1 rounded bg-[#3E6BFF]/20 text-[#3E6BFF] border border-[#3E6BFF]/30">
+                            {std.tag}
+                          </span>
+                          <span className="text-xs font-mono text-slate-500 font-bold">FRONT</span>
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-xs font-mono text-slate-400">{std.subtitle}</p>
+                          <h3 className="text-lg font-black text-white">{std.title}</h3>
+                        </div>
+                        <p className="text-xs text-slate-300 leading-relaxed font-medium">
+                          {std.frontDescription}
+                        </p>
+                      </div>
+
+                      <div className="pt-4 border-t border-slate-800 flex items-center justify-between text-xs font-bold text-[#3E6BFF]">
+                        <span>Putar Kartu (Detail)</span>
+                        <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+                      </div>
+                    </div>
+
+                    {/* CARD BACK SIDE */}
+                    <div className="absolute inset-0 backface-hidden rotate-y-180 p-6 rounded-2xl bg-gradient-to-br from-slate-900 via-slate-950 to-[#070C18] border border-[#3E6BFF]/50 flex flex-col justify-between shadow-2xl">
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                          <span className="text-xs font-black text-white uppercase">{std.title}</span>
+                          <span className="text-xs font-mono text-emerald-400 font-bold">BACK</span>
+                        </div>
+
+                        <div className="space-y-2">
+                          <p className="text-[11px] font-mono text-slate-400 font-bold">Spesifikasi Utama:</p>
+                          <ul className="space-y-1.5 text-xs text-slate-200 font-medium">
+                            {std.backDetails.map((detail, idx) => (
+                              <li key={idx} className="flex items-center space-x-2">
+                                <span className="w-1.5 h-1.5 rounded-full bg-[#3E6BFF]" />
+                                <span>{detail}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+
+                      <div className="pt-4 border-t border-slate-800 flex items-center justify-between text-xs font-bold text-white bg-[#3E6BFF] hover:bg-[#345CE0] px-4 py-2.5 rounded-xl text-center">
+                        <span>{std.ctaLabel}</span>
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </div>
+                    </div>
+                  </motion.div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+};
