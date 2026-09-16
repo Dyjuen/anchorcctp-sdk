@@ -6,6 +6,7 @@ export interface WalletState {
   network?: string;
   error?: string;
   isSimulated?: boolean;
+  needsInstall?: boolean;
 }
 
 export async function checkFreighterInstalled(): Promise<boolean> {
@@ -17,29 +18,39 @@ export async function checkFreighterInstalled(): Promise<boolean> {
   }
 }
 
-export async function connectFreighter(): Promise<WalletState> {
+export async function connectFreighter(opts?: { allowSimulated?: boolean }): Promise<WalletState> {
   try {
-    const installed = await checkFreighterInstalled();
-    if (!installed) {
-      // Return simulated mock account for browser environments without Freighter extension
+    const { isConnected: connected, error } = await freighter.isConnected();
+
+    if (error) {
+      throw new Error(error);
+    }
+
+    if (!connected) {
       return {
-        connected: true,
-        address: 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5',
-        network: 'TESTNET',
-        isSimulated: true,
+        connected: false,
+        address: null,
+        error: 'Freighter not installed — install from freighter.app',
+        needsInstall: true,
       };
     }
 
-    const { address, error } = await freighter.getAddress();
+    const addressResult = await freighter.getAddress();
 
-    if (!address || error) {
-      throw new Error('User declined wallet connection or no public key returned.');
+    if (addressResult.error || !addressResult.address) {
+      return {
+        connected: false,
+        address: null,
+        error: addressResult.error || 'User declined wallet connection',
+      };
     }
+
+    const networkResult = await freighter.getNetwork();
 
     return {
       connected: true,
-      address,
-      network: 'TESTNET',
+      address: addressResult.address,
+      network: networkResult.networkPassphrase,
       isSimulated: false,
     };
   } catch (err: unknown) {
@@ -52,23 +63,36 @@ export async function connectFreighter(): Promise<WalletState> {
 }
 
 export async function signWithFreighter(xdr: string): Promise<string> {
-  try {
-    const installed = await checkFreighterInstalled();
-    if (!installed) {
-      // Simulated signature for sandbox / demo mode
-      const hex = Array.from(new TextEncoder().encode(xdr.slice(0, 16)))
-        .map((b) => b.toString(16).padStart(2, '0'))
-        .join('');
-      return `MOCK_FREIGHTER_SIGNATURE_${Date.now()}_${hex}`;
-    }
+  const { signedTxXdr, error } = await freighter.signTransaction(xdr, {
+    networkPassphrase: 'Test SDF Network ; September 2015',
+  });
 
-    const { signedTxXdr, error } = await freighter.signTransaction(xdr, {
-      networkPassphrase: 'Test SDF Network ; September 2015',
-    });
-
-    if (error || !signedTxXdr) return xdr;
-    return signedTxXdr;
-  } catch (err: unknown) {
-    throw new Error(`Freighter signing rejected: ${err instanceof Error ? err.message : err}`, { cause: err });
+  if (error || !signedTxXdr) {
+    throw new Error(`Freighter signing rejected: ${error || 'empty response'}`);
   }
+
+  return signedTxXdr;
+}
+
+export async function checkNetworkMatch(expectedPassphrase: string): Promise<void> {
+  const { networkPassphrase, error } = await freighter.getNetwork();
+  if (error) throw new Error(`Failed to read wallet network: ${error}`);
+  if (networkPassphrase !== expectedPassphrase) {
+    throw new Error(`Network mismatch — wallet on ${networkPassphrase}, expected ${expectedPassphrase}`);
+  }
+}
+
+export async function getAccountBalances(address: string, horizonUrl: string): Promise<Array<{ asset_type: string; balance: string }>> {
+  if (!horizonUrl.startsWith('https://')) {
+    throw new Error('Horizon URL must use https');
+  }
+  const res = await fetch(`${horizonUrl}/accounts/${address}`);
+  if (res.status === 404) {
+    throw new Error(`Account unfunded — send testnet XLM from friendbot.stellar.org to ${address}`);
+  }
+  if (!res.ok) {
+    throw new Error(`Horizon request failed (${res.status})`);
+  }
+  const data = await res.json();
+  return data.balances;
 }
