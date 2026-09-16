@@ -31,6 +31,9 @@ jobs:
       - name: Typecheck TypeScript Project
         run: npm run typecheck
 
+      - name: Lint with ESLint
+        run: npm run lint
+
       - name: Run Test Suite with Coverage Gate (>= 90%)
         run: npm test
 
