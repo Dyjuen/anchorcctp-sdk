@@ -157,6 +157,7 @@ Flow: chain-pin (testnet allowlist only) → gas/USDC checks → approve-if-need
 - **Strict TDD**: All behaviors accompanied by isolated unit and integration tests.
 - **Coverage**: ≥90% line and branch coverage across core and CLI packages.
 - **Security Guardrails**: No stored private keys, cryptographic verification of all Iris proofs, integer-only BigInt arithmetic, strict spending caps on sponsored trustline creation.
+- **Non-Audit Disclaimer (PRD §7.10)**: This SDK is provided as-is for integration acceleration and has **not** undergone a third-party security audit. Review all signing paths and test thoroughly before handling substantial production value.
 
 ---
 

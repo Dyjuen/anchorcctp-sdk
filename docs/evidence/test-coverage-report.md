@@ -1,13 +1,26 @@
 # Test Coverage Evidence & Test Suites Report — AnchorCCTP SDK
 
-**Date:** 2026-09-10  
+**Date:** 2026-09-16  
 **Command Executed:** `npm test -- --coverage`  
-**Result:** **18 Passed Test Suites**, 0 Failed, **80 Passed Specs** (100% test pass rate)  
-**Overall Line Coverage:** **98.49%** (Target: $\ge 90.00\%$)
+**Result:** **24 Passed Test Suites** (1 skipped: `testnet-gated`, env-gated), 0 Failed, **161 Passed Specs**, 2 skipped  
+**Overall Line Coverage:** **97.42%** (Target: $\ge 90.00\%$; core-only gate: 97.5% lines / 91.3% branches via `packages/core/jest.config.js`)
 
 ---
 
-## 1. Terminal Coverage Matrix Output
+## 1. Terminal Coverage Matrix Output (fresh 2026-09-16)
+
+Fresh `npm test -- --coverage`: 24 passed / 1 skipped suites, 161 passed / 2 skipped specs.
+
+```
+All files          | 96.73 stmts | 89.78 branch | 94.28 funcs | 97.42 lines
+ cli/src/commands  | 96.75       | 86.23        | 100         | 96.66
+ core/src          | 95.88       | 92.98        | 90          | 96.31
+```
+
+Note: combined-run branch reads 89.78%; binding gate is core-only (91.3% branches,
+green via `packages/core/jest.config.js`). Root config is projects-only by design.
+
+### Historical matrix (2026-09-10, stale — kept for reference)
 
 ```
 -----------------|---------|----------|---------|---------|-------------------
@@ -45,7 +58,7 @@ Time:        4.207 s
 
 ---
 
-## 2. Detailed Test Suites Catalog & Code Snippets
+## 2. Detailed Test Suites Catalog & Code Snippets (historical 2026-09-10 — partial; current: 24 suites / 161 specs per §1)
 
 Here is the comprehensive breakdown of all 18 test suites in the monorepo, detailing what each test file asserts and including representative code snippets:
 

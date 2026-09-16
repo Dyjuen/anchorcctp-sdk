@@ -6,12 +6,6 @@
   "bin": {
     "anchor-cctp": "./dist/index.js"
   },
-  "files": [
-    "dist"
-  ],
-  "publishConfig": {
-    "access": "public"
-  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Dyjuen/anchorcctp-sdk.git",
@@ -40,7 +34,7 @@
     "access": "public"
   },
   "dependencies": {
-    "@anchor-cctp/core-sdk": "*"
+    "@anchor-cctp/core-sdk": "1.0.0"
   },
   "devDependencies": {
     "@types/jest": "^29.5.14",

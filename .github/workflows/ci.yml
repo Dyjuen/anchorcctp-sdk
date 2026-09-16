@@ -37,6 +37,9 @@ jobs:
       - name: Run Test Suite with Coverage Gate (>= 90%)
         run: npm test
 
+      - name: Enforce Core Coverage Threshold (>= 90%)
+        run: npm run test --workspace=@anchor-cctp/core-sdk
+
       - name: Build Core, CLI, and Demo Packages
         run: npm run build
 

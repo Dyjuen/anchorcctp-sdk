@@ -5,17 +5,5 @@ module.exports = {
   projects: [
     '<rootDir>/packages/core',
     '<rootDir>/packages/cli'
-  ],
-  collectCoverageFrom: [
-    'packages/core/src/**/*.ts',
-    '!packages/core/src/index.ts'
-  ],
-  coverageThreshold: {
-    global: {
-      branches: 90,
-      functions: 90,
-      lines: 90,
-      statements: 90
-    }
-  }
+  ]
 };

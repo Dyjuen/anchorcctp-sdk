@@ -147,6 +147,13 @@ anchor-cctp listen GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5 --li
 
 ---
 
+## ⚠️ Security & Non-Audit Disclaimer
+
+> **Non-Audit Disclaimer (PRD §7.10):**
+> This CLI is provided as-is for integration acceleration and has **not** undergone a third-party security audit. Review all signing paths and test thoroughly before handling substantial production value.
+
+---
+
 ## License
 
 MIT © Mother's Grace (Juen)
