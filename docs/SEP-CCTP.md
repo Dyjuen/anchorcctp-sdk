@@ -4,7 +4,8 @@
 SEP: CCTP-0001
 Title: Standardized CCTP Inbound Deposits for Stellar Anchors
 Author: Mother's Grace (Juen) <juen@mothersgrace.dev>
-Status: Draft
+Status: RFC — review requested
+PR: (pending — no fork of stellar/stellar-protocol exists)
 Type: Standards Track
 Created: 2026-08-24
 Discussion: https://github.com/stellar/stellar-protocol/discussions
@@ -14,7 +15,7 @@ Discussion: https://github.com/stellar/stellar-protocol/discussions
 
 ## 1. Abstract
 
-This Stellar Ecosystem Proposal (SEP) specifies a standardized mechanism for Stellar anchors to advertise and accept cross-chain USDC deposits via Circle's Cross-Chain Transfer Protocol (CCTP). By establishing unified `stellar.toml` metadata extensions, Soroban forwarder calling conventions, 6-to-7 decimal scaling standards, and cryptographic attestation verification protocols, this specification eliminates bespoke bridging silos and enables single-call cross-chain liquidity ingestion across 26+ connected blockchains.
+This Stellar Ecosystem Proposal (SEP) specifies a standardized mechanism for Stellar anchors to advertise and accept cross-chain USDC deposits via Circle's Cross-Chain Transfer Protocol (CCTP). By establishing unified `stellar.toml` metadata extensions, Soroban forwarder calling conventions, 6-to-7 decimal scaling standards, and cryptographic attestation verification protocols, this specification eliminates bespoke bridging silos and enables single-call cross-chain liquidity ingestion across 29 connected blockchains.
 
 ---
 
@@ -100,7 +101,7 @@ cctp_forwarder = "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC"
 [CCTP]
 CCTP_DOMAIN = 27
 FORWARDER_ADDRESS = "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC"
-SUPPORTED_SOURCE_DOMAINS = [0, 1, 2, 3, 4, 5, 6, 7, 10, 11, 12, 13, 14, 16, 18, 19, 21, 22, 25, 28, 29, 30, 31, 32, 37]
+SUPPORTED_SOURCE_DOMAINS = [0, 1, 2, 3, 5, 6, 7, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 21, 22, 25, 26, 28, 29, 30, 31, 32, 33, 37]
 DUST_HANDLING = "collector_sweep"
 DUST_COLLECTOR_ACCOUNT = "GDDUSTCOLLECTOR00000000000000000000000000000000000000000000"
 ```
@@ -112,6 +113,8 @@ DUST_COLLECTOR_ACCOUNT = "GDDUSTCOLLECTOR000000000000000000000000000000000000000
 | `SUPPORTED_SOURCE_DOMAINS` | Array[Int] | List of authorized Circle CCTP source domain IDs. |
 | `DUST_HANDLING` | String | Strategy for handling dust (`collector_sweep` or `credit_destination`). |
 | `DUST_COLLECTOR_ACCOUNT` | String (G...) | Stellar account designated to receive swept dust. |
+
+Authoritative list: `CCTP_DOMAINS` in `@anchor-cctp/core-sdk` (`packages/core/src/domains/index.ts`).
 
 ---
 
