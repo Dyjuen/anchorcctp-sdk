@@ -83,7 +83,7 @@ export async function runVerifyCommand(args: string[]): Promise<number> {
           2
         ) + '\n'
       );
-    process.stderr.write(`[ERROR] ${err instanceof Error ? err.message : String(err)}\n`);
+      process.stderr.write(`[ERROR] ${err instanceof Error ? err.message : String(err)}\n`);
       return 1;
     }
 
