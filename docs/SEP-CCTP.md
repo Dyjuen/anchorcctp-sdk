@@ -5,7 +5,7 @@ SEP: CCTP-0001
 Title: Standardized CCTP Inbound Deposits for Stellar Anchors
 Author: Mother's Grace (Juen) <juen@mothersgrace.dev>
 Status: RFC — review requested
-PR: (pending — no fork of stellar/stellar-protocol exists)
+PR: n/a — standalone project, no upstream stellar-protocol PR intended
 Type: Standards Track
 Created: 2026-08-24
 Discussion: https://github.com/stellar/stellar-protocol/discussions
