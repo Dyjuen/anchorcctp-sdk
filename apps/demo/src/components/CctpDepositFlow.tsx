@@ -28,6 +28,10 @@ interface CctpDepositFlowProps {
   onConnectWallet: () => void;
 }
 
+const TESTNET_PASSPHRASE = 'Test SDF Network ; September 2015';
+const MAINNET_PASSPHRASE = 'Public Global Stellar Network ; September 2015';
+const HORIZON_TESTNET = 'https://horizon-testnet.stellar.org';
+
 export const CctpDepositFlow: React.FC<CctpDepositFlowProps> = ({
   wallet,
   onConnectWallet,
@@ -62,10 +66,6 @@ export const CctpDepositFlow: React.FC<CctpDepositFlowProps> = ({
   const [networkLabel, setNetworkLabel] = useState<string>('');
   const [simError, setSimError] = useState<string>('none');
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
-
-  const TESTNET_PASSPHRASE = 'Test SDF Network ; September 2015';
-  const MAINNET_PASSPHRASE = 'Public Global Stellar Network ; September 2015';
-  const HORIZON_TESTNET = 'https://horizon-testnet.stellar.org';
 
   const selectedDomain = CCTP_DOMAINS[sourceDomainId] || CCTP_DOMAINS[0];
 
@@ -231,12 +231,21 @@ export const CctpDepositFlow: React.FC<CctpDepositFlowProps> = ({
       setIsProcessing(false);
     } catch (err: unknown) {
       setIsProcessing(false);
-      setErrorDetails({
-        code: 'DEPOSIT_ERROR',
-        message: err instanceof Error ? err.message : 'Deposit workflow encountered an error.',
-        remediation:
-          'Ensure Freighter wallet is unlocked, trustline is allowed, or retry with a valid transaction hash.',
-      });
+      const msg = err instanceof Error ? err.message : 'Deposit workflow encountered an error.';
+      if (simError === 'network-mismatch') {
+        setErrorDetails({
+          code: 'NETWORK_MISMATCH',
+          message: msg,
+          remediation: 'Switch Freighter wallet to the testnet network and retry.',
+        });
+      } else {
+        setErrorDetails({
+          code: 'DEPOSIT_ERROR',
+          message: msg,
+          remediation:
+            'Ensure Freighter wallet is unlocked, trustline is allowed, or retry with a valid transaction hash.',
+        });
+      }
     }
   };
 
