@@ -13,19 +13,19 @@ export const SupportPage: React.FC<Props> = ({ onNavigate }) => {
         className="group flex items-center gap-3 text-slate-400 hover:text-white transition-colors mb-12 font-mono text-sm uppercase tracking-widest"
       >
         <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
-        Kembali ke Beranda
+        Back to Home
       </button>
 
       <div className="flex items-center gap-4 mb-8">
         <div className="p-3 bg-amber-500/10 text-amber-400 rounded-xl border border-amber-500/20">
           <LifeBuoy className="w-8 h-8" />
         </div>
-        <h1 className="text-4xl md:text-6xl font-black text-white tracking-tighter">Pusat Bantuan</h1>
+        <h1 className="text-4xl md:text-6xl font-black text-white tracking-tighter">Support & Inquiries</h1>
       </div>
 
       <div className="prose prose-invert prose-slate max-w-none font-medium leading-relaxed">
         <p className="text-xl text-slate-300 mb-10">
-          Tim pengembang kami berdedikasi untuk membantu Anda mengintegrasikan AnchorCCTP dengan mulus. Silakan pilih saluran yang paling sesuai dengan kebutuhan Anda.
+          Find documentation, report protocol issues, or reach out directly to coordinate integration support.
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-12">
@@ -33,21 +33,21 @@ export const SupportPage: React.FC<Props> = ({ onNavigate }) => {
             <Code2 className="w-10 h-10 text-white mb-6" />
             <h3 className="text-2xl font-bold text-white mb-3">GitHub Issues</h3>
             <p className="text-slate-400 text-sm mb-6">
-              Laporkan bug, request fitur, atau temukan solusi dari komunitas open-source kami. Ini adalah jalur tercepat untuk bantuan teknis.
+              Report bugs, submit feature requests, and review ongoing pull requests. This is the fastest channel for technical troubleshooting.
             </p>
             <span className="text-[#3E6BFF] text-sm font-bold flex items-center gap-2">
-              Buka GitHub <ArrowLeft className="w-4 h-4 rotate-180 group-hover:translate-x-1 transition-transform" />
+              Visit GitHub <ArrowLeft className="w-4 h-4 rotate-180 group-hover:translate-x-1 transition-transform" />
             </span>
           </a>
 
           <a href="mailto:support@anchorcctp.dev" className="block p-8 rounded-3xl bg-slate-900 border border-slate-800 hover:border-slate-600 transition-all group">
             <Mail className="w-10 h-10 text-white mb-6" />
-            <h3 className="text-2xl font-bold text-white mb-3">Email Support</h3>
+            <h3 className="text-2xl font-bold text-white mb-3">Direct Contact</h3>
             <p className="text-slate-400 text-sm mb-6">
-              Untuk pertanyaan terkait kemitraan bisnis, SLA tingkat enterprise, atau masalah keamanan (security disclosure).
+              For partnership inquiries, anchor onboarding coordination, or responsible security disclosures.
             </p>
             <span className="text-[#3E6BFF] text-sm font-bold flex items-center gap-2">
-              Hubungi Kami <ArrowLeft className="w-4 h-4 rotate-180 group-hover:translate-x-1 transition-transform" />
+              Send Email <ArrowLeft className="w-4 h-4 rotate-180 group-hover:translate-x-1 transition-transform" />
             </span>
           </a>
         </div>

@@ -13,34 +13,34 @@ export const TermsOfServicePage: React.FC<Props> = ({ onNavigate }) => {
         className="group flex items-center gap-3 text-slate-400 hover:text-white transition-colors mb-12 font-mono text-sm uppercase tracking-widest"
       >
         <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
-        Kembali ke Beranda
+        Back to Home
       </button>
 
       <div className="flex items-center gap-4 mb-8">
         <div className="p-3 bg-emerald-500/10 text-emerald-400 rounded-xl border border-emerald-500/20">
           <FileText className="w-8 h-8" />
         </div>
-        <h1 className="text-4xl md:text-6xl font-black text-white tracking-tighter">Syarat & Ketentuan</h1>
+        <h1 className="text-4xl md:text-6xl font-black text-white tracking-tighter">Terms of Service</h1>
       </div>
 
       <div className="prose prose-invert prose-slate max-w-none font-medium leading-relaxed">
         <p className="text-xl text-slate-300 mb-10">
-          Dengan menggunakan perangkat lunak AnchorCCTP SDK, Anda menyetujui persyaratan penggunaan open-source kami.
+          By using AnchorCCTP SDK and this interactive demonstration, you agree to these open-source terms.
         </p>
 
-        <h2 className="text-2xl font-bold text-white mt-12 mb-6">1. Lisensi Open Source</h2>
+        <h2 className="text-2xl font-bold text-white mt-12 mb-6">1. Open-Source License</h2>
         <p className="text-slate-400 mb-6">
-          Perangkat lunak ini dirilis di bawah Lisensi MIT. Anda bebas menggunakan, memodifikasi, dan mendistribusikan kode sumber asalkan Anda menyertakan pemberitahuan hak cipta asli. Perangkat lunak ini disediakan "sebagaimana adanya", tanpa jaminan tersurat maupun tersirat.
+          AnchorCCTP is licensed under the MIT License. You are free to use, modify, and distribute the codebase provided that the original copyright notice remains intact. The software is provided "as is", without warranty of any kind, express or implied.
         </p>
 
-        <h2 className="text-2xl font-bold text-white mt-12 mb-6">2. Batasan Tanggung Jawab</h2>
+        <h2 className="text-2xl font-bold text-white mt-12 mb-6">2. Limitation of Liability</h2>
         <p className="text-slate-400 mb-6">
-          Penyedia AnchorCCTP tidak bertanggung jawab atas kerugian langsung, tidak langsung, insidental, khusus, atau konsekuensial yang timbul dari penggunaan atau ketidakmampuan menggunakan SDK ini, termasuk namun tidak terbatas pada kehilangan dana akibat interaksi smart contract.
+          The authors and contributors shall not be liable for any claims, damages, or liabilities arising from the use of this software, including loss of funds from smart contract interactions, network congestion, or third-party relayer downtime.
         </p>
 
-        <h2 className="text-2xl font-bold text-white mt-12 mb-6">3. Kepatuhan Hukum (Compliance)</h2>
+        <h2 className="text-2xl font-bold text-white mt-12 mb-6">3. Regulatory Compliance</h2>
         <p className="text-slate-400 mb-6">
-          Sebagai entitas yang mengoperasikan Anchor di jaringan Stellar, Anda sepenuhnya bertanggung jawab untuk mematuhi semua regulasi KYC, AML, dan lisensi keuangan yang berlaku di yurisdiksi Anda. AnchorCCTP hanyalah alat teknis (infrastruktur perangkat lunak) dan bukan penyedia layanan keuangan.
+          Anchors and developers implementing this SDK on Stellar are solely responsible for adhering to applicable KYC, AML, and financial regulations in their respective jurisdictions. AnchorCCTP provides developer tooling and smart contract interfaces; it is not a custodial financial service provider.
         </p>
       </div>
     </div>

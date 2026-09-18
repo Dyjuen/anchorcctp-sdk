@@ -1,30 +1,30 @@
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Minus } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { Plus } from 'lucide-react';
 
 export const FaqSection: React.FC = () => {
   const [openIndex, setOpenIndex] = useState<number | null>(2); // Default to middle element
 
   const faqs = [
     {
-      question: 'Apa itu AnchorCCTP?',
-      answer: 'AnchorCCTP adalah TypeScript SDK open-source untuk menerima deposit USDC cross-chain 1:1 dari 26+ blockchain Circle CCTP langsung ke ekosistem Stellar tanpa batas.'
+      question: 'What is AnchorCCTP?',
+      answer: 'AnchorCCTP is an open-source TypeScript SDK that accepts 1:1 cross-chain USDC deposits from 26+ Circle CCTP blockchains into the Stellar ecosystem without bridging friction.'
     },
     {
-      question: 'Desimal 6 ke 7 Stroop',
-      answer: 'Circle CCTP menggunakan 6 desimal untuk USDC, sedangkan Stellar menggunakan 7 desimal (Stroop). AnchorCCTP melakukan skala matematis otomatis presisi tinggi tanpa kerugian.'
+      question: '6-to-7 Stroop Decimals',
+      answer: 'Circle CCTP standardizes on 6 decimal places for USDC, whereas Stellar native assets use 7 decimals (Stroop). AnchorCCTP performs automated high-precision integer scaling with zero rounding loss.'
     },
     {
-      question: '26+ Domain Circle CCTP',
-      answer: 'Mendukung semua domain mainnet Circle CCTP, termasuk Ethereum, Solana, Arbitrum, Optimism, Polygon, Base, Avalanche, dan tentunya Stellar (Domain 27).'
+      question: '26+ Circle CCTP Domains',
+      answer: 'AnchorCCTP supports all production Circle CCTP domains, including Ethereum, Solana, Arbitrum, Optimism, Polygon, Base, Avalanche, and Stellar (Domain 27).'
     },
     {
-      question: 'Soroban Forwarder',
-      answer: 'Bertindak sebagai proxy minting di Stellar yang memverifikasi tanda tangan atestasi Circle Iris dan membuat trustline USDC tujuan secara otomatis (dibatasi 2 XLM).'
+      question: 'Soroban Forwarder Contract',
+      answer: 'The Soroban contract acts as an on-chain minting proxy on Stellar: it verifies Circle Iris attestation signatures and automatically provisions destination USDC trustlines (capped at 2 XLM).'
     },
     {
-      question: 'Status Pesanan Deposit',
-      answer: 'Setiap transaksi memiliki hash burn yang divalidasi dan disimpan di idempotency store. Anda dapat memantaunya langsung secara on-chain real-time.'
+      question: 'Deposit Order Tracking',
+      answer: 'Every transfer includes a verified burn hash tracked in an idempotency store. You can query status and inspect attestation proofs on-chain in real time.'
     },
   ];
 
@@ -44,10 +44,10 @@ export const FaqSection: React.FC = () => {
           className="space-y-4 text-left max-w-3xl"
         >
           <p className="font-mono text-xs font-bold uppercase tracking-widest text-slate-500">
-            // PERTANYAAN UMUM
+            // FREQUENTLY ASKED QUESTIONS
           </p>
           <h2 className="text-5xl md:text-6xl font-black text-white tracking-tighter">
-            Ada pertanyaan?
+            Got questions?
           </h2>
         </motion.div>
 
@@ -65,13 +65,14 @@ export const FaqSection: React.FC = () => {
                 <motion.div
                   key={idx}
                   layout
+                  transition={{ duration: 0.25, ease: [0.25, 1, 0.5, 1] }}
                   onClick={() => toggleFaq(idx)}
-                  className={`group relative flex flex-col transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] cursor-pointer overflow-hidden border-b lg:border-b-0 lg:border-r border-slate-800 last:border-0 ${
+                  className={`group relative flex flex-col transition-all duration-300 ease-out cursor-pointer overflow-hidden border-b lg:border-b-0 lg:border-r border-slate-800 last:border-0 ${
                     isOpen ? 'lg:flex-[3] bg-slate-900/50 h-[500px] lg:h-full' : 'lg:flex-[0.5] hover:bg-slate-800/30 h-[80px] lg:h-full'
                   }`}
                 >
                   {/* Desktop Closed State (Vertical Text) */}
-                  <div className={`hidden lg:flex w-full h-full flex-col items-center justify-between py-10 absolute inset-0 transition-opacity duration-300 ${isOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+                  <div className={`hidden lg:flex w-full h-full flex-col items-center justify-between py-10 absolute inset-0 transition-opacity duration-150 ${isOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
                     <div className="flex-1 flex items-center justify-center">
                       <h3 
                         className="text-lg font-bold text-slate-400 whitespace-nowrap tracking-wide group-hover:text-white transition-colors"
@@ -86,7 +87,7 @@ export const FaqSection: React.FC = () => {
                   </div>
 
                   {/* Mobile Closed State (Horizontal Text) */}
-                  <div className={`lg:hidden w-full h-full flex items-center justify-between px-6 absolute inset-0 transition-opacity duration-300 ${isOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+                  <div className={`lg:hidden w-full h-full flex items-center justify-between px-6 absolute inset-0 transition-opacity duration-150 ${isOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
                     <h3 className="text-base font-bold text-slate-400 group-hover:text-white transition-colors">
                       {faq.question}
                     </h3>
@@ -94,7 +95,7 @@ export const FaqSection: React.FC = () => {
                   </div>
 
                   {/* Opened State Content */}
-                  <div className={`w-full h-full flex flex-col justify-between p-8 md:p-12 relative z-10 transition-opacity duration-700 delay-100 ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+                  <div className={`w-full h-full flex flex-col justify-between p-8 md:p-12 relative z-10 transition-opacity duration-200 ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
                     
                     {/* Top Content: Question & Answer */}
                     <div className="flex flex-col lg:flex-row justify-between items-start gap-8">
@@ -106,11 +107,6 @@ export const FaqSection: React.FC = () => {
                           {faq.answer}
                         </p>
                       </div>
-                      
-                      {/* Close Button */}
-                      <button className="hidden lg:flex items-center gap-3 text-rose-500 text-xs font-bold tracking-widest uppercase hover:text-white transition-colors">
-                        TUTUP <Minus className="w-4 h-4" />
-                      </button>
                     </div>
 
                     {/* Bottom Content: Logo Visual (1.5x Larger) */}

@@ -27,16 +27,16 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
 
             {/* Main Title */}
             <h1 className="text-4xl sm:text-6xl lg:text-7xl font-black text-white tracking-tight leading-[1.08]">
-              Solusi Limit Menipis <br />
+              Cross-Chain USDC <br />
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#3E6BFF] via-[#60A5FA] to-[#06B6D4]">
-                Cross-Chain USDC
+                Settlement
               </span> <br />
-              untuk Stellar.
+              for Stellar Anchors.
             </h1>
 
             {/* Description */}
             <p className="text-slate-300 text-base sm:text-lg max-w-2xl leading-relaxed font-medium">
-              Terima deposit USDC 1:1 langsung dari <strong className="text-white">26+ domain Circle CCTP</strong> ke Stellar dengan verifikasi Iris, pemrosesan Soroban, dan pemangkasan desimal 6 ke 7 Stroop tanpa hambatan.
+              Accept 1:1 USDC deposits from <strong className="text-white">26+ Circle CCTP domains</strong> directly on Stellar. Verified via Circle Iris attestation, executed on Soroban, with automatic 6-to-7 decimal Stroop conversion.
             </p>
 
             {/* Action Buttons */}
@@ -47,7 +47,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                 onClick={onExploreDemo}
                 className="px-7 py-4 rounded-full font-extrabold text-sm bg-[#3E6BFF] hover:bg-[#345CE0] text-white shadow-lg flex items-center justify-center space-x-2 cursor-pointer"
               >
-                <span>Lihat katalog & demo</span>
+                <span>View catalog & demo</span>
                 <ArrowRight className="w-4 h-4" />
               </motion.button>
               <motion.button
@@ -57,7 +57,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                 className="px-7 py-4 rounded-full font-extrabold text-sm bg-slate-900/80 hover:bg-slate-800 text-white border border-slate-700/60 flex items-center justify-center space-x-2 cursor-pointer"
               >
                 <Terminal className="w-4 h-4 text-slate-400" />
-                <span>Dokumentasi SDK</span>
+                <span>SDK Documentation</span>
               </motion.button>
             </div>
           </motion.div>

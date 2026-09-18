@@ -54,7 +54,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
               }`}
             >
-              Katalog Domain
+              Domain Catalog
             </button>
             <button
               onClick={() => scrollTo('process')}
@@ -64,7 +64,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
               }`}
             >
-              Cara Beli
+              How It Works
             </button>
             <button
               onClick={() => scrollTo('trust')}
@@ -74,7 +74,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
               }`}
             >
-              Transparansi
+              Security
             </button>
             <button
               onClick={() => scrollTo('playground')}
@@ -114,7 +114,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 {wallet.address?.slice(0, 5)}...{wallet.address?.slice(-4)}
               </span>
             ) : (
-              'Masuk / Hubungkan Wallet'
+              'Connect Wallet'
             )}
           </button>
         </div>

@@ -44,7 +44,7 @@ export const CatalogSection: React.FC<CatalogSectionProps> = ({
   } | null>(null);
 
   const categories = [
-    { id: 'all', label: 'Semua Domain' },
+    { id: 'all', label: 'All Domains' },
     { id: 'evm', label: 'EVM Chains' },
     { id: 'svm', label: 'Solana (SVM)' },
     { id: 'cosmos', label: 'Cosmos / Noble' },
@@ -121,7 +121,7 @@ export const CatalogSection: React.FC<CatalogSectionProps> = ({
   return (
     <section id="catalog" className="py-16 relative bg-white dark:bg-[#070C18] border-t border-slate-200 dark:border-slate-800 w-full overflow-hidden">
       <div className="w-full max-w-[1700px] mx-auto px-6 sm:px-10 lg:px-16 space-y-10">
-        {/* Header Section (Pilih produk yang kamu inginkan) */}
+        {/* Header Section */}
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -131,10 +131,10 @@ export const CatalogSection: React.FC<CatalogSectionProps> = ({
         >
           <div className="space-y-2 text-left">
             <h2 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight sm:text-4xl">
-              Pilih Rute Domain yang Kamu Inginkan
+              Select Source Domain
             </h2>
             <p className="text-slate-500 max-w-xl text-sm font-medium">
-              Transfer USDC 1:1 langsung dari 26+ blockchain asal ke akun Stellar Anda.
+              Transfer 1:1 USDC from 26+ connected blockchains directly to your Stellar account.
             </p>
           </div>
         </motion.div>
@@ -218,7 +218,7 @@ export const CatalogSection: React.FC<CatalogSectionProps> = ({
                   </div>
 
                   <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs font-bold">
-                    <span className="text-slate-400">Rasio Depo</span>
+                    <span className="text-slate-400">Deposit Ratio</span>
                     <span className="text-emerald-400 font-mono">1 USDC = 1 USDC</span>
                   </div>
                 </motion.div>
@@ -249,7 +249,7 @@ export const CatalogSection: React.FC<CatalogSectionProps> = ({
                   </div>
                 </div>
                 <span className="px-3.5 py-1 rounded-full text-xs font-extrabold bg-[#3E6BFF] text-white shadow-md">
-                  Domain Terpilih
+                  Selected Domain
                 </span>
               </div>
 
@@ -257,7 +257,7 @@ export const CatalogSection: React.FC<CatalogSectionProps> = ({
               <div className="space-y-4 text-left">
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                    Jumlah Deposit (USDC)
+                    Deposit Amount (USDC)
                   </label>
                   <input
                     type="number"
@@ -269,7 +269,7 @@ export const CatalogSection: React.FC<CatalogSectionProps> = ({
 
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                    Hash Transaksi Burn (Source)
+                    Burn Transaction Hash (Source)
                   </label>
                   <input
                     type="text"
@@ -281,7 +281,7 @@ export const CatalogSection: React.FC<CatalogSectionProps> = ({
 
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                    Tujuan Akun Stellar
+                    Stellar Destination Account
                   </label>
                   <input
                     type="text"
@@ -305,15 +305,15 @@ export const CatalogSection: React.FC<CatalogSectionProps> = ({
                 {isProcessing ? (
                   <>
                     <RefreshCw className="w-4 h-4 animate-spin" />
-                    <span>Memproses Ingesting CCTP...</span>
+                    <span>Processing CCTP Ingestion...</span>
                   </>
                 ) : wallet.connected ? (
                   <>
-                    <span>Beli / Eksekusi Deposit Now</span>
+                    <span>Execute Deposit Now</span>
                     <ArrowRight className="w-4 h-4" />
                   </>
                 ) : (
-                  <span>Sambungkan Freighter Wallet</span>
+                  <span>Connect Freighter Wallet</span>
                 )}
               </button>
             </div>
@@ -322,7 +322,7 @@ export const CatalogSection: React.FC<CatalogSectionProps> = ({
             {settlementResult && (
               <div className="mt-4 p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-xl space-y-2 text-xs font-mono">
                 <div className="flex justify-between text-emerald-400 font-bold">
-                  <span>Hasil Minting:</span>
+                  <span>Minting Output:</span>
                   <span>{settlementResult.stellarAmount} USDC</span>
                 </div>
                 <div className="flex justify-between text-slate-400">

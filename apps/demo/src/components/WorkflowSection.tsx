@@ -21,71 +21,71 @@ export const WorkflowSection: React.FC = () => {
   const steps = [
     {
       step: '01',
-      title: 'Pilih & Burn',
-      description: 'Eksekusi depositForBurn di chain asal dengan target Stellar Domain 27.',
-      badge: 'Langkah 1: Source Burn',
+      title: 'Select & Burn',
+      description: 'Call depositForBurn on source chain with destination domain set to Stellar (Domain 27).',
+      badge: 'Step 1: Source Burn',
     },
     {
       step: '02',
-      title: 'Atestasi Iris',
-      description: 'Polling Circle Iris API untuk bukti kriptografi yang valid.',
-      badge: 'Langkah 2: Proof',
+      title: 'Iris Attestation',
+      description: 'Poll Circle Iris API for cryptographic signature proof.',
+      badge: 'Step 2: Proof',
     },
     {
       step: '03',
       title: 'Soroban Forwarder',
-      description: 'Kirim bukti ke Soroban. Konversi 6-ke-7 Stroop berjalan otomatis.',
-      badge: 'Langkah 3: Execute',
+      description: 'Submit proof to Soroban forwarder. 6-to-7 Stroop conversion runs automatically.',
+      badge: 'Step 3: Execute',
     },
     {
       step: '04',
       title: 'Stellar Settlement',
-      description: 'USDC native mendarat di dompet Stellar secara presisi.',
-      badge: 'Langkah 4: Selesai',
+      description: 'Native Stellar USDC arrives directly into recipient wallet balance.',
+      badge: 'Step 4: Settled',
     },
   ];
 
   const features = [
     {
       icon: <Globe className="w-5 h-5 text-[#3E6BFF]" />,
-      title: '26+ Domain Circle CCTP',
+      title: '26+ Circle CCTP Domains',
       description:
-        'Dukungan penuh untuk Ethereum, Arbitrum, Optimism, Solana, Polygon, Base, Avalanche, dan domain utama lainnya.',
+        'Full support for Ethereum, Arbitrum, Optimism, Solana, Polygon, Base, Avalanche, and all active CCTP chains.',
       codeSnippet: `import { Domains } from '@anchor-cctp/core-sdk';\n\nconst dest = Domains.STELLAR; // Domain 27\nconst src = Domains.ETHEREUM; // Domain 0`,
     },
     {
       icon: <Lock className="w-5 h-5 text-emerald-400" />,
-      title: 'Verifikasi Proof Kriptografi',
+      title: 'Cryptographic Proof Verification',
       description:
-        'Integrasi Circle Iris API v1 dengan exponential backoff dan validasi tanda tangan sebelum pencetakan.',
+        'Circle Iris API integration with exponential backoff and ECDSA signature checks prior to contract execution.',
       codeSnippet: `const proof = await irisApi.getAttestation({\n  txHash: burnTxHash,\n  retries: 5,\n});`,
     },
     {
       icon: <RefreshCcw className="w-5 h-5 text-cyan-400" />,
-      title: 'Skala Desimal 6 → 7 Stroop',
+      title: 'Lossless Decimal Scaling (6 to 7 Stroops)',
       description:
-        'Konversi matematis presisi tinggi tanpa kerugian floating-point dari unit EVM/SVM ke Stellar Stroop.',
+        'Integer math preserves exact value between 6-decimal EVM/SVM tokens and 7-decimal Stellar Stroops.',
       codeSnippet: `// 1 USDC (6 decimals) -> 10,000,000 stroops\nconst stroopAmount = DecimalMath.scaleToStroop(\n  amount,\n  sourceDecimals\n);`,
     },
     {
       icon: <Cpu className="w-5 h-5 text-purple-400" />,
       title: 'Soroban Forwarder Contract',
       description:
-        'Engine minting terdelegasi dengan pembuatan Trustline otomatis dan batas proteksi reserve 2 XLM.',
+        'Delegated minting contract with automated trustline creation and a strict 2 XLM reserve ceiling.',
       codeSnippet: `await forwarderContract.invoke({\n  method: "receive",\n  args: [recipient, amount, attestation]\n});`,
     },
     {
       icon: <FileCheck className="w-5 h-5 text-amber-400" />,
-      title: 'Proteksi Idempotensi Replay',
+      title: 'Replay Guard & Idempotency',
       description:
-        'Pencegahan klaim ganda dengan pencatatan hash transaksi burn di dalam store persistent append-only.',
+        'Prevents double-crediting by tracking processed burn hashes in an append-only transaction store.',
       codeSnippet: `if (await store.isBurnProcessed(hash)) {\n  throw new ReplayError("Transaction already minted");\n}`,
     },
     {
       icon: <ShieldAlert className="w-5 h-5 text-[#3E6BFF]" />,
-      title: 'Spesifikasi Standar SEP-CCTP',
+      title: 'SEP-CCTP Ecosystem Standards',
       description:
-        'Standar ekosistem Stellar yang memperluas file stellar.toml dengan metadata forwarder dan aturan dust.',
+        'Stellar ecosystem standard extending stellar.toml with verified forwarder addresses and dust collector rules.',
       codeSnippet: `[[CCTP_ISSUERS]]\ndomain = 27\nissuer = "G..."\nforwarder = "C..."`,
     },
   ];
@@ -93,7 +93,7 @@ export const WorkflowSection: React.FC = () => {
   return (
     <section id="features" className="py-16 relative bg-slate-50 dark:bg-slate-950 w-full">
       <div className="w-full max-w-[1700px] mx-auto px-6 sm:px-10 lg:px-16 space-y-16">
-        {/* Section 1: Buying Workflow Timeline matching naleka.xyz "Cara Beli" */}
+        {/* Section 1: Buying Workflow Timeline */}
         <div className="space-y-8">
           <motion.div
             initial={{ opacity: 0, y: 15 }}
@@ -102,10 +102,10 @@ export const WorkflowSection: React.FC = () => {
             className="space-y-2 text-left"
           >
             <h2 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight sm:text-4xl">
-              Cara Beli & Tarik USDC CCTP
+              CCTP Ingestion Lifecycle
             </h2>
             <p className="text-slate-300 max-w-xl text-sm font-medium">
-              Dari burn transaksi di jaringan asal hingga penerimaan USDC di Soroban Stellar.
+              From source transaction burn to final USDC settlement on Soroban Stellar.
             </p>
           </motion.div>
 
@@ -184,10 +184,10 @@ export const WorkflowSection: React.FC = () => {
             <div className="lg:w-5/12 relative">
               <div className="sticky top-40 space-y-6">
                 <h3 className="text-4xl md:text-6xl lg:text-7xl font-black text-white tracking-tighter leading-[1.1]">
-                  Arsitektur <br className="hidden lg:block"/> Lintas <br className="hidden lg:block"/> Rantai
+                  Cross-Chain <br className="hidden lg:block"/> Core <br className="hidden lg:block"/> Engine
                 </h3>
                 <p className="text-slate-400 text-base md:text-lg font-medium leading-relaxed max-w-sm">
-                  Jaminan keamanan tingkat tinggi dan primitif pengembang untuk pergerakan likuiditas di ekosistem Stellar tanpa batas.
+                  Deterministic security guarantees and developer primitives for liquidity movement across Stellar.
                 </p>
                 <div className="hidden lg:block pt-8">
                   <div className="w-20 h-1 bg-[#3E6BFF] rounded-full" />

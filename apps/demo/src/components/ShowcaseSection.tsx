@@ -36,52 +36,52 @@ export const ShowcaseSection: React.FC = () => {
       title: 'Soroban Forwarder Mint',
       subtitle: 'Smart Contract Automation',
       tag: 'CCTP Domain 27',
-      frontDescription: 'Pencetakan token terdelegasi dengan pembuatan Trustline otomatis tanpa batas interaksi manual.',
+      frontDescription: 'Delegated minting with automatic trustline setup, removing manual onboarding steps.',
       backDetails: [
-        'Batas cadangan XLM ≤ 2 XLM',
-        'Eksekusi atomik Soroban SDK',
-        'Validasi domain ID & Iris proof',
+        'XLM reserve cap: ≤ 2 XLM',
+        'Atomic execution via Soroban SDK',
+        'Domain ID and Iris proof validation',
       ],
-      ctaLabel: 'Lihat Kontrak Soroban',
+      ctaLabel: 'View Soroban Contract',
     },
     {
       id: 'std-2',
-      title: 'Attestation Poller v1',
+      title: 'Attestation Poller',
       subtitle: 'Circle Iris Proof Engine',
-      tag: 'Kriptografi Verified',
-      frontDescription: 'Polling otomatis dengan exponential backoff dan verifikasi tanda tangan kriptografi 64-byte.',
+      tag: 'Cryptographic Proof',
+      frontDescription: 'Automated polling with exponential backoff and 64-byte signature verification.',
       backDetails: [
         'Fast-path attestation retrieval',
-        'Dukungan 26+ domain CCTP',
-        'Automatic retry on pending proof',
+        'Support for 26+ CCTP domains',
+        'Automatic retry on pending proofs',
       ],
-      ctaLabel: 'Lihat Log Proof Iris',
+      ctaLabel: 'View Iris Proof Log',
     },
     {
       id: 'std-3',
       title: 'Decimal Precision Scaler',
-      subtitle: '6 → 7 Stroop Conversion',
-      tag: 'Presisi Tinggi',
-      frontDescription: 'Pengubah desimal 6 (EVM/SVM) ke 7 Stroop (Stellar) tanpa kehilangan fraksi atau floating-point rounding.',
+      subtitle: '6 to 7 Stroop Conversion',
+      tag: 'Lossless Scaling',
+      frontDescription: 'Convert 6-decimal USDC (EVM/SVM) to 7-decimal Stellar Stroop units with zero rounding error.',
       backDetails: [
-        'Pengolahan BigInt presisi',
-        'Pencatatan sisa dust otomatis',
-        'Format unit standar Soroban',
+        'Pure BigInt integer arithmetic',
+        'Deterministic sub-stroop dust accounting',
+        'Compliant with Soroban token interface',
       ],
-      ctaLabel: 'Uji Kalkulator Desimal',
+      ctaLabel: 'Test Decimal Math',
     },
     {
       id: 'std-4',
       title: 'Replay Attack Protection',
-      subtitle: 'Idempotency Persistence Store',
-      tag: 'Keamanan On-Chain',
-      frontDescription: 'Setiap hash transaksi burn dicatat di append-only store untuk mencegah klaim berulang.',
+      subtitle: 'Idempotency Store',
+      tag: 'Settlement Safety',
+      frontDescription: 'Burn transaction hashes are recorded in an append-only store to prevent duplicate credits.',
       backDetails: [
         'Unique hash registry',
-        'Pencegahan double-minting',
-        'Audit trail real-time',
+        'Zero double-minting guarantee',
+        'Idempotent receive() lifecycle',
       ],
-      ctaLabel: 'Cek Idempotency Hash',
+      ctaLabel: 'Verify Replay Store',
     },
   ];
 
@@ -110,17 +110,17 @@ export const ShowcaseSection: React.FC = () => {
 
               <div className="space-y-4">
                 <h3 className="text-2xl font-black text-white leading-tight">
-                  Infrastruktur Ingesting Anchor Stellar Tanpa Friction
+                  Stellar Anchor Ingestion Infrastructure
                 </h3>
                 <p className="text-slate-300 text-sm font-medium leading-relaxed">
-                  Gabungan otomatisasi Soroban smart contract dengan Circle CCTP untuk kemudahan deposit cross-chain dari 26+ blockchain.
+                  Combining Soroban smart contracts with Circle CCTP to enable frictionless cross-chain deposits from 26+ blockchains.
                 </p>
               </div>
 
               <div className="grid grid-cols-2 gap-4 pt-4 border-t border-emerald-500/20">
                 <div className="p-4 rounded-2xl bg-slate-950/70 border border-emerald-500/20 space-y-1">
-                  <p className="text-[10px] font-mono text-emerald-400 uppercase font-bold">Respon Time</p>
-                  <p className="text-xl font-black text-white">&lt; 3 Detik</p>
+                  <p className="text-[10px] font-mono text-emerald-400 uppercase font-bold">Response Time</p>
+                  <p className="text-xl font-black text-white">&lt; 3 Seconds</p>
                 </div>
                 <div className="p-4 rounded-2xl bg-slate-950/70 border border-emerald-500/20 space-y-1">
                   <p className="text-[10px] font-mono text-emerald-400 uppercase font-bold">Trustline Cost</p>
@@ -138,32 +138,32 @@ export const ShowcaseSection: React.FC = () => {
             className="lg:col-span-6 space-y-6 text-left"
           >
             <p className="font-mono text-xs font-bold uppercase tracking-widest text-[#3E6BFF]">
-              // HUTS BACK-AND-FORTH SECTION
+              // HUTS ARCHITECTURE
             </p>
             <h2 className="text-3xl font-black text-white tracking-tight sm:text-4xl">
-              Proses Terstruktur Seperti Standar Arsitektur Modern
+              Engineered to Modern Production Standards
             </h2>
             <p className="text-slate-300 text-base font-medium leading-relaxed">
-              Kami membangun <strong className="text-white">AnchorCCTP SDK</strong> dengan standar modular yang fleksibel. Setiap modul berjalan secara terisolasi namun terkoordinasi dengan presisi.
+              The <strong className="text-white">AnchorCCTP SDK</strong> provides isolated, predictable primitives. Every module runs independently while maintaining end-to-end type safety.
             </p>
             <div className="space-y-3 pt-2">
               <div className="flex items-center space-x-3 text-sm font-bold text-slate-200">
                 <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
-                <span>Otomatisasi pembuatan Trustline Soroban untuk user baru</span>
+                <span>Automatic Soroban trustline creation for new recipient accounts</span>
               </div>
               <div className="flex items-center space-x-3 text-sm font-bold text-slate-200">
                 <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
-                <span>Pengawalan batas cadangan XLM hingga maksimal 2 XLM</span>
+                <span>Sponsor reserve pool protection capped at ≤ 2 XLM</span>
               </div>
               <div className="flex items-center space-x-3 text-sm font-bold text-slate-200">
                 <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
-                <span>Dukungan file metadata standar SEP-CCTP (stellar.toml)</span>
+                <span>SEP-CCTP metadata standard compliance via stellar.toml</span>
               </div>
             </div>
           </motion.div>
         </div>
 
-        {/* CUSTOM INLINE SVG SECTION DIVIDER (divider-arrow from huts.com) */}
+        {/* CUSTOM INLINE SVG SECTION DIVIDER */}
         <div className="flex items-center justify-center py-6">
           <div className="flex items-center space-x-4 opacity-70">
             <div className="h-[1px] w-24 bg-gradient-to-r from-transparent via-[#3E6BFF] to-transparent" />
@@ -184,13 +184,13 @@ export const ShowcaseSection: React.FC = () => {
             className="lg:col-span-6 space-y-6 text-left order-2 lg:order-1"
           >
             <p className="font-mono text-xs font-bold uppercase tracking-widest text-[#3E6BFF]">
-              // HUTS REVERSE DIRECTION SECTION
+              // PROOF VERIFICATION
             </p>
             <h2 className="text-3xl font-black text-white tracking-tight sm:text-4xl">
-              Circle Iris Proof Engine Terverifikasi Kriptografi
+              Circle Iris Cryptographic Proof Engine
             </h2>
             <p className="text-slate-300 text-base font-medium leading-relaxed">
-              Polling bukti atestasi dilakukan melalui algoritma exponential backoff otomatis. Mencegah kegagalan koneksi jaringan saat lalu lintas transaksi melonjak tinggi.
+              Attestation proofs are retrieved via configurable exponential backoff polling, handling traffic spikes gracefully without dropped transfers.
             </p>
             <div className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-3">
               <div className="flex items-center justify-between text-xs font-mono">
@@ -214,7 +214,7 @@ export const ShowcaseSection: React.FC = () => {
             <div className="relative rounded-3xl overflow-hidden border border-[#3E6BFF]/30 bg-gradient-to-br from-[#0D1527] via-slate-900 to-slate-950 p-8 shadow-2xl space-y-6">
               <div className="flex items-center justify-between border-b border-slate-800 pb-4">
                 <span className="font-mono text-xs text-[#3E6BFF] font-bold uppercase tracking-widest">
-                  // ATTENTION ENGINE
+                  // ATTESTATION ENGINE
                 </span>
                 <span className="text-xs px-3 py-1 rounded-full bg-[#3E6BFF]/20 text-[#3E6BFF] font-bold border border-[#3E6BFF]/40">
                   Circle Iris v1
@@ -223,10 +223,10 @@ export const ShowcaseSection: React.FC = () => {
 
               <div className="space-y-4">
                 <h3 className="text-2xl font-black text-white leading-tight">
-                  Verifikasi Tanpa Celah Sebelum Settlement
+                  Cryptographic Integrity Before Settlement
                 </h3>
                 <p className="text-slate-300 text-sm font-medium leading-relaxed">
-                  SDK memastikan pesan burn dari Ethereum, Arbitrum, Solana, atau Cosmos memiliki byte signature sah sebelum dikirim ke Soroban.
+                  The SDK validates that every burn message from Ethereum, Base, Solana, or Noble carries a genuine cryptographic signature prior to forwarding on Stellar.
                 </p>
               </div>
 
@@ -239,26 +239,26 @@ export const ShowcaseSection: React.FC = () => {
         </div>
       </section>
 
-      {/* SECTION 2: HUTS-STYLE INTERACTIVE 3D FLIP CARD SLIDER / GRID */}
+      {/* SECTION 2: 3D FLIP CARD GRID */}
       <section className="relative py-16 bg-[#091526]/80 border-t border-b border-slate-800/80">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
           {/* Header */}
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-slate-800 pb-6">
             <div className="space-y-2 text-left">
               <p className="font-mono text-xs font-bold uppercase tracking-widest text-[#3E6BFF]">
-                // HUTS INTERACTIVE STANDARDS
+                // CORE PROTOCOL SPECIFICATIONS
               </p>
               <h2 className="text-3xl font-black text-white tracking-tight sm:text-4xl">
-                Semuanya Berawal dari Standar Kami...
+                Built on Verified Standards
               </h2>
               <p className="text-slate-300 max-w-xl text-sm font-medium">
-                Klik tiap kartu untuk memutar (3D Flip) dan melihat detail arsitektur di balik layar.
+                Click any card to flip and inspect the underlying architecture specifications.
               </p>
             </div>
 
             <div className="flex items-center space-x-2 text-xs font-extrabold text-slate-400">
               <Compass className="w-4 h-4 text-[#3E6BFF]" />
-              <span>Tekan kartu untuk melihat sisi belakang</span>
+              <span>Click card to inspect details</span>
             </div>
           </div>
 
@@ -296,7 +296,7 @@ export const ShowcaseSection: React.FC = () => {
                       </div>
 
                       <div className="pt-4 border-t border-slate-800 flex items-center justify-between text-xs font-bold text-[#3E6BFF]">
-                        <span>Putar Kartu (Detail)</span>
+                        <span>Flip Card</span>
                         <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
                       </div>
                     </div>
@@ -310,7 +310,7 @@ export const ShowcaseSection: React.FC = () => {
                         </div>
 
                         <div className="space-y-2">
-                          <p className="text-[11px] font-mono text-slate-400 font-bold">Spesifikasi Utama:</p>
+                          <p className="text-[11px] font-mono text-slate-400 font-bold">Key Specifications:</p>
                           <ul className="space-y-1.5 text-xs text-slate-200 font-medium">
                             {std.backDetails.map((detail, idx) => (
                               <li key={idx} className="flex items-center space-x-2">
