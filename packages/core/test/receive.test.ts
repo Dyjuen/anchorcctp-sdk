@@ -11,12 +11,20 @@ import {
   TrustlineCreationError,
   InvalidBurnHashError,
   InvalidConfigError,
+  InvalidAddressError,
 } from '../src/errors/index.js';
+import { SettlementRecord } from '../src/replay/index.js';
 import { StrKey } from '@stellar/stellar-sdk';
+
+/** Build a well-formed CCTP message hex with the given amount encoded as uint64 LE at offset 4. */
+function wellFormedMsg(amount: bigint): string {
+  const buf = Buffer.alloc(46, 0); // 46 bytes = 92 hex chars, well above minimum
+  buf.writeBigUInt64LE(amount, 4);
+  return '0x' + buf.toString('hex');
+}
 
 describe('receive() Orchestration Engine', () => {
   const validDestination = StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 0x55));
-  const goodMsg = '0x' + 'ab'.repeat(40);
   const goodSig = '0x' + 'cd'.repeat(70);
   const H = (suffix: string) => '0x' + suffix.padStart(64, '0').slice(0, 64);
 
@@ -29,7 +37,7 @@ describe('receive() Orchestration Engine', () => {
         attestation: async () => ({
           status: 'complete',
           attestation: '0x' + 'ab'.repeat(40),
-          message: goodMsg,
+          message: wellFormedMsg(1000000n),
           signature: goodSig,
         }),
         hasTrustline: async () => true,
@@ -39,7 +47,15 @@ describe('receive() Orchestration Engine', () => {
   }
 
   it('receive() polls, converts, credits, emits onSettled', async () => {
-    const sdk = makeSdk();
+    const amount = 5000000n;
+    const sdk = makeSdk({
+      attestation: async () => ({
+        status: 'complete',
+        attestation: '0x' + 'ab'.repeat(40),
+        message: wellFormedMsg(amount),
+        signature: goodSig,
+      }),
+    });
     const settled: any[] = [];
     sdk.on('onSettled', (p) => settled.push(p));
 
@@ -47,18 +63,25 @@ describe('receive() Orchestration Engine', () => {
       sourceDomain: 0,
       burnTxHash: H('01'),
       destinationAddress: validDestination,
-      amount: 5000000n, // 5 USDC
+      amount,
     });
 
     expect(r.settled).toBe(true);
-    expect(r.amount).toBe(50000000n); // 5 * 10 = 50 stroops
+    expect(r.amount).toBe(50000000n);
     expect(settled.length).toBe(1);
     expect(settled[0].amount).toBe(50000000n);
     expect(settled[0].txHash).toBe('SIGNED_TX_123');
   });
 
   it('replay of same burnTxHash throws ReplayTransferError', async () => {
-    const sdk = makeSdk();
+    const sdk = makeSdk({
+      attestation: async () => ({
+        status: 'complete',
+        attestation: '0x' + 'ab'.repeat(40),
+        message: wellFormedMsg(1000000n),
+        signature: goodSig,
+      }),
+    });
     await sdk.receive({
       sourceDomain: 0,
       burnTxHash: H('abcdef01'),
@@ -162,11 +185,12 @@ describe('receive() Orchestration Engine', () => {
 
   it('handles custom logger and real attestation client polling', async () => {
     const logs: string[] = [];
+    const amount = 1000000n;
     const okFetch = async () =>
       ({
         ok: true,
         json: async () => ({
-          messages: [{ message: '0x' + 'ab'.repeat(40), attestation: '0x' + 'cd'.repeat(70), status: 'complete' }],
+          messages: [{ message: wellFormedMsg(amount), attestation: '0x' + 'cd'.repeat(70), status: 'complete' }],
         }),
       } as unknown as Response);
 
@@ -183,10 +207,10 @@ describe('receive() Orchestration Engine', () => {
     } as any);
 
     const res = await sdk.receive({
-      sourceDomain: 6, // Base
+      sourceDomain: 6,
       burnTxHash: H('cafe0001'),
       destinationAddress: validDestination,
-      amount: 1000000n,
+      amount,
     });
 
     expect(res.settled).toBe(true);
@@ -196,6 +220,7 @@ describe('receive() Orchestration Engine', () => {
 
   it('handles trustline options and custom signer in receive()', async () => {
     let trustlineCreated = false;
+    const amount = 1000000n;
     const sdk = createAnchorCCTP({
       signer: async () => 'DEFAULT_SIGNER',
       forwarderContractId: 'CA66Q2WFBND6V4UEB7RD4SAXSVIWMD6RA4X3U32ELVFGXV5PJK4T4VSZ',
@@ -206,7 +231,7 @@ describe('receive() Orchestration Engine', () => {
       _test: {
         attestation: async () => ({
           status: 'complete',
-          message: goodMsg,
+          message: wellFormedMsg(amount),
           signature: goodSig,
         }),
         hasTrustline: async () => false,
@@ -218,10 +243,10 @@ describe('receive() Orchestration Engine', () => {
     });
 
     const res = await sdk.receive({
-      sourceDomain: 27, // Stellar
+      sourceDomain: 27,
       burnTxHash: H('cafe0002'),
       destinationAddress: validDestination,
-      amount: 1000000n,
+      amount,
       signer: async () => 'CUSTOM_SIGNER_TX',
     });
 
@@ -232,13 +257,21 @@ describe('receive() Orchestration Engine', () => {
 
   it('documents that 6->7 conversion yields zero dust (no onDustCollected)', async () => {
     const dustCollected: unknown[] = [];
-    const sdk = makeSdk();
+    const amount = 1000000n;
+    const sdk = makeSdk({
+      attestation: async () => ({
+        status: 'complete',
+        attestation: '0x' + 'ab'.repeat(40),
+        message: wellFormedMsg(amount),
+        signature: goodSig,
+      }),
+    });
     sdk.on('onDustCollected', (p) => dustCollected.push(p));
     const res = await sdk.receive({
       sourceDomain: 0,
       burnTxHash: H('cafe0003'),
       destinationAddress: validDestination,
-      amount: 1000000n,
+      amount,
     });
     expect(res.settled).toBe(true);
     expect(res.dust).toBe(0n);
@@ -248,6 +281,7 @@ describe('receive() Orchestration Engine', () => {
   it('uses _test.pollAttestation hook when provided and fires onReceiving events', async () => {
     let mockPollCalled = false;
     const receivingEvents: any[] = [];
+    const amount = 1000000n;
 
     const sdk = createAnchorCCTP({
       signer: async () => 'SIGNED_POLL_HOOK',
@@ -260,7 +294,7 @@ describe('receive() Orchestration Engine', () => {
           return {
             status: 'complete',
             attestation: '0x' + 'ab'.repeat(40),
-            message: '0x' + 'ab'.repeat(40),
+            message: wellFormedMsg(amount),
             signature: '0x' + 'cd'.repeat(70),
             attempts: 2,
             elapsedTimeMs: 250,
@@ -276,7 +310,7 @@ describe('receive() Orchestration Engine', () => {
       sourceDomain: 0,
       burnTxHash: H('cafe0004'),
       destinationAddress: validDestination,
-      amount: 1000000n,
+      amount,
     });
 
     expect(mockPollCalled).toBe(true);
@@ -287,11 +321,12 @@ describe('receive() Orchestration Engine', () => {
   });
 
   it('C1: receive without signer or defaultSigner throws MintFailedError', async () => {
+    const amount = 1000000n;
     const sdk = createAnchorCCTP({
       _test: {
         attestation: async () => ({
           status: 'complete',
-          message: goodMsg,
+          message: wellFormedMsg(amount),
           signature: goodSig,
         }),
         hasTrustline: async () => true,
@@ -303,7 +338,7 @@ describe('receive() Orchestration Engine', () => {
         sourceDomain: 0,
         burnTxHash: H('cafe0005'),
         destinationAddress: validDestination,
-        amount: 1000000n,
+        amount,
       })
     ).rejects.toBeInstanceOf(MintFailedError);
   });
@@ -315,12 +350,12 @@ describe('receive() Orchestration Engine', () => {
         sourceDomain: 0,
         burnTxHash: H('c6miss'),
         destinationAddress: validDestination,
-        // amount deliberately omitted
       } as any)
     ).rejects.toMatchObject({ code: 'INVALID_AMOUNT' });
   });
 
   it('receive forwards sourceSequence to the mint XDR', async () => {
+    const amount = 1000000n;
     const spy = jest.spyOn(forwarderMod, 'submitMint');
     const sdk = createAnchorCCTP({
       signer: async (x) => 'SIGNED_SEQ_TX',
@@ -328,7 +363,7 @@ describe('receive() Orchestration Engine', () => {
       _test: {
         attestation: async () => ({
           status: 'complete',
-          message: goodMsg,
+          message: wellFormedMsg(amount),
           signature: goodSig,
         }),
         hasTrustline: async () => true,
@@ -339,7 +374,7 @@ describe('receive() Orchestration Engine', () => {
       sourceDomain: 6,
       burnTxHash: '0x' + 'a1'.repeat(32),
       destinationAddress: validDestination,
-      amount: 1000000n,
+      amount,
       sourceSequence: '424242',
     });
 
@@ -350,12 +385,13 @@ describe('receive() Orchestration Engine', () => {
   });
 
   it('C2: receive without hasTrustline provider throws TrustlineCreationError', async () => {
+    const amount = 1000000n;
     const sdk = createAnchorCCTP({
       signer: async (x) => 'SIGNED_TX',
       _test: {
         attestation: async () => ({
           status: 'complete',
-          message: goodMsg,
+          message: wellFormedMsg(amount),
           signature: goodSig,
         }),
       },
@@ -366,19 +402,20 @@ describe('receive() Orchestration Engine', () => {
         sourceDomain: 0,
         burnTxHash: H('cafe0006'),
         destinationAddress: validDestination,
-        amount: 1000000n,
+        amount,
       })
     ).rejects.toMatchObject({ code: 'TRUSTLINE_CREATION_FAILED' });
   });
 
   it('O5/M1: normalizes replay key case (0xABC same as 0xabc)', async () => {
+    const amount = 1000000n;
     const sdk = createAnchorCCTP({
       signer: async (x) => 'SIGNED_NORM',
       forwarderContractId: 'CA66Q2WFBND6V4UEB7RD4SAXSVIWMD6RA4X3U32ELVFGXV5PJK4T4VSZ',
       _test: {
         attestation: async () => ({
           status: 'complete',
-          message: goodMsg,
+          message: wellFormedMsg(amount),
           signature: goodSig,
         }),
         hasTrustline: async () => true,
@@ -389,7 +426,7 @@ describe('receive() Orchestration Engine', () => {
       sourceDomain: 0,
       burnTxHash: '0x' + 'AA'.repeat(32),
       destinationAddress: validDestination,
-      amount: 1000000n,
+      amount,
     });
 
     await expect(
@@ -397,7 +434,7 @@ describe('receive() Orchestration Engine', () => {
         sourceDomain: 0,
         burnTxHash: '0x' + 'aa'.repeat(32),
         destinationAddress: validDestination,
-        amount: 1000000n,
+        amount,
       })
     ).rejects.toMatchObject({ code: 'REPLAY_TRANSFER' });
   });
@@ -409,12 +446,13 @@ describe('receive() Orchestration Engine', () => {
   });
 
   it('O15: sourceSequence must be numeric string', async () => {
+    const amount = 1000000n;
     const sdk = createAnchorCCTP({
       signer: async (x) => 'SIGNED_SEQ',
       _test: {
         attestation: async () => ({
           status: 'complete',
-          message: goodMsg,
+          message: wellFormedMsg(amount),
           signature: goodSig,
         }),
         hasTrustline: async () => true,
@@ -426,13 +464,14 @@ describe('receive() Orchestration Engine', () => {
         sourceDomain: 0,
         burnTxHash: H('cafe0008'),
         destinationAddress: validDestination,
-        amount: 1000000n,
+        amount,
         sourceSequence: 'abc',
       })
     ).rejects.toMatchObject({ code: 'INVALID_CONFIG' });
   });
 
   it('M4: invalid dust collector StrKey in resolved path throws', async () => {
+    const amount = 1000000n;
     const sdk = createAnchorCCTP({
       signer: async () => 'SIGNED_DUST',
       dustCollectorAddress: 'INVALID_DUST',
@@ -440,7 +479,7 @@ describe('receive() Orchestration Engine', () => {
       _test: {
         attestation: async () => ({
           status: 'complete',
-          message: goodMsg,
+          message: wellFormedMsg(amount),
           signature: goodSig,
         }),
         hasTrustline: async () => true,
@@ -452,7 +491,7 @@ describe('receive() Orchestration Engine', () => {
         sourceDomain: 0,
         burnTxHash: H('cafe0d01'),
         destinationAddress: validDestination,
-        amount: 1000000n,
+        amount,
       })
     ).rejects.toMatchObject({ code: 'INVALID_CONFIG' });
   });
@@ -460,6 +499,7 @@ describe('receive() Orchestration Engine', () => {
   it('C4: onSettled never fires when submitMint fails + replay not marked', async () => {
     const { ReplayStore } = require('../src/replay/index.js');
     const replayStore = new ReplayStore();
+    const amount = 1000000n;
     const settled: unknown[] = [];
     const sdk = createAnchorCCTP({
       signer: async () => { throw new Error('sign boom'); },
@@ -467,7 +507,7 @@ describe('receive() Orchestration Engine', () => {
       _test: {
         attestation: async () => ({
           status: 'complete',
-          message: goodMsg,
+          message: wellFormedMsg(amount),
           signature: goodSig,
         }),
         hasTrustline: async () => true,
@@ -480,14 +520,237 @@ describe('receive() Orchestration Engine', () => {
         sourceDomain: 0,
         burnTxHash: H('c4fail01'),
         destinationAddress: validDestination,
-        amount: 1000000n,
+        amount,
       })
     ).rejects.toThrow();
 
     expect(settled).toHaveLength(0);
-    // replay store should NOT mark it processed
     const replayed = await replayStore.isProcessed(H('c4fail01'));
     expect(replayed).toBe(false);
+  });
+
+  // --- C5: Crash window tests ---
+
+  it('C5: pre-marked submitted record → ReplayTransferError, submitMint never called', async () => {
+    const burnHash = H('c5cafe01');
+    const amount = 1000000n;
+    const { ReplayStore } = require('../src/replay/index.js');
+    const replayStore = new ReplayStore();
+    const submittedRecord: SettlementRecord = {
+      burnTxHash: burnHash,
+      txHash: 'TX_AFTER_MINT',
+      sourceDomain: 0,
+      destinationAddress: validDestination,
+      timestamp: new Date().toISOString(),
+      status: 'submitted',
+    };
+    await replayStore.markProcessed(burnHash, submittedRecord);
+
+    const spy = jest.spyOn(forwarderMod, 'submitMint');
+    const sdk = createAnchorCCTP({
+      signer: async () => 'SHOULD_NOT_SIGN',
+      replayStore,
+      forwarderContractId: 'CA66Q2WFBND6V4UEB7RD4SAXSVIWMD6RA4X3U32ELVFGXV5PJK4T4VSZ',
+      _test: {
+        attestation: async () => ({
+          status: 'complete',
+          message: wellFormedMsg(amount),
+          signature: goodSig,
+        }),
+        hasTrustline: async () => true,
+      },
+    } as any);
+
+    await expect(
+      sdk.receive({
+        sourceDomain: 0,
+        burnTxHash: burnHash,
+        destinationAddress: validDestination,
+        amount,
+      })
+    ).rejects.toMatchObject({ code: 'REPLAY_TRANSFER' });
+
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  it('C5: markProcessed writes status submitted then settled', async () => {
+    const burnHash = H('c5cafe02');
+    const amount = 1000000n;
+    const { ReplayStore } = require('../src/replay/index.js');
+    const replayStore = new ReplayStore();
+    const marks: string[] = [];
+    const origMark = replayStore.markProcessed.bind(replayStore);
+    replayStore.markProcessed = async (h: string, r: SettlementRecord) => {
+      marks.push(r.status ?? 'none');
+      return origMark(h, r);
+    };
+
+    const sdk = createAnchorCCTP({
+      signer: async () => 'C5_SIGNED',
+      replayStore,
+      forwarderContractId: 'CA66Q2WFBND6V4UEB7RD4SAXSVIWMD6RA4X3U32ELVFGXV5PJK4T4VSZ',
+      _test: {
+        attestation: async () => ({
+          status: 'complete',
+          message: wellFormedMsg(amount),
+          signature: goodSig,
+        }),
+        hasTrustline: async () => true,
+      },
+    } as any);
+
+    await sdk.receive({
+      sourceDomain: 0,
+      burnTxHash: burnHash,
+      destinationAddress: validDestination,
+      amount,
+    });
+
+    expect(marks).toEqual(['submitted', 'settled']);
+  });
+
+  // --- O2: Amount binding tests ---
+
+  it('O2: amount mismatch between params and attestation message throws InvalidAmountError', async () => {
+    const amount = 1000000n;
+    const wrongAmount = 9999999n;
+    const sdk = createAnchorCCTP({
+      signer: async () => 'SHOULD_NOT_SIGN',
+      forwarderContractId: 'CA66Q2WFBND6V4UEB7RD4SAXSVIWMD6RA4X3U32ELVFGXV5PJK4T4VSZ',
+      _test: {
+        attestation: async () => ({
+          status: 'complete',
+          message: wellFormedMsg(wrongAmount), // message says 9999999
+          signature: goodSig,
+        }),
+        hasTrustline: async () => true,
+      },
+    } as any);
+
+    await expect(
+      sdk.receive({
+        sourceDomain: 0,
+        burnTxHash: H('02cafe01'),
+        destinationAddress: validDestination,
+        amount, // caller says 1000000
+      })
+    ).rejects.toThrow(InvalidAmountError);
+  });
+
+  it('O2: message too short to contain amount throws AttestationVerificationError (fail closed)', async () => {
+    const amount = 1000000n;
+    // Short message: only 4 bytes (8 hex chars) — below minimum 12 bytes
+    const shortMsg = '0x' + 'ab'.repeat(4);
+    const sdk = createAnchorCCTP({
+      signer: async () => 'SHOULD_NOT_SIGN',
+      forwarderContractId: 'CA66Q2WFBND6V4UEB7RD4SAXSVIWMD6RA4X3U32ELVFGXV5PJK4T4VSZ',
+      _test: {
+        attestation: async () => ({
+          status: 'complete',
+          message: shortMsg,
+          signature: goodSig,
+        }),
+        hasTrustline: async () => true,
+      },
+    } as any);
+
+    await expect(
+      sdk.receive({
+        sourceDomain: 0,
+        burnTxHash: H('02cafe02'),
+        destinationAddress: validDestination,
+        amount,
+      })
+    ).rejects.toThrow(AttestationVerificationError);
+  });
+
+  it('O2: matching amount passes validation', async () => {
+    const amount = 5000000n;
+    const sdk = createAnchorCCTP({
+      signer: async () => 'O2_MATCH_SIGNED',
+      forwarderContractId: 'CA66Q2WFBND6V4UEB7RD4SAXSVIWMD6RA4X3U32ELVFGXV5PJK4T4VSZ',
+      _test: {
+        attestation: async () => ({
+          status: 'complete',
+          message: wellFormedMsg(amount),
+          signature: goodSig,
+        }),
+        hasTrustline: async () => true,
+      },
+    } as any);
+
+    const r = await sdk.receive({
+      sourceDomain: 0,
+      burnTxHash: H('02cafe03'),
+      destinationAddress: validDestination,
+      amount,
+    });
+
+    expect(r.settled).toBe(true);
+    expect(r.amount).toBe(50000000n); // 5 * 10
+  });
+
+  // --- O15: Sponsor param tests ---
+
+  it('O15: sponsorAccount used as tx source', async () => {
+    const amount = 1000000n;
+    const sponsor = StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 0x77));
+    const spy = jest.spyOn(forwarderMod, 'submitMint');
+    const sdk = createAnchorCCTP({
+      signer: async () => 'O15_SIGNED',
+      forwarderContractId: 'CA66Q2WFBND6V4UEB7RD4SAXSVIWMD6RA4X3U32ELVFGXV5PJK4T4VSZ',
+      _test: {
+        attestation: async () => ({
+          status: 'complete',
+          message: wellFormedMsg(amount),
+          signature: goodSig,
+        }),
+        hasTrustline: async () => true,
+      },
+    } as any);
+
+    await sdk.receive({
+      sourceDomain: 0,
+      burnTxHash: H('015cafe01'),
+      destinationAddress: validDestination,
+      amount,
+      sponsorAccount: sponsor,
+    });
+
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy.mock.calls[0][0].sourceAccount).toBe(sponsor);
+    spy.mockRestore();
+  });
+
+  it('O15: invalid sponsorAccount throws InvalidAddressError', async () => {
+    const amount = 1000000n;
+    const sdk = createAnchorCCTP({
+      signer: async () => 'O15_SIGNED',
+      forwarderContractId: 'CA66Q2WFBND6V4UEB7RD4SAXSVIWMD6RA4X3U32ELVFGXV5PJK4T4VSZ',
+      _test: {
+        attestation: async () => ({
+          status: 'complete',
+          message: wellFormedMsg(amount),
+          signature: goodSig,
+        }),
+        hasTrustline: async () => true,
+      },
+    } as any);
+
+    try {
+      await sdk.receive({
+        sourceDomain: 0,
+        burnTxHash: H('bad015'),
+        destinationAddress: validDestination,
+        amount,
+        sponsorAccount: 'INVALID_SPONSOR',
+      });
+      fail('should have thrown InvalidAddressError');
+    } catch (e) {
+      expect(e).toBeInstanceOf(InvalidAddressError);
+      expect((e as any).code).toBe('INVALID_ADDRESS');
+    }
   });
 });
 
@@ -499,4 +762,3 @@ describe('resolveDustCollector', () => {
     expect(resolveDustCollector({ dest })).toBe(dest);
   });
 });
-

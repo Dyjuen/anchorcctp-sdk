@@ -6,6 +6,8 @@ export interface SettlementRecord {
   sourceDomain?: number;
   destinationAddress?: string;
   timestamp?: string;
+  /** C5: crash window tracking. 'submitted' after mint TX sent, 'settled' after post-mint work completes. */
+  status?: 'submitted' | 'settled';
 }
 
 export interface IReplayStoreAdapter {

@@ -15,6 +15,7 @@ import {
   TrustlineCreationError,
   InvalidBurnHashError,
   InvalidConfigError,
+  InvalidAddressError,
 } from './errors/index.js';
 
 export interface ReceiveParams {
@@ -33,6 +34,8 @@ export interface ReceiveParams {
   spendCapXlm?: number;
   forwarderContractId?: string;
   sourceSequence?: string;
+  /** O15: Sponsor account used as transaction source for the mint XDR. */
+  sponsorAccount?: string;
 }
 
 export interface ReceiveResult {
@@ -168,6 +171,35 @@ export async function receive(
     throw error;
   }
 
+  // O2: Parse amount from CCTP message and cross-check against caller-supplied amount.
+  // CCTP message layout (assumption from Circle source-chain message format):
+  //   offset 0..3:   version/padding (4 bytes)
+  //   offset 4..11:  amount as uint64 LE (8 bytes)
+  //   offset 12+:    source/denom/mintRecipient/destinationDomain/etc.
+  // If message is too short to contain the amount field, fail closed.
+  const msgHex = attResult.message.startsWith('0x') ? attResult.message.slice(2) : attResult.message;
+  const AMOUNT_OFFSET_BYTES = 4;
+  const AMOUNT_LENGTH_BYTES = 8;
+  const MIN_MSG_BYTES = AMOUNT_OFFSET_BYTES + AMOUNT_LENGTH_BYTES; // 12 bytes = 24 hex chars
+  if (msgHex.length < MIN_MSG_BYTES * 2) {
+    const error = new AttestationVerificationError(
+      burnTxHash,
+      `message too short to contain amount field (need >= ${MIN_MSG_BYTES} bytes, got ${Math.floor(msgHex.length / 2)})`
+    );
+    ctx.emitter.emit('onError', { error, burnTxHash });
+    throw error;
+  }
+  const msgBytes = Buffer.from(msgHex, 'hex');
+  // uint64 LE decode
+  const parsedAmount = msgBytes.readBigUInt64LE(AMOUNT_OFFSET_BYTES);
+  if (parsedAmount !== amount) {
+    const error = new InvalidAmountError(
+      `amount mismatch: caller supplied ${amount} but attestation message contains ${parsedAmount}`
+    );
+    ctx.emitter.emit('onError', { error, burnTxHash });
+    throw error;
+  }
+
   // 8. Trustline Inspection & Opt-in Creation
   const allowTrustline =
     params.allowTrustlineCreation ??
@@ -208,6 +240,11 @@ export async function receive(
     throw new MintFailedError(burnTxHash, 'forwarderContractId required. Pass params.forwarderContractId or config.network/forwarderContractId.');
   }
 
+  // O15: validate sponsorAccount early (before buildMintAndForwardXdr)
+  if (params.sponsorAccount && !StrKey.isValidEd25519PublicKey(params.sponsorAccount)) {
+    throw new InvalidAddressError(params.sponsorAccount, 'sponsorAccount must be a valid G... StrKey');
+  }
+
   let mintResult: Awaited<ReturnType<typeof submitMint>>;
   try {
     mintResult = await submitMint(
@@ -217,6 +254,7 @@ export async function receive(
         destination: stellarDestination,
         forwarderContractId,
         ...(params.sourceSequence === undefined ? {} : { sourceSequence: params.sourceSequence }),
+        ...(params.sponsorAccount === undefined ? {} : { sourceAccount: params.sponsorAccount }),
       },
       effectiveSigner
     );
@@ -224,6 +262,17 @@ export async function receive(
     ctx.emitter.emit('onError', { error: submitErr, burnTxHash });
     throw submitErr;
   }
+
+  // C5: Mark 'submitted' immediately after mint TX sent (crash here → retry sees submitted, no double-mint)
+  const timestamp = new Date().toISOString();
+  await ctx.replayStore.markProcessed(burnTxHash, {
+    burnTxHash,
+    txHash: mintResult.txHash,
+    sourceDomain,
+    destinationAddress: stellarDestination,
+    timestamp,
+    status: 'submitted',
+  });
 
   // 10. Decimal Conversion (6 -> 7 decimals) & Dust Routing
   const { stellarAmount, dust } = convert6to7(amount);
@@ -239,8 +288,7 @@ export async function receive(
     throw new InvalidConfigError(`dustCollectorAddress must be a valid G... StrKey, got: "${effectiveDustCollector}"`);
   }
 
-  // 11. Mark Processed BEFORE emitting (crash between emit and mark → no unmarked settlement)
-  const timestamp = new Date().toISOString();
+  // C5: Mark 'settled' after post-mint work completes (full record with amount/dust)
   const record: SettlementRecord = {
     burnTxHash,
     txHash: mintResult.txHash,
@@ -249,6 +297,7 @@ export async function receive(
     sourceDomain,
     destinationAddress: stellarDestination,
     timestamp,
+    status: 'settled',
   };
   await ctx.replayStore.markProcessed(burnTxHash, record);
 

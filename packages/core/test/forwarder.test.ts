@@ -232,3 +232,42 @@ describe('M5/O4: translateToStellar rejects zero addresses', () => {
     expect(() => translateToStellar('0x' + '00'.repeat(32))).toThrow(expect.objectContaining({ code: 'INVALID_ADDRESS' }));
   });
 });
+
+describe('O15: sourceAccount / sponsor param', () => {
+  const dest = StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 0x33));
+  const sponsor = StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 0x77));
+  const msg = '0x' + 'ab'.repeat(40);
+  const sig = '0x' + 'cd'.repeat(70);
+
+  it('buildMintAndForwardXdr uses sourceAccount as tx source when provided', () => {
+    const xdr = buildMintAndForwardXdr({
+      message: msg,
+      signature: sig,
+      destination: dest,
+      sourceAccount: sponsor,
+    });
+    const tx: any = TransactionBuilder.fromXDR(xdr, 'TESTNET');
+    expect(tx.source).toBe(sponsor);
+  });
+
+  it('buildMintAndForwardXdr falls back to destination when sourceAccount absent', () => {
+    const xdr = buildMintAndForwardXdr({
+      message: msg,
+      signature: sig,
+      destination: dest,
+    });
+    const tx: any = TransactionBuilder.fromXDR(xdr, 'TESTNET');
+    expect(tx.source).toBe(dest);
+  });
+
+  it('buildMintAndForwardXdr throws InvalidAddressError for invalid sourceAccount', () => {
+    expect(() =>
+      buildMintAndForwardXdr({
+        message: msg,
+        signature: sig,
+        destination: dest,
+        sourceAccount: 'INVALID_SPONSOR',
+      })
+    ).toThrow(InvalidAddressError);
+  });
+});

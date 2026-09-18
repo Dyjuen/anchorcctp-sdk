@@ -9,6 +9,8 @@ export interface MintParams {
   horizonUrl?: string;
   networkPassphrase?: string;
   sourceSequence?: string;
+  /** O15: Sponsor account used as transaction source. Must be a valid G... StrKey. */
+  sourceAccount?: string;
 }
 
 export type SignerCallback = (xdr: string) => Promise<string>;
@@ -37,8 +39,15 @@ function hexToBytes(hex: string): Buffer {
 export function buildMintAndForwardXdr(params: MintParams): string {
   const contractId = params.forwarderContractId || DEFAULT_FORWARDER;
   const passphrase = params.networkPassphrase || Networks.TESTNET;
+
+  // O15: sponsor/sourceAccount validation
+  const txSource = params.sourceAccount ?? params.destination;
+  if (params.sourceAccount && !StrKey.isValidEd25519PublicKey(params.sourceAccount)) {
+    throw new InvalidAddressError(params.sourceAccount, 'sourceAccount must be a valid G... StrKey');
+  }
+
   try {
-    const source = new Account(params.destination, params.sourceSequence ?? '0');
+    const source = new Account(txSource, params.sourceSequence ?? '0');
     const contract = new Contract(contractId);
     const op = contract.call(
       'mint_and_forward',
@@ -55,6 +64,7 @@ export function buildMintAndForwardXdr(params: MintParams): string {
       .build();
     return tx.toXDR();
   } catch (err) {
+    if (err instanceof InvalidAddressError) throw err;
     const reason = err instanceof Error ? err.message : String(err);
     throw new ForwarderContractError(contractId, reason);
   }
@@ -114,7 +124,7 @@ export async function submitMint(
     const signedOutput = await signer(xdr);
     return { txHash: signedOutput };
   } catch (error) {
-    if (error instanceof ForwarderContractError) throw error;
+    if (error instanceof ForwarderContractError || error instanceof InvalidAddressError) throw error;
     const reason = error instanceof Error ? error.message : String(error);
     throw new MintFailedError(params.message, reason);
   }
