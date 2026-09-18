@@ -1,4 +1,5 @@
 import { createAnchorCCTP, AnchorCCTPConfig } from '../src/config.js';
+import { InvalidConfigError } from '../src/errors/index.js';
 
 describe('AnchorCCTP Configuration & Factory', () => {
   it('createAnchorCCTP returns object with receive(), on(), once(), and off()', () => {
@@ -41,6 +42,29 @@ describe('AnchorCCTP Configuration & Factory', () => {
     const logs: string[] = [];
     const sdk2 = createAnchorCCTP({ logger: (s) => logs.push(s) });
     expect(sdk2).toBeDefined();
+  });
+
+  it('N1: _test overrides forbidden in production', () => {
+    const original = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+    try {
+      expect(() =>
+        createAnchorCCTP({ _test: { fake: true } } as any)
+      ).toThrow(InvalidConfigError);
+    } finally {
+      process.env.NODE_ENV = original;
+    }
+  });
+
+  it('N1: _test allowed outside production', () => {
+    const original = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'test';
+    try {
+      const sdk = createAnchorCCTP({ _test: { fake: true } } as any);
+      expect(sdk).toBeDefined();
+    } finally {
+      process.env.NODE_ENV = original;
+    }
   });
 });
 

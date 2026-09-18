@@ -10,6 +10,10 @@ import {
   ReplayTransferError,
   InvalidAmountError,
   AttestationVerificationError,
+  MintFailedError,
+  TrustlineCreationError,
+  InvalidBurnHashError,
+  InvalidConfigError,
 } from './errors/index.js';
 
 export interface ReceiveParams {
@@ -66,6 +70,16 @@ export function resolveDustCollector(args: {
 }
 
 /**
+ * Normalizes burnTxHash to lowercase 0x + 64 hex chars, or throws InvalidBurnHashError.
+ */
+export function normalizeBurnTxHash(h: string): string {
+  if (typeof h !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(h.trim())) {
+    throw new InvalidBurnHashError(h);
+  }
+  return '0x' + h.trim().slice(2).toLowerCase();
+}
+
+/**
  * Orchestrates the full CCTP receive lifecycle on Stellar.
  */
 export async function receive(
@@ -74,29 +88,32 @@ export async function receive(
 ): Promise<ReceiveResult> {
   const {
     sourceDomain,
-    burnTxHash,
+    burnTxHash: burnTxHashRaw,
     destinationAddress,
     amount = 1000000n, // Default 1 USDC base units if not passed
   } = params;
 
-  // 1. Verify source domain is supported
+  // 1. Normalize burnTxHash (0x + 64 hex, lowercase)
+  const burnTxHash = normalizeBurnTxHash(burnTxHashRaw);
+
+  // 2. Verify source domain is supported
   assertSupportedDomain(sourceDomain);
 
-  // 2. Validate amount (> 0n)
+  // 3. Validate amount (> 0n)
   if (typeof amount !== 'bigint' || amount <= 0n) {
     throw new InvalidAmountError('Amount must be a positive BigInt (> 0n).');
   }
 
-  // 3. Replay Protection Guard
+  // 4. Replay Protection Guard
   const isAlreadyProcessed = await ctx.replayStore.isProcessed(burnTxHash);
   if (isAlreadyProcessed) {
     throw new ReplayTransferError(burnTxHash);
   }
 
-  // 4. Address translation & validation
+  // 5. Address translation & validation
   const stellarDestination = translateToStellar(destinationAddress);
 
-  // 5. Attestation Polling
+  // 6. Attestation Polling
   ctx.logger.info('Starting CCTP attestation polling', { burnTxHash, sourceDomain });
   let attResult: AttestationResult;
 
@@ -133,7 +150,7 @@ export async function receive(
     );
   }
 
-  // 6. Cryptographic Attestation Verification
+  // 7. Cryptographic Attestation Verification
   const isVerified = ctx.attestationClient.verifyAttestation(
     attResult.message,
     attResult.signature
@@ -147,31 +164,38 @@ export async function receive(
     throw error;
   }
 
-  // 7. Trustline Inspection & Opt-in Creation
+  // 8. Trustline Inspection & Opt-in Creation
   const allowTrustline =
     params.allowTrustlineCreation ??
     ctx.defaultTrustline?.allowCreation ??
     false;
   const spendCap = params.spendCapXlm ?? ctx.defaultTrustline?.spendCapXlm;
 
-  const effectiveSigner =
-    params.signer ||
-    ctx.defaultSigner ||
-    (async (xdr: string) => `SIGNED_${xdr}`);
+  const effectiveSigner = params.signer ?? ctx.defaultSigner;
+  if (!effectiveSigner) {
+    throw new MintFailedError(burnTxHash, 'No signer configured. Pass params.signer or config.signer.');
+  }
+
+  const hasTrustline = ctx._test?.hasTrustline;
+  if (!hasTrustline) {
+    throw new TrustlineCreationError(stellarDestination, 'No hasTrustline provider wired. Pass Horizon-backed provider via _test.hasTrustline (tests) or production wiring.');
+  }
+  const createTrustline = ctx._test?.createTrustline ?? (async (xdr: string) => effectiveSigner(xdr));
+
+  // O15: sourceSequence must be numeric string
+  if (params.sourceSequence !== undefined && !/^\d+$/.test(params.sourceSequence)) {
+    throw new InvalidConfigError('sourceSequence must be numeric string');
+  }
 
   await ensureTrustline({
     destination: stellarDestination,
     allowCreation: allowTrustline,
     spendCapXlm: spendCap,
-    hasTrustline:
-      ctx._test?.hasTrustline ||
-      (async () => true),
-    createTrustline:
-      ctx._test?.createTrustline ||
-      (async (xdr: string) => effectiveSigner(xdr)),
+    hasTrustline,
+    createTrustline,
   });
 
-  // 8. Soroban Forwarder Mint Submission
+  // 9. Soroban Forwarder Mint Submission
   const forwarderContractId =
     params.forwarderContractId ?? ctx.defaultForwarderContractId;
   const mintResult = await submitMint(
@@ -185,7 +209,7 @@ export async function receive(
     effectiveSigner
   );
 
-  // 9. Decimal Conversion (6 -> 7 decimals) & Dust Routing
+  // 10. Decimal Conversion (6 -> 7 decimals) & Dust Routing
   const { stellarAmount, dust } = convert6to7(amount);
 
   const effectiveDustCollector = resolveDustCollector({
@@ -194,7 +218,7 @@ export async function receive(
     cfg: ctx.defaultDustCollector,
   });
 
-  // 10. Emit Lifecycle Events
+  // 11. Emit Lifecycle Events
   const timestamp = new Date().toISOString();
   ctx.emitter.emit('onSettled', {
     amount: stellarAmount,
@@ -213,7 +237,7 @@ export async function receive(
     });
   }
 
-  // 11. Mark Processed in Replay Store
+  // 12. Mark Processed in Replay Store
   const record: SettlementRecord = {
     burnTxHash,
     txHash: mintResult.txHash,

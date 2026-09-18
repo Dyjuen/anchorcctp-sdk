@@ -12,6 +12,7 @@ describe('Security Checklist Invariant Tests (PRD §7 & §8)', () => {
   const sampleStellarAddress = StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 0x77));
   const goodMsg = '0x' + 'ab'.repeat(40);
   const goodSig = '0x' + 'cd'.repeat(70);
+  const H = (suffix: string) => '0x' + suffix.padStart(64, '0').slice(0, 64);
 
   it('INVARIANT 1: Replay of same burnTxHash is rejected without double-crediting', async () => {
     const settledEvents: any[] = [];
@@ -24,14 +25,15 @@ describe('Security Checklist Invariant Tests (PRD §7 & §8)', () => {
           message: goodMsg,
           signature: goodSig,
         }),
+        hasTrustline: async () => true,
       },
-    });
+    } as any);
     sdk.on('onSettled', (e) => settledEvents.push(e));
 
     // First receive succeeds
     const first = await sdk.receive({
       sourceDomain: 0,
-      burnTxHash: '0xreplay_guard_hash',
+      burnTxHash: H('cafe0010'),
       destinationAddress: sampleStellarAddress,
     });
     expect(first.settled).toBe(true);
@@ -41,7 +43,7 @@ describe('Security Checklist Invariant Tests (PRD §7 & §8)', () => {
     await expect(
       sdk.receive({
         sourceDomain: 0,
-        burnTxHash: '0xreplay_guard_hash',
+        burnTxHash: H('cafe0010'),
         destinationAddress: sampleStellarAddress,
       })
     ).rejects.toMatchObject({ code: 'REPLAY_TRANSFER' });
@@ -55,12 +57,12 @@ describe('Security Checklist Invariant Tests (PRD §7 & §8)', () => {
       _test: {
         attestation: async () => ({ status: 'complete', message: goodMsg, signature: goodSig }),
       },
-    });
+    } as any);
 
     await expect(
       sdk.receive({
         sourceDomain: 0,
-        burnTxHash: '0xzero_amt',
+        burnTxHash: H('cafe0011'),
         destinationAddress: sampleStellarAddress,
         amount: 0n,
       })
@@ -69,7 +71,7 @@ describe('Security Checklist Invariant Tests (PRD §7 & §8)', () => {
     await expect(
       sdk.receive({
         sourceDomain: 0,
-        burnTxHash: '0xneg_amt',
+        burnTxHash: H('cafe0012'),
         destinationAddress: sampleStellarAddress,
         amount: -500n,
       })
@@ -85,7 +87,7 @@ describe('Security Checklist Invariant Tests (PRD §7 & §8)', () => {
     await expect(
       sdk.receive({
         sourceDomain: 99999,
-        burnTxHash: '0xunknown_domain',
+        burnTxHash: H('cafe0013'),
         destinationAddress: sampleStellarAddress,
       })
     ).rejects.toMatchObject({ code: 'INVALID_DOMAIN' });
@@ -102,14 +104,15 @@ describe('Security Checklist Invariant Tests (PRD §7 & §8)', () => {
           message: '0x' + 'ab'.repeat(10),
           signature: '0x' + 'cd'.repeat(20),
         }),
+        hasTrustline: async () => true,
       },
-    });
+    } as any);
     sdk.on('onSettled', (e) => settledEvents.push(e));
 
     await expect(
       sdk.receive({
         sourceDomain: 0,
-        burnTxHash: '0xpending_tx',
+        burnTxHash: H('cafe0014'),
         destinationAddress: sampleStellarAddress,
       })
     ).rejects.toThrow(AnchorCCTPError);

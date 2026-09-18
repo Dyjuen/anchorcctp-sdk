@@ -1,12 +1,16 @@
 import { createAnchorCCTP } from '../src/config.js';
 import * as forwarderMod from '../src/forwarder/index.js';
-import { resolveDustCollector } from '../src/receive.js';
+import { resolveDustCollector, normalizeBurnTxHash } from '../src/receive.js';
 import {
   ReplayTransferError,
   InvalidDomainError,
   InvalidAmountError,
   AnchorCCTPError,
   AttestationVerificationError,
+  MintFailedError,
+  TrustlineCreationError,
+  InvalidBurnHashError,
+  InvalidConfigError,
 } from '../src/errors/index.js';
 import { StrKey } from '@stellar/stellar-sdk';
 
@@ -14,6 +18,7 @@ describe('receive() Orchestration Engine', () => {
   const validDestination = StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 0x55));
   const goodMsg = '0x' + 'ab'.repeat(40);
   const goodSig = '0x' + 'cd'.repeat(70);
+  const H = (suffix: string) => '0x' + suffix.padStart(64, '0').slice(0, 64);
 
   function makeSdk(over: any = {}) {
     return createAnchorCCTP({
@@ -26,6 +31,7 @@ describe('receive() Orchestration Engine', () => {
           message: goodMsg,
           signature: goodSig,
         }),
+        hasTrustline: async () => true,
         ...over,
       },
     } as any);
@@ -38,7 +44,7 @@ describe('receive() Orchestration Engine', () => {
 
     const r = await sdk.receive({
       sourceDomain: 0,
-      burnTxHash: '0x1',
+      burnTxHash: H('01'),
       destinationAddress: validDestination,
       amount: 5000000n, // 5 USDC
     });
@@ -54,14 +60,14 @@ describe('receive() Orchestration Engine', () => {
     const sdk = makeSdk();
     await sdk.receive({
       sourceDomain: 0,
-      burnTxHash: '0xreplay',
+      burnTxHash: H('abcdef01'),
       destinationAddress: validDestination,
     });
 
     await expect(
       sdk.receive({
         sourceDomain: 0,
-        burnTxHash: '0xreplay',
+        burnTxHash: H('abcdef01'),
         destinationAddress: validDestination,
       })
     ).rejects.toMatchObject({ code: 'REPLAY_TRANSFER' });
@@ -72,7 +78,7 @@ describe('receive() Orchestration Engine', () => {
     await expect(
       sdk.receive({
         sourceDomain: 999,
-        burnTxHash: '0x2',
+        burnTxHash: H('02'),
         destinationAddress: validDestination,
       })
     ).rejects.toMatchObject({ code: 'INVALID_DOMAIN' });
@@ -83,7 +89,7 @@ describe('receive() Orchestration Engine', () => {
     await expect(
       sdk.receive({
         sourceDomain: 0,
-        burnTxHash: '0xbad_amount',
+        burnTxHash: H('bad1'),
         destinationAddress: validDestination,
         amount: 0n,
       })
@@ -92,7 +98,7 @@ describe('receive() Orchestration Engine', () => {
     await expect(
       sdk.receive({
         sourceDomain: 0,
-        burnTxHash: '0xbad_amount_neg',
+        burnTxHash: H('bad2'),
         destinationAddress: validDestination,
         amount: -100n,
       })
@@ -101,7 +107,7 @@ describe('receive() Orchestration Engine', () => {
     await expect(
       sdk.receive({
         sourceDomain: 0,
-        burnTxHash: '0xbad_amount_type',
+        burnTxHash: H('bad3'),
         destinationAddress: validDestination,
         amount: '100' as any,
       })
@@ -120,7 +126,7 @@ describe('receive() Orchestration Engine', () => {
     await expect(
       sdk.receive({
         sourceDomain: 0,
-        burnTxHash: '0xunverified',
+        burnTxHash: H('unverified'),
         destinationAddress: validDestination,
       })
     ).rejects.toThrow(AnchorCCTPError);
@@ -132,16 +138,17 @@ describe('receive() Orchestration Engine', () => {
       _test: {
         attestation: async () => ({
           status: 'complete',
-          message: '0xshort',
-          signature: '0xshort',
+          message: '0x' + 'ab'.repeat(20),
+          signature: '0x' + 'cd'.repeat(30),
         }),
+        hasTrustline: async () => true,
       },
     } as any);
 
     await expect(
       sdk.receive({
         sourceDomain: 6,
-        burnTxHash: '0xbadshape',
+        burnTxHash: H('deadbeef01'),
         destinationAddress: validDestination,
       })
     ).rejects.toThrow(AttestationVerificationError);
@@ -163,11 +170,14 @@ describe('receive() Orchestration Engine', () => {
       pollIntervalMs: 1,
       logger: (msg) => logs.push(msg),
       signer: async (xdr) => 'SIGNED_REAL',
-    });
+      _test: {
+        hasTrustline: async () => true,
+      },
+    } as any);
 
     const res = await sdk.receive({
       sourceDomain: 6, // Base
-      burnTxHash: '0xreal_poll',
+      burnTxHash: H('cafe0001'),
       destinationAddress: validDestination,
     });
 
@@ -200,7 +210,7 @@ describe('receive() Orchestration Engine', () => {
 
     const res = await sdk.receive({
       sourceDomain: 27, // Stellar
-      burnTxHash: '0xtrustline_flow',
+      burnTxHash: H('cafe0002'),
       destinationAddress: validDestination,
       signer: async () => 'CUSTOM_SIGNER_TX',
     });
@@ -216,7 +226,7 @@ describe('receive() Orchestration Engine', () => {
     sdk.on('onDustCollected', (p) => dustCollected.push(p));
     const res = await sdk.receive({
       sourceDomain: 0,
-      burnTxHash: '0xdust_documents_zero',
+      burnTxHash: H('cafe0003'),
       destinationAddress: validDestination,
       amount: 1000000n,
     });
@@ -245,14 +255,15 @@ describe('receive() Orchestration Engine', () => {
             elapsedTimeMs: 250,
           };
         },
+        hasTrustline: async () => true,
       },
-    });
+    } as any);
 
     sdk.on('onReceiving', (evt) => receivingEvents.push(evt));
 
     const res = await sdk.receive({
       sourceDomain: 0,
-      burnTxHash: '0xhook_test',
+      burnTxHash: H('cafe0004'),
       destinationAddress: validDestination,
     });
 
@@ -263,7 +274,7 @@ describe('receive() Orchestration Engine', () => {
     expect(res.settled).toBe(true);
   });
 
-  it('uses default fallback signer when signer is omitted from both config and receive()', async () => {
+  it('C1: receive without signer or defaultSigner throws MintFailedError', async () => {
     const sdk = createAnchorCCTP({
       _test: {
         attestation: async () => ({
@@ -271,16 +282,18 @@ describe('receive() Orchestration Engine', () => {
           message: goodMsg,
           signature: goodSig,
         }),
+        hasTrustline: async () => true,
       },
-    });
+    } as any);
 
-    const res = await sdk.receive({
-      sourceDomain: 0,
-      burnTxHash: '0xfallback_signer',
-      destinationAddress: validDestination,
-    });
-    expect(res.settled).toBe(true);
-    expect(res.txHash).toContain('SIGNED_');
+    await expect(
+      sdk.receive({
+        sourceDomain: 0,
+        burnTxHash: H('cafe0005'),
+        destinationAddress: validDestination,
+        amount: 1000000n,
+      })
+    ).rejects.toBeInstanceOf(MintFailedError);
   });
 
   it('receive forwards sourceSequence to the mint XDR', async () => {
@@ -299,7 +312,7 @@ describe('receive() Orchestration Engine', () => {
 
     await sdk.receive({
       sourceDomain: 6,
-      burnTxHash: '0xseqplumb',
+      burnTxHash: '0x' + 'a1'.repeat(32),
       destinationAddress: validDestination,
       amount: 1000000n,
       sourceSequence: '424242',
@@ -309,6 +322,88 @@ describe('receive() Orchestration Engine', () => {
     const callParams = spy.mock.calls[0][0];
     expect(callParams.sourceSequence).toBe('424242');
     spy.mockRestore();
+  });
+
+  it('C2: receive without hasTrustline provider throws TrustlineCreationError', async () => {
+    const sdk = createAnchorCCTP({
+      signer: async (x) => 'SIGNED_TX',
+      _test: {
+        attestation: async () => ({
+          status: 'complete',
+          message: goodMsg,
+          signature: goodSig,
+        }),
+      },
+    } as any);
+
+    await expect(
+      sdk.receive({
+        sourceDomain: 0,
+        burnTxHash: H('cafe0006'),
+        destinationAddress: validDestination,
+        amount: 1000000n,
+      })
+    ).rejects.toMatchObject({ code: 'TRUSTLINE_CREATION_FAILED' });
+  });
+
+  it('O5/M1: normalizes replay key case (0xABC same as 0xabc)', async () => {
+    const sdk = createAnchorCCTP({
+      signer: async (x) => 'SIGNED_NORM',
+      _test: {
+        attestation: async () => ({
+          status: 'complete',
+          message: goodMsg,
+          signature: goodSig,
+        }),
+        hasTrustline: async () => true,
+      },
+    } as any);
+
+    await sdk.receive({
+      sourceDomain: 0,
+      burnTxHash: '0x' + 'AA'.repeat(32),
+      destinationAddress: validDestination,
+      amount: 1000000n,
+    });
+
+    await expect(
+      sdk.receive({
+        sourceDomain: 0,
+        burnTxHash: '0x' + 'aa'.repeat(32),
+        destinationAddress: validDestination,
+        amount: 1000000n,
+      })
+    ).rejects.toMatchObject({ code: 'REPLAY_TRANSFER' });
+  });
+
+  it('O5/M1: rejects malformed burnTxHash (non-hex, wrong length)', () => {
+    expect(() => normalizeBurnTxHash('not-a-hash')).toThrow(InvalidBurnHashError);
+    expect(() => normalizeBurnTxHash('0x' + 'ab'.repeat(16))).toThrow(InvalidBurnHashError);
+    expect(() => normalizeBurnTxHash('')).toThrow(InvalidBurnHashError);
+  });
+
+  it('O15: sourceSequence must be numeric string', async () => {
+    const sdk = createAnchorCCTP({
+      signer: async (x) => 'SIGNED_SEQ',
+      _test: {
+        attestation: async () => ({
+          status: 'complete',
+          message: goodMsg,
+          signature: goodSig,
+        }),
+        hasTrustline: async () => true,
+      },
+    } as any);
+
+    await expect(
+      sdk.receive({
+        sourceDomain: 0,
+        burnTxHash: H('cafe0008'),
+        destinationAddress: validDestination,
+        amount: 1000000n,
+        sourceSequence: 'abc',
+      })
+    ).rejects.toMatchObject({ code: 'INVALID_CONFIG' });
   });
 });
 

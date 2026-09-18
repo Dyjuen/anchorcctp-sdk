@@ -9,6 +9,7 @@ import {
 import { createLogger, Logger } from './logger/index.js';
 import { receive, ReceiveParams, ReceiveResult, ReceiveContext } from './receive.js';
 import { SignerCallback, resolveForwarder } from './forwarder/index.js';
+import { InvalidConfigError } from './errors/index.js';
 
 export interface TrustlineConfig {
   allowCreation: boolean;
@@ -46,6 +47,11 @@ function isLogger(obj: unknown): obj is Logger {
  * Factory creating an AnchorCCTP SDK client.
  */
 export function createAnchorCCTP(config: AnchorCCTPConfig): AnchorCCTP {
+  // N1: _test overrides forbidden in production
+  if (process.env.NODE_ENV === 'production' && config._test) {
+    throw new InvalidConfigError('_test overrides forbidden in production');
+  }
+
   let logger: Logger;
   if (isLogger(config.logger)) {
     logger = config.logger;

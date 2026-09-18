@@ -119,6 +119,18 @@ export class InvalidConfigError extends AnchorCCTPError {
     super(`Invalid testnet config: ${reason}.`);
   }
 }
+/**
+ * Thrown when burnTxHash is malformed (not 0x + 64 hex chars).
+ */
+export class InvalidBurnHashError extends AnchorCCTPError {
+  readonly code = 'INVALID_HASH';
+  readonly remediation = 'Provide EVM burn hash as 0x + 64 hex chars (lowercased before replay check).';
+
+  constructor(public readonly hash: string) {
+    super(`Invalid burnTxHash: "${hash}".`);
+  }
+}
+
 export class ReplayTransferError extends AnchorCCTPError {
   readonly code = 'REPLAY_TRANSFER';
   readonly remediation = 'This burn transaction has already been processed and settled. Check existing settlement records.';
