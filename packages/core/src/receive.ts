@@ -20,7 +20,12 @@ export interface ReceiveParams {
   sourceDomain: number;
   burnTxHash: string;
   destinationAddress: string;
-  amount?: bigint;
+  /**
+   * **WARNING (O2):** Amount is caller-supplied and NOT yet bound to the attestation message.
+   * Caller MUST pass the attested value from the source-chain burn. Mismatch check against the
+   * on-chain message parser is deferred to a future slice — no silent behavior change today.
+   */
+  amount: bigint;
   dustCollectorAddress?: string;
   pollIntervalMs?: number;
   maxRetries?: number;
@@ -90,8 +95,12 @@ export async function receive(
     sourceDomain,
     burnTxHash: burnTxHashRaw,
     destinationAddress,
-    amount = 1000000n, // Default 1 USDC base units if not passed
+    amount,
   } = params;
+
+  if (typeof amount !== 'bigint' || amount <= 0n) {
+    throw new InvalidAmountError('Amount is required and must be a positive BigInt (> 0n).');
+  }
 
   // 1. Normalize burnTxHash (0x + 64 hex, lowercase)
   const burnTxHash = normalizeBurnTxHash(burnTxHashRaw);
@@ -99,12 +108,7 @@ export async function receive(
   // 2. Verify source domain is supported
   assertSupportedDomain(sourceDomain);
 
-  // 3. Validate amount (> 0n)
-  if (typeof amount !== 'bigint' || amount <= 0n) {
-    throw new InvalidAmountError('Amount must be a positive BigInt (> 0n).');
-  }
-
-  // 4. Replay Protection Guard
+  // 3. Replay Protection Guard
   const isAlreadyProcessed = await ctx.replayStore.isProcessed(burnTxHash);
   if (isAlreadyProcessed) {
     throw new ReplayTransferError(burnTxHash);

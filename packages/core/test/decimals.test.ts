@@ -4,6 +4,7 @@ import {
   formatStellarUnits,
   parseStellarUnits,
   InvalidAmountError,
+  MAX_CCTP_AMOUNT,
 } from '../src/index';
 
 describe('Decimal Conversion & Dust Math', () => {
@@ -26,6 +27,11 @@ describe('Decimal Conversion & Dust Math', () => {
 
     it('rejects negative amount with InvalidAmountError', () => {
       expect(() => convert6to7(-100n)).toThrow(InvalidAmountError);
+    });
+
+    it('M3: rejects amount above MAX_CCTP_AMOUNT (u64 cap)', () => {
+      expect(() => convert6to7(MAX_CCTP_AMOUNT + 1n)).toThrow(InvalidAmountError);
+      expect(() => convert6to7(2n ** 64n)).toThrow(InvalidAmountError);
     });
   });
 
@@ -54,6 +60,11 @@ describe('Decimal Conversion & Dust Math', () => {
 
     it('rejects negative amount with InvalidAmountError', () => {
       expect(() => convert7to6(-50n)).toThrow(InvalidAmountError);
+    });
+
+    it('M3: rejects amount above MAX_CCTP_AMOUNT (u64 cap)', () => {
+      expect(() => convert7to6(MAX_CCTP_AMOUNT + 1n)).toThrow(InvalidAmountError);
+      expect(() => convert7to6(2n ** 64n)).toThrow(InvalidAmountError);
     });
   });
 
@@ -95,6 +106,21 @@ describe('Decimal Conversion & Dust Math', () => {
       expect(() => parseStellarUnits('abc')).toThrow(InvalidAmountError);
       expect(() => parseStellarUnits('1.2.3')).toThrow(InvalidAmountError);
       expect(() => parseStellarUnits('1.00000001')).toThrow(InvalidAmountError); // > 7 decimals
+    });
+
+    it('N4: rejects whole-part with >18 digits (DoS guard)', () => {
+      expect(() => parseStellarUnits('9'.repeat(19) + '.0000000')).toThrow(InvalidAmountError);
+      expect(() => parseStellarUnits('9'.repeat(19))).toThrow(InvalidAmountError);
+    });
+
+    it('N4: rejects stroops exceeding MAX_CCTP_AMOUNT * 10n', () => {
+      // MAX_CCTP_AMOUNT = 2^64 - 1; MAX*10 = (2^64-1)*10
+      const maxStroops = (2n ** 64n - 1n) * 10n;
+      const tooManyStroops = maxStroops + 1n;
+      const whole = tooManyStroops / 10_000_000n;
+      const frac = tooManyStroops % 10_000_000n;
+      const str = `${whole}.${frac.toString().padStart(7, '0')}`;
+      expect(() => parseStellarUnits(str)).toThrow(InvalidAmountError);
     });
   });
 });

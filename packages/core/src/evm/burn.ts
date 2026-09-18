@@ -1,5 +1,6 @@
 import { parseAbi } from 'viem';
 import { buildCctpForwarderHookData, contractStrkeyToBytes32 } from './hook.js';
+import { MAX_CCTP_AMOUNT } from '../decimals/index.js';
 
 export const EVM_TESTNET_MESSENGER = '0x8FE6B999Dc680CcFDD5Bf7EB0974218be2542DAA' as `0x${string}`;
 export const BASE_SEPOLIA_USDC = '0x036CbD53842c5426634e7929541eC2318f3dCF7e' as `0x${string}`;
@@ -41,6 +42,12 @@ export interface PlanBurnParams {
 
 /** Pure: every EVM arg for a Stellar-bound burn. No network, no keys. */
 export function planBurn(params: PlanBurnParams): BurnPlan {
+  if (typeof params.amount !== 'bigint' || params.amount <= 0n) {
+    throw new BurnError('INVALID_BURN_AMOUNT', `Amount must be > 0n, received ${params.amount}.`);
+  }
+  if (params.amount > MAX_CCTP_AMOUNT) {
+    throw new BurnError('INVALID_BURN_AMOUNT', `Amount ${params.amount} exceeds MAX_CCTP_AMOUNT (${MAX_CCTP_AMOUNT}).`);
+  }
   const burnToken = params.burnToken ?? BASE_SEPOLIA_USDC;
   const messenger = params.messenger ?? EVM_TESTNET_MESSENGER;
   const maxFee = params.maxFee ?? 5000n;
@@ -81,7 +88,7 @@ export interface ExecuteBurnParams extends BurnClients {
 
 export class BurnError extends Error {
   constructor(
-    readonly code: 'EVM_CHAIN_PIN' | 'INSUFFICIENT_GAS' | 'INSUFFICIENT_USDC' | 'APPROVE_FAILED' | 'BURN_FAILED',
+    readonly code: 'EVM_CHAIN_PIN' | 'INSUFFICIENT_GAS' | 'INSUFFICIENT_USDC' | 'APPROVE_FAILED' | 'BURN_FAILED' | 'INVALID_BURN_AMOUNT',
     message: string
   ) {
     super(`${code}: ${message}`);

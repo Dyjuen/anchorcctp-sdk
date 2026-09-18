@@ -58,6 +58,24 @@ describe('planBurn', () => {
       planBurn({ amount: 1_000_000n, stellarDestination: DEST, forwarderContractId: FWD, messenger: 'USDC' as `0x${string}` }),
     ).toThrow('Invalid messenger');
   });
+
+  test('M10: zero amount throws INVALID_BURN_AMOUNT', () => {
+    expect(() =>
+      planBurn({ amount: 0n, stellarDestination: DEST, forwarderContractId: FWD }),
+    ).toThrow(expect.objectContaining({ code: 'INVALID_BURN_AMOUNT' }));
+  });
+
+  test('M10: negative amount throws INVALID_BURN_AMOUNT', () => {
+    expect(() =>
+      planBurn({ amount: -1n, stellarDestination: DEST, forwarderContractId: FWD }),
+    ).toThrow(expect.objectContaining({ code: 'INVALID_BURN_AMOUNT' }));
+  });
+
+  test('M10: amount above MAX_CCTP_AMOUNT throws INVALID_BURN_AMOUNT', () => {
+    expect(() =>
+      planBurn({ amount: 2n ** 64n, stellarDestination: DEST, forwarderContractId: FWD }),
+    ).toThrow(expect.objectContaining({ code: 'INVALID_BURN_AMOUNT' }));
+  });
 });
 
 function fakes(overrides?: {

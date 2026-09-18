@@ -1,5 +1,8 @@
 import { InvalidAmountError } from '../errors/index.js';
 
+/** Maximum CCTP amount: u64 max (2^64 - 1). Amounts above this are rejected. */
+export const MAX_CCTP_AMOUNT = 2n ** 64n - 1n;
+
 export interface DecimalConversionResult {
   /** Credit amount on Stellar (7 decimals, in stroops) */
   stellarAmount: bigint;
@@ -13,8 +16,8 @@ export interface DecimalConversionResult {
  * Dust branch is inert for this direction — active only in {@link convert7to6}.
  */
 export function convert6to7(cctpAmountBase6: bigint): DecimalConversionResult {
-  if (cctpAmountBase6 <= 0n) {
-    throw new InvalidAmountError(`Amount must be greater than 0n, received ${cctpAmountBase6}n.`);
+  if (typeof cctpAmountBase6 !== 'bigint' || cctpAmountBase6 <= 0n || cctpAmountBase6 > MAX_CCTP_AMOUNT) {
+    throw new InvalidAmountError(`Amount must be > 0n and <= ${MAX_CCTP_AMOUNT}n (u64 max), received ${cctpAmountBase6}n.`);
   }
 
   const stellarAmount = cctpAmountBase6 * 10n;
@@ -29,8 +32,8 @@ export function convert6to7(cctpAmountBase6: bigint): DecimalConversionResult {
  * Remainder stroops (< 10n) are rounded down and returned as dust.
  */
 export function convert7to6(stellarAmountStroops: bigint): { cctpAmount: bigint; dust: bigint } {
-  if (stellarAmountStroops <= 0n) {
-    throw new InvalidAmountError(`Amount must be greater than 0n, received ${stellarAmountStroops}n.`);
+  if (typeof stellarAmountStroops !== 'bigint' || stellarAmountStroops <= 0n || stellarAmountStroops > MAX_CCTP_AMOUNT) {
+    throw new InvalidAmountError(`Amount must be > 0n and <= ${MAX_CCTP_AMOUNT}n (u64 max), received ${stellarAmountStroops}n.`);
   }
 
   const cctpAmount = stellarAmountStroops / 10n;
@@ -67,8 +70,20 @@ export function parseStellarUnits(val: string): bigint {
   const isNegative = trimmed.startsWith('-');
   const unsigned = isNegative ? trimmed.slice(1) : trimmed;
   const [wholePart, fracPart = ''] = unsigned.split('.');
+
+  // N4: whole digits ≤18 to prevent BigInt DoS via huge allocations
+  if (wholePart.length > 18) {
+    throw new InvalidAmountError(`Whole-part digits exceeds 18: "${val}".`);
+  }
+
   const paddedFrac = fracPart.padEnd(7, '0');
   const stroops = BigInt(wholePart) * 10_000_000n + BigInt(paddedFrac);
+
+  // N4: total stroops must not exceed MAX_CCTP_AMOUNT * 10n
+  if (stroops > MAX_CCTP_AMOUNT * 10n) {
+    throw new InvalidAmountError(`Stroops amount exceeds MAX_CCTP_AMOUNT * 10: "${val}".`);
+  }
+
   return isNegative ? -stroops : stroops;
 }
 

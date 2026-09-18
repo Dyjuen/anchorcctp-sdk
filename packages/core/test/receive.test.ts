@@ -62,6 +62,7 @@ describe('receive() Orchestration Engine', () => {
       sourceDomain: 0,
       burnTxHash: H('abcdef01'),
       destinationAddress: validDestination,
+      amount: 1000000n,
     });
 
     await expect(
@@ -69,6 +70,7 @@ describe('receive() Orchestration Engine', () => {
         sourceDomain: 0,
         burnTxHash: H('abcdef01'),
         destinationAddress: validDestination,
+        amount: 1000000n,
       })
     ).rejects.toMatchObject({ code: 'REPLAY_TRANSFER' });
   });
@@ -80,6 +82,7 @@ describe('receive() Orchestration Engine', () => {
         sourceDomain: 999,
         burnTxHash: H('02'),
         destinationAddress: validDestination,
+        amount: 1000000n,
       })
     ).rejects.toMatchObject({ code: 'INVALID_DOMAIN' });
   });
@@ -128,6 +131,7 @@ describe('receive() Orchestration Engine', () => {
         sourceDomain: 0,
         burnTxHash: H('unverified'),
         destinationAddress: validDestination,
+        amount: 1000000n,
       })
     ).rejects.toThrow(AnchorCCTPError);
   });
@@ -150,6 +154,7 @@ describe('receive() Orchestration Engine', () => {
         sourceDomain: 6,
         burnTxHash: H('deadbeef01'),
         destinationAddress: validDestination,
+        amount: 1000000n,
       })
     ).rejects.toThrow(AttestationVerificationError);
   });
@@ -179,6 +184,7 @@ describe('receive() Orchestration Engine', () => {
       sourceDomain: 6, // Base
       burnTxHash: H('cafe0001'),
       destinationAddress: validDestination,
+      amount: 1000000n,
     });
 
     expect(res.settled).toBe(true);
@@ -212,6 +218,7 @@ describe('receive() Orchestration Engine', () => {
       sourceDomain: 27, // Stellar
       burnTxHash: H('cafe0002'),
       destinationAddress: validDestination,
+      amount: 1000000n,
       signer: async () => 'CUSTOM_SIGNER_TX',
     });
 
@@ -265,6 +272,7 @@ describe('receive() Orchestration Engine', () => {
       sourceDomain: 0,
       burnTxHash: H('cafe0004'),
       destinationAddress: validDestination,
+      amount: 1000000n,
     });
 
     expect(mockPollCalled).toBe(true);
@@ -294,6 +302,18 @@ describe('receive() Orchestration Engine', () => {
         amount: 1000000n,
       })
     ).rejects.toBeInstanceOf(MintFailedError);
+  });
+
+  it('C6: receive rejects missing amount (no default)', async () => {
+    const sdk = makeSdk();
+    await expect(
+      sdk.receive({
+        sourceDomain: 0,
+        burnTxHash: H('c6miss'),
+        destinationAddress: validDestination,
+        // amount deliberately omitted
+      } as any)
+    ).rejects.toMatchObject({ code: 'INVALID_AMOUNT' });
   });
 
   it('receive forwards sourceSequence to the mint XDR', async () => {
