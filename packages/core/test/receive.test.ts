@@ -405,6 +405,39 @@ describe('receive() Orchestration Engine', () => {
       })
     ).rejects.toMatchObject({ code: 'INVALID_CONFIG' });
   });
+
+  it('C4: onSettled never fires when submitMint fails + replay not marked', async () => {
+    const { ReplayStore } = require('../src/replay/index.js');
+    const replayStore = new ReplayStore();
+    const settled: unknown[] = [];
+    const sdk = createAnchorCCTP({
+      signer: async () => { throw new Error('sign boom'); },
+      replayStore,
+      _test: {
+        attestation: async () => ({
+          status: 'complete',
+          message: goodMsg,
+          signature: goodSig,
+        }),
+        hasTrustline: async () => true,
+      },
+    } as any);
+    sdk.on('onSettled', (p: unknown) => settled.push(p));
+
+    await expect(
+      sdk.receive({
+        sourceDomain: 0,
+        burnTxHash: H('c4fail01'),
+        destinationAddress: validDestination,
+        amount: 1000000n,
+      })
+    ).rejects.toThrow();
+
+    expect(settled).toHaveLength(0);
+    // replay store should NOT mark it processed
+    const replayed = await replayStore.isProcessed(H('c4fail01'));
+    expect(replayed).toBe(false);
+  });
 });
 
 describe('resolveDustCollector', () => {

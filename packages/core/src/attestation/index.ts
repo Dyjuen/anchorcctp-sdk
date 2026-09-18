@@ -63,7 +63,7 @@ export class AttestationClient {
    * Validates the hex shape of an attestation payload.
    * Byte-shape check only — full on-chain verification is handled by the forwarder contract.
    */
-  verifyAttestation(message: string, signature: string): boolean {
+  isWellFormedAttestation(message: string, signature: string): boolean {
     if (!message || !signature || typeof message !== 'string' || typeof signature !== 'string') {
       return false;
     }
@@ -73,6 +73,11 @@ export class AttestationClient {
     if (msg.slice(2).length < 64 || msg.length < 66) return false;
     if (sig.slice(2).length < 130 || sig.length < 132) return false;
     return true;
+  }
+
+  /** @deprecated Use isWellFormedAttestation. Shape-only; on-chain forwarder is sole verifier. */
+  verifyAttestation(m: string, s: string): boolean {
+    return this.isWellFormedAttestation(m, s);
   }
 
 

@@ -150,12 +150,12 @@ export async function receive(
     );
   }
 
-  // 7. Cryptographic Attestation Verification
-  const isVerified = ctx.attestationClient.verifyAttestation(
+  // 7. Well-formed Attestation Check (forwarder contract is sole cryptographic verifier)
+  const isWellFormed = ctx.attestationClient.isWellFormedAttestation(
     attResult.message,
     attResult.signature
   );
-  if (!isVerified || attResult.status !== 'complete') {
+  if (!isWellFormed || attResult.status !== 'complete') {
     const error = new AttestationVerificationError(
       burnTxHash,
       'message/signature byte shape invalid or status not complete'
@@ -198,16 +198,23 @@ export async function receive(
   // 9. Soroban Forwarder Mint Submission
   const forwarderContractId =
     params.forwarderContractId ?? ctx.defaultForwarderContractId;
-  const mintResult = await submitMint(
-    {
-      message: attResult.message,
-      signature: attResult.signature,
-      destination: stellarDestination,
-      forwarderContractId,
-      ...(params.sourceSequence === undefined ? {} : { sourceSequence: params.sourceSequence }),
-    },
-    effectiveSigner
-  );
+
+  let mintResult: Awaited<ReturnType<typeof submitMint>>;
+  try {
+    mintResult = await submitMint(
+      {
+        message: attResult.message,
+        signature: attResult.signature,
+        destination: stellarDestination,
+        forwarderContractId,
+        ...(params.sourceSequence === undefined ? {} : { sourceSequence: params.sourceSequence }),
+      },
+      effectiveSigner
+    );
+  } catch (submitErr) {
+    ctx.emitter.emit('onError', { error: submitErr, burnTxHash });
+    throw submitErr;
+  }
 
   // 10. Decimal Conversion (6 -> 7 decimals) & Dust Routing
   const { stellarAmount, dust } = convert6to7(amount);
@@ -218,8 +225,20 @@ export async function receive(
     cfg: ctx.defaultDustCollector,
   });
 
-  // 11. Emit Lifecycle Events
+  // 11. Mark Processed BEFORE emitting (crash between emit and mark → no unmarked settlement)
   const timestamp = new Date().toISOString();
+  const record: SettlementRecord = {
+    burnTxHash,
+    txHash: mintResult.txHash,
+    amount: stellarAmount,
+    dust,
+    sourceDomain,
+    destinationAddress: stellarDestination,
+    timestamp,
+  };
+  await ctx.replayStore.markProcessed(burnTxHash, record);
+
+  // 12. Emit Lifecycle Events
   ctx.emitter.emit('onSettled', {
     amount: stellarAmount,
     dust,
@@ -236,18 +255,6 @@ export async function receive(
       burnTxHash,
     });
   }
-
-  // 12. Mark Processed in Replay Store
-  const record: SettlementRecord = {
-    burnTxHash,
-    txHash: mintResult.txHash,
-    amount: stellarAmount,
-    dust,
-    sourceDomain,
-    destinationAddress: stellarDestination,
-    timestamp,
-  };
-  await ctx.replayStore.markProcessed(burnTxHash, record);
 
   ctx.logger.info('Transfer settled successfully', {
     burnTxHash,

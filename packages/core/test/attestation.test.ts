@@ -22,16 +22,29 @@ describe('Circle Attestation Client', () => {
     expect(r.signature).toBe('0xsig');
   });
 
-  it('verifyAttestation validates hex shape: empty/short false, valid true', () => {
+  it('isWellFormedAttestation validates hex shape: empty/short false, valid true', () => {
     const c = new AttestationClient({ fetchImpl: okFetch as any, logger: () => {} });
-    expect(c.verifyAttestation('', '0xsig')).toBe(false);
-    expect(c.verifyAttestation('0xmsg', '')).toBe(false);
-    expect(c.verifyAttestation(null as any, '0xsig')).toBe(false);
-    expect(c.verifyAttestation('0x123', '0x' + 'ab'.repeat(65))).toBe(false);
-    expect(c.verifyAttestation('0x' + 'ab'.repeat(40), '0xshort')).toBe(false);
+    expect(c.isWellFormedAttestation('', '0xsig')).toBe(false);
+    expect(c.isWellFormedAttestation('0xmsg', '')).toBe(false);
+    expect(c.isWellFormedAttestation(null as any, '0xsig')).toBe(false);
+    expect(c.isWellFormedAttestation('0x123', '0x' + 'ab'.repeat(65))).toBe(false);
+    expect(c.isWellFormedAttestation('0x' + 'ab'.repeat(40), '0xshort')).toBe(false);
+    const goodMsg = '0x' + 'ab'.repeat(40);
+    const goodSig = '0x' + 'cd'.repeat(70);
+    expect(c.isWellFormedAttestation(goodMsg, goodSig)).toBe(true);
+  });
+
+  it('verifyAttestation alias delegates to isWellFormedAttestation', () => {
+    const c = new AttestationClient({ fetchImpl: okFetch as any, logger: () => {} });
     const goodMsg = '0x' + 'ab'.repeat(40);
     const goodSig = '0x' + 'cd'.repeat(70);
     expect(c.verifyAttestation(goodMsg, goodSig)).toBe(true);
+    expect(c.verifyAttestation('bad', 'bad')).toBe(false);
+  });
+
+  it('isWellFormedAttestation rejects attacker long-hex (shape pass ≠ verified)', () => {
+    const c = new AttestationClient({ fetchImpl: okFetch as any, logger: () => {} });
+    expect(c.isWellFormedAttestation('0x' + 'ab'.repeat(100), '0x' + 'cd'.repeat(100))).toBe(true);
   });
 
   it('poll throws AttestationTimeoutError after maxRetries', async () => {
