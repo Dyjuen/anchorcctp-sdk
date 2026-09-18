@@ -20,6 +20,36 @@ describe('CCTP Domain ID Registry', () => {
     expect((CCTP_DOMAINS as any)[4]).toBeUndefined();
   });
 
+  it('rejects prototype-chain properties bypassing `in` check', () => {
+    const protoProps = ['constructor', '__proto__', 'toString', 'valueOf', 'hasOwnProperty'];
+    for (const prop of protoProps) {
+      // `in` operator finds inherited props → proto bypass. Number() cast avoids type error.
+      const num = Number(prop);
+      expect(isSupportedDomain(num)).toBe(false);
+      expect(() => assertSupportedDomain(num)).toThrow(InvalidDomainError);
+    }
+    // Direct string-as-number trick: objects coerce these to string keys on `in`
+    expect(isSupportedDomain('constructor' as unknown as number)).toBe(false);
+    expect(isSupportedDomain('__proto__' as unknown as number)).toBe(false);
+    expect(isSupportedDomain('toString' as unknown as number)).toBe(false);
+  });
+
+  it('rejects non-integer domain IDs (6.5, NaN, "0")', () => {
+    expect(isSupportedDomain(6.5)).toBe(false);
+    expect(isSupportedDomain(NaN)).toBe(false);
+    expect(isSupportedDomain('0' as unknown as number)).toBe(false);
+    expect(() => assertSupportedDomain(6.5)).toThrow(InvalidDomainError);
+    expect(() => assertSupportedDomain(NaN)).toThrow(InvalidDomainError);
+    expect(() => assertSupportedDomain('0' as unknown as number)).toThrow(InvalidDomainError);
+  });
+
+  it('accepts valid boundary domain IDs 0 and 27', () => {
+    expect(isSupportedDomain(0)).toBe(true);
+    expect(isSupportedDomain(27)).toBe(true);
+    expect(assertSupportedDomain(0).chain).toBe('ethereum');
+    expect(assertSupportedDomain(27).chain).toBe('stellar');
+  });
+
   it('getDomainMeta returns meta; unknown throws InvalidDomainError', () => {
     expect(getDomainMeta(6).name).toBe('Base');
     expect(getDomainMeta(27).name).toBe('Stellar');

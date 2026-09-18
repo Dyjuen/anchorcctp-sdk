@@ -47,7 +47,8 @@ export const CCTP_DOMAINS: Readonly<Record<number, DomainMeta>> = {
  * Checks if a domain ID is supported by CCTP.
  */
 export function isSupportedDomain(domainId: number): boolean {
-  return domainId in CCTP_DOMAINS;
+  if (!Number.isInteger(domainId)) return false;
+  return Object.hasOwn(CCTP_DOMAINS, domainId);
 }
 
 /**
