@@ -8,10 +8,16 @@ import {
 import { createLogger } from '../src/logger/index.js';
 import { StrKey } from '@stellar/stellar-sdk';
 
+/** Build a well-formed CCTP message hex with the given amount encoded as uint64 LE at offset 4. */
+function wellFormedMsg(amount: bigint): string {
+  const buf = Buffer.alloc(46, 0);
+  buf.writeBigUInt64LE(amount, 4);
+  return '0x' + buf.toString('hex');
+}
+
 describe('Security Checklist Invariant Tests (PRD §7 & §8)', () => {
   const sampleStellarAddress = StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 0x77));
-  const goodMsg = '0x' + 'ab'.repeat(40);
-  const goodSig = '0x' + 'cd'.repeat(70);
+  const goodSig = '0x' + 'cd'.repeat(65);
   const H = (suffix: string) => '0x' + suffix.padStart(64, '0').slice(0, 64);
 
   it('INVARIANT 1: Replay of same burnTxHash is rejected without double-crediting', async () => {
@@ -23,7 +29,7 @@ describe('Security Checklist Invariant Tests (PRD §7 & §8)', () => {
       _test: {
         attestation: async () => ({
           status: 'complete',
-          message: goodMsg,
+          message: wellFormedMsg(1000000n),
           signature: goodSig,
         }),
         hasTrustline: async () => true,
@@ -58,7 +64,7 @@ describe('Security Checklist Invariant Tests (PRD §7 & §8)', () => {
     const sdk = createAnchorCCTP({
       signer: async () => 'TX',
       _test: {
-        attestation: async () => ({ status: 'complete', message: goodMsg, signature: goodSig }),
+        attestation: async () => ({ status: 'complete', message: wellFormedMsg(1000000n), signature: goodSig }),
       },
     } as any);
 
@@ -105,8 +111,8 @@ describe('Security Checklist Invariant Tests (PRD §7 & §8)', () => {
       _test: {
         attestation: async () => ({
           status: 'pending',
-          message: '0x' + 'ab'.repeat(10),
-          signature: '0x' + 'cd'.repeat(20),
+          message: wellFormedMsg(1000000n),
+          signature: goodSig,
         }),
         hasTrustline: async () => true,
       },
