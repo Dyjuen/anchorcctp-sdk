@@ -1,3 +1,4 @@
+import { parseAbi } from 'viem';
 import { buildCctpForwarderHookData, contractStrkeyToBytes32 } from './hook.js';
 
 export const EVM_TESTNET_MESSENGER = '0x8FE6B999Dc680CcFDD5Bf7EB0974218be2542DAA' as `0x${string}`;
@@ -7,15 +8,15 @@ export const STELLAR_DOMAIN = 27;
 export const TESTNET_CHAIN_IDS = new Set([84532, 421614, 11155111, 43113]);
 const ADDRESS_RE = /^0x[0-9a-fA-F]{40}$/;
 
-export const ERC20_ABI = [
+export const ERC20_ABI = parseAbi([
   'function approve(address spender, uint256 amount) returns (bool)',
   'function allowance(address owner, address spender) view returns (uint256)',
   'function balanceOf(address account) view returns (uint256)',
-] as const;
+]);
 
-export const MESSENGER_ABI = [
+export const MESSENGER_ABI = parseAbi([
   'function depositForBurn(uint256 amount, uint32 destinationDomain, bytes32 mintRecipient, address burnToken, bytes32 destinationCaller, uint256 maxFee, uint32 minFinalityThreshold, bytes hookData) returns (uint64)',
-] as const;
+]);
 
 export interface BurnPlan {
   amount: bigint;
@@ -70,7 +71,7 @@ export interface BurnClients {
   walletClient: {
     writeContract(a: unknown): Promise<`0x${string}`>;
   };
-  account: `0x${string}`;
+  account: `0x${string}` | { address: `0x${string}` };
 }
 
 export interface ExecuteBurnParams extends BurnClients {
@@ -89,7 +90,8 @@ export class BurnError extends Error {
 
 /** Executes approve-if-needed + depositForBurnWithHook. Throws BurnError with actionable code. */
 export async function executeBurn(params: ExecuteBurnParams): Promise<{ burnTxHash: `0x${string}` }> {
-  const { publicClient, walletClient, account, plan, expectedChainId } = params;
+  const { publicClient, walletClient, account: rawAccount, plan, expectedChainId } = params;
+  const account = typeof rawAccount === 'string' ? rawAccount : rawAccount.address;
   const chainId = await publicClient.getChainId();
   if (chainId !== expectedChainId || !TESTNET_CHAIN_IDS.has(chainId)) {
     throw new BurnError('EVM_CHAIN_PIN', `chainId=${chainId} refused (expected ${expectedChainId}, testnet allowlist only).`);
@@ -109,7 +111,7 @@ export async function executeBurn(params: ExecuteBurnParams): Promise<{ burnTxHa
   if (allowance < plan.amount) {
     const approveHash = await walletClient.writeContract({
       address: plan.burnToken, abi: ERC20_ABI, functionName: 'approve',
-      args: [plan.messenger, plan.amount], account,
+      args: [plan.messenger, plan.amount], ...(typeof rawAccount === 'object' ? { account: rawAccount } : { account }),
     });
     const approveRcpt = await publicClient
       .waitForTransactionReceipt({ hash: approveHash, timeout: 120_000 })
@@ -120,7 +122,7 @@ export async function executeBurn(params: ExecuteBurnParams): Promise<{ burnTxHa
     address: plan.messenger, abi: MESSENGER_ABI, functionName: 'depositForBurn',
     args: [plan.amount, plan.destinationDomain, plan.mintRecipient, plan.burnToken,
       plan.destinationCaller, plan.maxFee, plan.minFinalityThreshold, plan.hookData],
-    account,
+    ...(typeof rawAccount === 'object' ? { account: rawAccount } : { account }),
   });
   const burnRcpt = await publicClient
     .waitForTransactionReceipt({ hash: burnTxHash, timeout: 120_000 })

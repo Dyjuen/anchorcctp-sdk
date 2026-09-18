@@ -12,17 +12,34 @@
  * Usage:
  *   npm run testnet:auto -- --skip-burn 0x... [--source-domain 6] [--amount 1000000] [--log docs/evidence/testnet-auto.log]
  */
+import { existsSync, readFileSync, appendFileSync, writeFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { Horizon, Asset, Keypair, Networks, Operation, rpc, TransactionBuilder } from '@stellar/stellar-sdk';
 import { createAnchorCCTPFromEnv } from '../packages/core/src/testnet-config.js';
 import { readAccountState } from '../packages/core/src/testnet/account.js';
 import { checkForwarderDeployed } from '../packages/core/src/testnet/forwarder-check.js';
 import { TESTNET_USDC_ISSUER } from '../packages/core/src/trustline/index.js';
 import { convert6to7 } from '../packages/core/src/decimals/index.js';
-import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { createPublicClient, createWalletClient, http } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { baseSepolia } from 'viem/chains';
 import { BurnError, executeBurn, planBurn } from '../packages/core/src/evm/burn.js';
+
+// Auto-load .env.testnet if present so command works cross-platform seamlessly
+const envTestnetPath = resolve(process.cwd(), '.env.testnet');
+if (existsSync(envTestnetPath)) {
+  const content = readFileSync(envTestnetPath, 'utf8');
+  for (const line of content.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const eqIdx = trimmed.indexOf('=');
+    if (eqIdx !== -1) {
+      const key = trimmed.slice(0, eqIdx).trim();
+      const val = trimmed.slice(eqIdx + 1).trim().replace(/^["']|["']$/g, '');
+      if (!process.env[key]) process.env[key] = val;
+    }
+  }
+}
 
 function arg(name: string): string | undefined {
   const i = process.argv.indexOf(name);
@@ -109,7 +126,7 @@ async function main(): Promise<void> {
         ...(process.env.EVM_MESSENGER_ADDRESS ? { messenger: process.env.EVM_MESSENGER_ADDRESS as `0x${string}` } : {}),
         ...(process.env.EVM_MAX_FEE ? { maxFee: parseMaxFee(process.env.EVM_MAX_FEE) } : {}),
       });
-      const r = await executeBurn({ publicClient, walletClient, account: account.address, plan, expectedChainId });
+      const r = await executeBurn({ publicClient, walletClient, account, plan, expectedChainId });
       burnTxHash = r.burnTxHash;
       evmBurnTxHash = r.burnTxHash;
       log(`[EVENT] [burn] txHash=${burnTxHash}`);
