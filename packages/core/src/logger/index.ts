@@ -9,10 +9,15 @@ export interface Logger {
   debug(msg: string, meta?: Record<string, unknown>): void;
 }
 
-const SECRET_KEY_PATTERN = /secret|key|private|mnemonic|seed/i;
+const SECRET_KEY_PATTERN = /secret|private|seed|mnemonic|password|token|key/i;
+const STELLAR_SEED_RE = /^S[A-Z2-7]{55}$/;
 
 function sanitizeValue(value: unknown): unknown {
   if (value === null || value === undefined) {
+    return value;
+  }
+  if (typeof value === 'string') {
+    if (STELLAR_SEED_RE.test(value.trim())) return '[REDACTED]';
     return value;
   }
   if (typeof value === 'object') {
@@ -33,12 +38,15 @@ function sanitizeValue(value: unknown): unknown {
 }
 
 function defaultSink(message: string): void {
-  process.stderr.write(message + '\n');
+  if (typeof process !== 'undefined' && process.stderr) {
+    process.stderr.write(message + '\n');
+  }
 }
 
 /**
  * Creates a structured JSON logger that writes to a sink (default: process.stderr).
  * Automatically redacts sensitive fields matching secret/key/private/mnemonic/seed.
+ * Also redacts Stellar S... seed values regardless of key name.
  */
 export function createLogger(namespace: string, sink: LogSink = defaultSink): Logger {
   const log = (level: LogLevel, msg: string, meta?: Record<string, unknown>) => {

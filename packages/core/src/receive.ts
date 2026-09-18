@@ -28,8 +28,6 @@ export interface ReceiveParams {
    */
   amount: bigint;
   dustCollectorAddress?: string;
-  pollIntervalMs?: number;
-  maxRetries?: number;
   signer?: SignerCallback;
   allowTrustlineCreation?: boolean;
   spendCapXlm?: number;

@@ -47,4 +47,33 @@ describe('Typed Lifecycle Event Emitter', () => {
     ee.emit('onError', { error: testError, burnTxHash: '0x1' });
     expect(capturedErr).toBe(testError);
   });
+
+  it('N2: throwing listener does not break other listeners on same event', () => {
+    const ee = createEventEmitter();
+    const results: string[] = [];
+    ee.on('onSettled', () => { throw new Error('boom'); });
+    ee.on('onSettled', (p) => results.push(p.txHash));
+    ee.emit('onSettled', { amount: 100n, dust: 0n, txHash: 'ok' });
+    expect(results).toEqual(['ok']);
+  });
+
+  it('N2: throwing onError listener does not mask original error', () => {
+    const ee = createEventEmitter();
+    const original = new Error('original');
+    ee.on('onError', () => { throw new Error('handler boom'); });
+    ee.on('onError', (p) => expect(p.error).toBe(original));
+    ee.emit('onError', { error: original, burnTxHash: '0x1' });
+  });
+
+  it('O12: warn when >10 listeners registered on same event', () => {
+    const warns: string[] = [];
+    const ee = createEventEmitter((msg) => warns.push(msg));
+    for (let i = 0; i < 10; i++) {
+      ee.on('onSettled', () => {});
+    }
+    expect(warns).toHaveLength(0);
+    ee.on('onSettled', () => {}); // 11th
+    expect(warns).toHaveLength(1);
+    expect(warns[0]).toContain('11');
+  });
 });

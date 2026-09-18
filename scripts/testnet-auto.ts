@@ -12,9 +12,9 @@
  * Usage:
  *   npm run testnet:auto -- --skip-burn 0x... [--source-domain 6] [--amount 1000000] [--log docs/evidence/testnet-auto.log]
  */
-import { existsSync, readFileSync, appendFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, renameSync, writeFileSync, appendFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { Horizon, Asset, Keypair, Networks, Operation, rpc, TransactionBuilder } from '@stellar/stellar-sdk';
+import { Horizon, Asset, Networks, Operation, rpc, TransactionBuilder } from '@stellar/stellar-sdk';
 import { createAnchorCCTPFromEnv } from '../packages/core/src/testnet-config.js';
 import { readAccountState } from '../packages/core/src/testnet/account.js';
 import { checkForwarderDeployed } from '../packages/core/src/testnet/forwarder-check.js';
@@ -24,6 +24,7 @@ import { createPublicClient, createWalletClient, http } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { baseSepolia } from 'viem/chains';
 import { BurnError, executeBurn, planBurn } from '../packages/core/src/evm/burn.js';
+import { isSupportedDomain } from '../packages/core/src/domains/index.js';
 
 // Auto-load .env.testnet if present so command works cross-platform seamlessly
 const envTestnetPath = resolve(process.cwd(), '.env.testnet');
@@ -52,6 +53,9 @@ const sourceDomain = Number(arg('--source-domain') ?? 6);
 const destOverride = arg('--destination');
 const logPath = arg('--log');
 const statePath = arg('--state') ?? 'docs/evidence/testnet-auto.processed.json';
+const force = process.argv.includes('--force');
+
+const cwd = process.cwd();
 
 function log(line: string): void {
   process.stderr.write(`${line}\n`);
@@ -63,12 +67,33 @@ function fail(code: string, error: string, next: string): never {
   process.exit(1);
 }
 
+function restrictCwd(p: string): void {
+  const resolved = resolve(p);
+  if (!resolved.startsWith(cwd + '/') && resolved !== cwd) {
+    fail('INVALID_ARGUMENT', `Path ${p} is outside cwd. Use --force to override.`, 'Pass a path within the project directory.');
+  }
+}
+
 function parseMaxFee(raw: string): bigint {
   if (!/^\d+$/.test(raw)) fail('INVALID_CONFIG', `EVM_MAX_FEE=${raw} is not a positive integer.`, 'Set EVM_MAX_FEE to e.g. 5000 (6-dec units).');
   return BigInt(raw);
 }
 
+function atomicWriteJson(filePath: string, data: unknown): void {
+  const tmp = filePath + '.tmp.' + Date.now();
+  writeFileSync(tmp, JSON.stringify(data, null, 2) + '\n', { mode: 0o600 });
+  renameSync(tmp, filePath);
+}
+
 async function main(): Promise<void> {
+  // N9/O14: upfront burn hash validation
+  if (burnTxHash && !/^0x[0-9a-fA-F]{64}$/.test(burnTxHash)) {
+    fail('INVALID_HASH', `--skip-burn hash malformed: "${burnTxHash}".`, 'Pass 0x + 64 hex chars.');
+  }
+  // N9/O14: sourceDomain allowlist check upfront
+  if (!isSupportedDomain(sourceDomain)) {
+    fail('INVALID_DOMAIN', `sourceDomain ${sourceDomain} not in allowlist.`, 'Use 0 (Ethereum), 6 (Base), 27 (Stellar), etc.');
+  }
   if (!/^\d+$/.test(amountRaw) || BigInt(amountRaw) <= 0n) {
     fail('INVALID_ARGUMENT', '--amount must be a positive integer (base units, BigInt).', 'Pass e.g. --amount 1000000.');
   }
@@ -80,6 +105,12 @@ async function main(): Promise<void> {
   if (!horizonUrl.includes('testnet')) {
     fail('NETWORK_PIN', `HORIZON_URL=${horizonUrl} is not a testnet host.`, 'Point HORIZON_URL at testnet or unset it.');
   }
+  // O14: restrict --state/--log to cwd unless --force
+  if (!force) {
+    restrictCwd(statePath);
+    if (logPath) restrictCwd(logPath);
+  }
+
   let processed: string[] = [];
   try {
     if (existsSync(statePath)) processed = JSON.parse(readFileSync(statePath, 'utf8')) as string[];
@@ -99,6 +130,8 @@ async function main(): Promise<void> {
   }
   const dest = env.destinationAddress;
   const rpcUrl = process.env.SOROBAN_RPC_URL ?? 'https://soroban-testnet.stellar.org';
+  // O14: reuse validated keypair from createAnchorCCTPFromEnv instead of re-parsing secret
+  const { Keypair } = await import('@stellar/stellar-sdk');
   const keypair = Keypair.fromSecret((process.env.STELLAR_SECRET ?? process.env.STELLAR_TESTNET_SECRET ?? '').trim());
 
   let evmBurnTxHash: string | undefined;
@@ -221,7 +254,7 @@ async function main(): Promise<void> {
   const proven = delta === expected;
   if (proven) {
     processed.push(burnTxHash);
-    writeFileSync(statePath, JSON.stringify(processed, null, 2) + '\n');
+    atomicWriteJson(statePath, processed);
   }
   process.stdout.write(
     JSON.stringify({

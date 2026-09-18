@@ -33,7 +33,17 @@ const positionals = process.argv.slice(2).filter((a) => !a.startsWith('-'));
 const burnTxHash = positionals[0] || process.env.CIRCLE_TESTNET_BURN_TX || '';
 const destArg = positionals[1] || process.env.STELLAR_TESTNET_DESTINATION || '';
 const sourceDomain = Number(arg('--source-domain') ?? 6);
-const amount = BigInt(arg('--amount') ?? '1000000');
+
+let amount: bigint;
+try {
+  amount = BigInt(arg('--amount') ?? '1000000');
+} catch {
+  process.stdout.write(
+    JSON.stringify({ settled: false, error: '--amount is not a valid BigInt', code: 'INVALID_ARGUMENT' }) + '\n'
+  );
+  process.exit(1);
+}
+
 const verifyOnly = flag('--verify-only');
 const logPath = arg('--log');
 
@@ -93,6 +103,7 @@ async function runVerifyOnly(): Promise<void> {
 async function runReceive(): Promise<void> {
 let sdk;
 let destinationAddress = destArg;
+let offline = false;
 try {
   const fromEnv = createAnchorCCTPFromEnv({
     ...process.env,
@@ -104,6 +115,7 @@ try {
 } catch {
   // No usable env identity — offline stub proves XDR build without settlement.
   log('[INFO] No env identity — offline stub signer (no settlement)');
+  offline = true;
   sdk = createAnchorCCTP({
     attestationBaseUrl,
     signer: async (xdr) => {
@@ -134,6 +146,7 @@ try {
       dust: res.dust.toString(),
       txHash: res.txHash,
       elapsedMs: Date.now() - before,
+      ...(offline ? { offline: true } : {}),
     }) + '\n'
   );
 } catch (err) {

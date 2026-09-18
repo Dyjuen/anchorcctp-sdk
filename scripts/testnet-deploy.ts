@@ -11,7 +11,7 @@
  * Usage:
  *   npx tsx --tsconfig tsconfig.scripts.json scripts/testnet-deploy.ts [--out config/testnet.public.json] [--env-out .env.testnet] [--destination G...] [--no-fund] [--force]
  */
-import { chmodSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { Keypair } from '@stellar/stellar-sdk';
 import { parseTestnetConfig } from '../packages/core/src/testnet-config.js';
@@ -84,8 +84,7 @@ async function main(): Promise<void> {
     if (existsSync(envPath) && !force) {
       console.error(`[WARN] ${envPath} exists — secret NOT overwritten (pass --force to rotate).`);
     } else {
-      writeFileSync(envPath, `STELLAR_TESTNET_SECRET=${secret}\nSTELLAR_TESTNET_DESTINATION=${destination}\n`);
-      chmodSync(envPath, 0o600);
+      writeFileSync(envPath, `STELLAR_TESTNET_SECRET=${secret}\nSTELLAR_TESTNET_DESTINATION=${destination}\n`, { mode: 0o600 });
       secretStored = true;
     }
     console.error('[INFO] Secret written to env file only (mode 0600). Value never printed.');

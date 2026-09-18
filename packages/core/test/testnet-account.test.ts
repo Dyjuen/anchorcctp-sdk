@@ -58,4 +58,32 @@ describe('readAccountState', () => {
       })
     ).rejects.toThrow('Horizon account read failed: 500');
   });
+
+  test('N6: passes AbortSignal to fetch', async () => {
+    const fetchImpl = jest.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ account_id: ADDR, balances: [] }),
+    })) as unknown as typeof fetch;
+    await readAccountState({ horizonUrl: 'https://horizon-testnet.stellar.org', address: ADDR, fetchImpl });
+    const callArgs = (fetchImpl as jest.Mock).mock.calls[0];
+    expect(callArgs[1]?.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  test('N6: encodes address with special chars', async () => {
+    const fetchImpl = jest.fn(async () => ({
+      ok: false,
+      status: 404,
+      json: async () => ({}),
+    })) as unknown as typeof fetch;
+    await readAccountState({ horizonUrl: 'https://horizon-testnet.stellar.org', address: 'G TEST/123', fetchImpl });
+    const url = (fetchImpl as jest.Mock).mock.calls[0][0] as string;
+    expect(url).toContain(encodeURIComponent('G TEST/123'));
+  });
+
+  test('N6: rejects http horizonUrl', async () => {
+    await expect(
+      readAccountState({ horizonUrl: 'http://horizon-testnet.stellar.org', address: ADDR })
+    ).rejects.toThrow('horizonUrl must be https');
+  });
 });

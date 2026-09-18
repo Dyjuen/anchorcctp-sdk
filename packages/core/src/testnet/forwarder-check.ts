@@ -24,10 +24,14 @@ export function forwarderInstanceKeyB64(contractId: string): string {
 }
 
 async function rpcCall(rpcUrl: string, method: string, params: unknown, fetchImpl: typeof fetch): Promise<unknown> {
+  if (!/^https:\/\//.test(rpcUrl)) {
+    throw new Error('rpcUrl must be https');
+  }
   const res = await fetchImpl(rpcUrl, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
+    signal: AbortSignal.timeout(15000),
   });
   if (!res.ok) throw new Error(`Soroban RPC ${method} failed: ${res.status}`);
   return ((await res.json()) as { result: unknown }).result;
@@ -37,12 +41,20 @@ async function rpcCall(rpcUrl: string, method: string, params: unknown, fetchImp
 export async function checkForwarderDeployed(params: CheckForwarderParams): Promise<ForwarderCheck> {
   const fetchImpl = params.fetchImpl ?? fetch;
   const latest = await rpcCall(params.rpcUrl, 'getLatestLedger', {}, fetchImpl).catch(() => undefined);
-  const entries = await rpcCall(
-    params.rpcUrl,
-    'getLedgerEntries',
-    { keys: [forwarderInstanceKeyB64(params.contractId)] },
-    fetchImpl
-  ).catch(() => undefined);
+  let entries: unknown;
+  try {
+    entries = await rpcCall(
+      params.rpcUrl,
+      'getLedgerEntries',
+      { keys: [forwarderInstanceKeyB64(params.contractId)] },
+      fetchImpl
+    );
+  } catch (err) {
+    if (err instanceof Error && /Soroban RPC/.test(err.message)) {
+      throw new Error(`RPC_ERROR: ${err.message}`);
+    }
+    throw err;
+  }
   const found = Array.isArray((entries as Record<string, unknown>)?.entries) && ((entries as Record<string, unknown>).entries as unknown[]).length > 0;
   return {
     deployed: found === true,

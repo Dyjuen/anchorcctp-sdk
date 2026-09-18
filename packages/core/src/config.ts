@@ -41,7 +41,9 @@ export interface AnchorCCTP {
 }
 
 function isLogger(obj: unknown): obj is Logger {
-  return typeof obj === 'object' && obj !== null && 'info' in obj;
+  if (typeof obj !== 'object' || obj === null) return false;
+  const o = obj as Record<string, unknown>;
+  return typeof o.info === 'function' && typeof o.warn === 'function' && typeof o.error === 'function' && typeof o.debug === 'function';
 }
 
 /**
@@ -73,9 +75,11 @@ export function createAnchorCCTP(config: AnchorCCTPConfig): AnchorCCTP {
 
 
   const replayStore = config.replayStore || new ReplayStore();
-  const emitter: AnchorCCTPEventEmitter = createEventEmitter();
+  const emitter: AnchorCCTPEventEmitter = createEventEmitter(logger.warn.bind(logger));
 
   const defaultForwarderContractId = config.forwarderContractId ?? (config.network ? resolveForwarder(config.network) : undefined);
+
+  const trustline = config.trustline ? Object.freeze({ ...config.trustline }) : undefined;
 
   const ctx: ReceiveContext = {
     attestationClient,
@@ -84,7 +88,7 @@ export function createAnchorCCTP(config: AnchorCCTPConfig): AnchorCCTP {
     logger,
     defaultSigner: config.signer,
     defaultDustCollector: config.dustCollectorAddress,
-    defaultTrustline: config.trustline,
+    defaultTrustline: trustline,
     defaultForwarderContractId,
     defaultUsdcIssuer: config.usdcIssuer,
     _test: config._test,

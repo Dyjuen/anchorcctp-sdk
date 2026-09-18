@@ -99,6 +99,7 @@ export class AttestationClient {
       try {
         const res = await this.fetchImpl(url, {
           headers: { Accept: 'application/json' },
+          signal: AbortSignal.timeout(15000),
         });
 
         if (res.ok) {
@@ -173,6 +174,7 @@ export class AttestationClient {
       try {
         const res = await this.fetchImpl(url, {
           headers: { Accept: 'application/json' },
+          signal: AbortSignal.timeout(15000),
         });
 
         if (res.ok) {

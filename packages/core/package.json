@@ -44,7 +44,7 @@
   "author": "Mother's Grace (Juen)",
   "license": "MIT",
   "dependencies": {
-    "@stellar/stellar-sdk": "^13.1.0",
+    "@stellar/stellar-sdk": "13.3.0",
     "viem": "2.56.5"
   },
   "devDependencies": {

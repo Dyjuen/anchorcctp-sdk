@@ -23,10 +23,15 @@ interface HorizonBalance {
 
 /** Reads funding + USDC trustline/balance state for one Stellar account. 404 = missing. */
 export async function readAccountState(params: ReadAccountStateParams): Promise<AccountState> {
+  if (!/^https:\/\//.test(params.horizonUrl)) {
+    throw new Error('horizonUrl must be https');
+  }
   const missing: AccountState = { exists: false, funded: false, hasTrustline: false, usdcBalance: '0' };
   const issuer = params.usdcIssuer ?? TESTNET_USDC_ISSUER;
+  const encoded = encodeURIComponent(params.address);
   const res = await (params.fetchImpl ?? fetch)(
-    `${params.horizonUrl.replace(/\/$/, '')}/accounts/${params.address}`
+    `${params.horizonUrl.replace(/\/$/, '')}/accounts/${encoded}`,
+    { signal: AbortSignal.timeout(15000) }
   );
   if (res.status === 404) return missing;
   if (!res.ok) throw new Error(`Horizon account read failed: ${res.status}`);

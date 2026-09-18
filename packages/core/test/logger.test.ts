@@ -55,6 +55,28 @@ describe('Structured JSON Logger', () => {
     expect(lines[0]).not.toContain('PRIVATE_KEY_123');
   });
 
+  it('M6: redacts Stellar S... seed values regardless of key name', () => {
+    const lines: string[] = [];
+    const log = createLogger('seed-check', (s) => lines.push(s));
+    const seed = 'SAJBHO67X42MCLZ5YRHLN4DIF5VQUYFXGFHKKJ7GQZG3GSZ4TLR6Z3OY';
+    log.info('seed value', { owner: seed, customKey: seed });
+    const parsed = JSON.parse(lines[0]);
+    expect(parsed.owner).toBe('[REDACTED]');
+    expect(parsed.customKey).toBe('[REDACTED]');
+    expect(lines[0]).not.toContain('SAJBHO67X42MCLZ5YRHLN4DIF5VQUYFXGFHKKJ7GQZG3GSZ4TLR6Z3OY');
+  });
+
+  it('M6: browser-safe defaultSink — no process.stderr required', () => {
+    const orig = globalThis.process;
+    try {
+      (globalThis as any).process = undefined;
+      const log = createLogger('browser-safe');
+      expect(() => log.info('no crash')).not.toThrow();
+    } finally {
+      (globalThis as any).process = orig;
+    }
+  });
+
   it('uses default sink when none provided', () => {
     const stderrSpy = jest.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const log = createLogger('default-sink');
@@ -82,5 +104,3 @@ describe('Structured JSON Logger', () => {
     expect(parsed.str).toBe('hello');
   });
 });
-
-

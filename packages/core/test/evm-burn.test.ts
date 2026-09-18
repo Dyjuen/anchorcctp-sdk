@@ -77,16 +77,22 @@ describe('planBurn', () => {
     ).toThrow(expect.objectContaining({ code: 'INVALID_BURN_AMOUNT' }));
   });
 
-  test('rejects zero burnToken address', () => {
+  test('rejects zero burnToken address with BurnError INVALID_BURN_AMOUNT', () => {
     expect(() =>
       planBurn({ amount: 1000n, stellarDestination: DEST, forwarderContractId: FWD, burnToken: '0x' + '00'.repeat(20) }),
-    ).toThrow('Invalid burnToken');
+    ).toThrow(BurnError);
+    expect(() =>
+      planBurn({ amount: 1000n, stellarDestination: DEST, forwarderContractId: FWD, burnToken: '0x' + '00'.repeat(20) }),
+    ).toThrow(expect.objectContaining({ code: 'INVALID_BURN_AMOUNT' }));
   });
 
-  test('rejects zero messenger address', () => {
+  test('rejects zero messenger address with BurnError INVALID_BURN_AMOUNT', () => {
     expect(() =>
       planBurn({ amount: 1000n, stellarDestination: DEST, forwarderContractId: FWD, messenger: '0x' + '00'.repeat(20) }),
-    ).toThrow('Invalid messenger');
+    ).toThrow(BurnError);
+    expect(() =>
+      planBurn({ amount: 1000n, stellarDestination: DEST, forwarderContractId: FWD, messenger: '0x' + '00'.repeat(20) }),
+    ).toThrow(expect.objectContaining({ code: 'INVALID_BURN_AMOUNT' }));
   });
 });
 

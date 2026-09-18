@@ -53,18 +53,24 @@ interface ListenerWrapper {
  * Creates a strongly-typed lifecycle event emitter for AnchorCCTP.
  * Universal zero-dependency implementation compatible with Node, browsers, and Edge runtimes.
  */
-export function createEventEmitter(): AnchorCCTPEventEmitter {
+export function createEventEmitter(onWarn?: (msg: string) => void): AnchorCCTPEventEmitter {
   const listeners = new Map<EventKey, ListenerWrapper[]>();
 
   const typedEmitter: AnchorCCTPEventEmitter = {
     on<K extends EventKey>(event: K, handler: EventHandler<K>) {
       const list = listeners.get(event) || [];
+      if (list.length >= 10) {
+        onWarn?.(`[AnchorCCTP] ${event} has ${list.length + 1} listeners — possible leak`);
+      }
       list.push({ fn: handler as (payload: unknown) => void, once: false });
       listeners.set(event, list);
       return typedEmitter;
     },
     once<K extends EventKey>(event: K, handler: EventHandler<K>) {
       const list = listeners.get(event) || [];
+      if (list.length >= 10) {
+        onWarn?.(`[AnchorCCTP] ${event} has ${list.length + 1} listeners — possible leak`);
+      }
       list.push({ fn: handler as (payload: unknown) => void, once: true });
       listeners.set(event, list);
       return typedEmitter;
@@ -90,7 +96,11 @@ export function createEventEmitter(): AnchorCCTPEventEmitter {
         list.filter((w) => !w.once)
       );
       for (const wrapper of copy) {
-        wrapper.fn(payload);
+        try {
+          wrapper.fn(payload);
+        } catch {
+          // N2: per-listener try/catch — one thrower never breaks others
+        }
       }
       return true;
     },
@@ -98,4 +108,3 @@ export function createEventEmitter(): AnchorCCTPEventEmitter {
 
   return typedEmitter;
 }
-
