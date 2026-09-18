@@ -38,58 +38,106 @@ export async function connectFreighter(opts?: { allowSimulated?: boolean }): Pro
       return {
         connected: false,
         address: null,
-        error: 'Freighter not installed — install from freighter.app',
-        needsInstall: true,
+        error: 'Freighter not installed. Install from freighter.app',
       };
     }
 
-    const addressResult = await freighter.getAddress();
+    const { isAllowed } = await import('@stellar/freighter-api');
+    const allowed = await isAllowed();
+    if (!allowed) {
+      const { setAllowed } = await import('@stellar/freighter-api');
+      await setAllowed();
+    }
 
-    if (addressResult.error || !addressResult.address) {
+    const { getAddress } = await import('@stellar/freighter-api');
+    const address = await getAddress();
+    if (!address) {
       return {
         connected: false,
         address: null,
-        error: addressResult.error || 'User declined wallet connection',
+        error: 'User denied access or wallet is locked',
       };
     }
 
-    const networkResult = await freighter.getNetwork();
+    // Verify network passphrase (must match STELLAR_NETWORK_PASSPHRASE)
+    const { getNetworkPassphrase } = await import('@stellar/freighter-api');
+    const networkPassphrase = await getNetworkPassphrase();
+    const expectedPassphrase =
+      (import.meta as any).env?.VITE_STELLAR_NETWORK_PASSPHRASE ??
+      'Test SDF Network ; September 2015';
+
+    if (networkPassphrase !== expectedPassphrase) {
+      return {
+        connected: false,
+        address,
+        networkPassphrase,
+        error: `Network mismatch: wallet on ${networkPassphrase}, expected ${expectedPassphrase}`,
+      };
+    }
+
+    // Fetch balances via Horizon
+    const balanceInfo = await fetchBalances(address);
 
     return {
       connected: true,
-      address: addressResult.address,
-      network: networkResult.networkPassphrase,
-      isSimulated: false,
+      address,
+      networkPassphrase,
+      balances: balanceInfo,
     };
   } catch (err: unknown) {
     return {
       connected: false,
       address: null,
-      error: err instanceof Error ? err.message : 'Failed to connect to Freighter wallet.',
+      error: err instanceof Error ? err.message : String(err),
     };
   }
 }
 
+/**
+ * Sign a transaction with Freighter.
+ * Throws with an actionable error if the user rejects or the network mismatches.
+ */
 export async function signWithFreighter(
   xdr: string,
-  expectedPassphrase: string = 'Test SDF Network ; September 2015',
+  networkPassphrase: string = 'Test SDF Network ; September 2015'
 ): Promise<string> {
-  const { signedTxXdr, error } = await freighter.signTransaction(xdr, {
-    networkPassphrase: expectedPassphrase,
-  });
+  const { signTransaction, getNetworkPassphrase } = await import('@stellar/freighter-api');
 
-  if (error || !signedTxXdr) {
-    throw new Error(`Freighter signing rejected: ${error || 'empty response'}`);
+  const currentPassphrase = await getNetworkPassphrase();
+  if (currentPassphrase !== networkPassphrase) {
+    throw new Error(`Network mismatch: wallet on ${currentPassphrase}, expected ${networkPassphrase}`);
   }
 
-  return signedTxXdr;
+  const result = await signTransaction(xdr, {
+    networkPassphrase,
+  });
+
+  return result;
 }
 
-export async function checkNetworkMatch(expectedPassphrase: string): Promise<void> {
-  const { networkPassphrase, error } = await freighter.getNetwork();
-  if (error) throw new Error(`Failed to read wallet network: ${error}`);
-  if (networkPassphrase !== expectedPassphrase) {
-    throw new Error(`Network mismatch — wallet on ${networkPassphrase}, expected ${expectedPassphrase}`);
+/**
+ * Verify destination account exists and has a funded XLM balance.
+ * Returns the current XLM and USDC balances.
+ */
+export async function verifyAccountFunded(
+  address: string,
+  horizonUrl = 'https://horizon-testnet.stellar.org'
+): Promise<{ xlm: string; usdc: string; exists: boolean }> {
+  try {
+    const balances = await getAccountBalances(address, horizonUrl);
+    const xlmBalance =
+      balances.find((b) => b.asset_type === 'native')?.balance ?? '0';
+    const usdcBalance =
+      balances.find(
+        (b) =>
+          b.asset_type !== 'native' &&
+          'asset_code' in b &&
+          (b as any).asset_code === 'USDC'
+      )?.balance ?? '0';
+
+    return { xlm: xlmBalance, usdc: usdcBalance, exists: true };
+  } catch {
+    throw new Error(`Account unfunded: send testnet XLM from friendbot.stellar.org to ${address}`);
   }
 }
 
@@ -99,7 +147,7 @@ export async function getAccountBalances(address: string, horizonUrl: string): P
   }
   const res = await fetch(`${horizonUrl}/accounts/${address}`);
   if (res.status === 404) {
-    throw new Error(`Account unfunded — send testnet XLM from friendbot.stellar.org to ${address}`);
+    throw new Error(`Account unfunded: send testnet XLM from friendbot.stellar.org to ${address}`);
   }
   if (!res.ok) {
     throw new Error(`Horizon request failed (${res.status})`);

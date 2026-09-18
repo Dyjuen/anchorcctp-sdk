@@ -173,13 +173,13 @@ export const CctpDepositFlow: React.FC<CctpDepositFlowProps> = ({
       if (xlm < 2) {
         setErrorDetails({
           code: 'INSUFFICIENT_XLM',
-          message: `Trustline would fail — current XLM balance: ${xlmBalance ?? 'unknown'}`,
+          message: `Trustline would fail: current XLM balance ${xlmBalance ?? 'unknown'}`,
           remediation: 'Fund with testnet friendbot: https://friendbot.stellar.org',
         });
       } else {
         setErrorDetails({
           code: 'BALANCE_CHECK_PASSED',
-          message: `XLM balance ${xlmBalance} ≥ 2 XLM — trustline would succeed`,
+          message: `XLM balance ${xlmBalance} ≥ 2 XLM: trustline would succeed`,
           remediation: 'No error to simulate: balance is sufficient.',
         });
       }
