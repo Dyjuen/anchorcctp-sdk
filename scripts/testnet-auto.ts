@@ -12,9 +12,9 @@
  * Usage:
  *   npm run testnet:auto -- --skip-burn 0x... [--source-domain 6] [--amount 1000000] [--log docs/evidence/testnet-auto.log]
  */
-import { existsSync, readFileSync, renameSync, writeFileSync, appendFileSync } from 'node:fs';
+import { existsSync, readFileSync, renameSync, writeFileSync, appendFileSync, unlinkSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { Horizon, Asset, Networks, Operation, rpc, TransactionBuilder } from '@stellar/stellar-sdk';
+import { Horizon, Asset, Networks, Operation, rpc, TransactionBuilder, Keypair } from '@stellar/stellar-sdk';
 import { createAnchorCCTPFromEnv } from '../packages/core/src/testnet-config.js';
 import { readAccountState } from '../packages/core/src/testnet/account.js';
 import { checkForwarderDeployed } from '../packages/core/src/testnet/forwarder-check.js';
@@ -102,8 +102,17 @@ async function main(): Promise<void> {
     fail('NETWORK_PIN', 'STELLAR_NETWORK=mainnet refused by testnet:auto.', 'Unset STELLAR_NETWORK or run the mainnet flow manually.');
   }
   const horizonUrl = process.env.HORIZON_URL ?? 'https://horizon-testnet.stellar.org';
-  if (!horizonUrl.includes('testnet')) {
-    fail('NETWORK_PIN', `HORIZON_URL=${horizonUrl} is not a testnet host.`, 'Point HORIZON_URL at testnet or unset it.');
+  // O6: hostname allowlist — *.stellar.org or localhost only
+  if (!horizonUrl.startsWith('https://')) {
+    fail('NETWORK_PIN', `HORIZON_URL=${horizonUrl} must be https.`, 'Point HORIZON_URL at testnet or unset it.');
+  }
+  try {
+    const host = new URL(horizonUrl).hostname;
+    if (!host.endsWith('.stellar.org') && host !== 'localhost') {
+      fail('NETWORK_PIN', `HORIZON_URL host "${host}" not in allowlist.`, 'Use *.stellar.org or localhost.');
+    }
+  } catch {
+    fail('NETWORK_PIN', `HORIZON_URL=${horizonUrl} is not a valid URL.`, 'Point HORIZON_URL at testnet or unset it.');
   }
   // O14: restrict --state/--log to cwd unless --force
   if (!force) {
@@ -112,10 +121,38 @@ async function main(): Promise<void> {
   }
 
   let processed: string[] = [];
+  // N9: single-process guard via O_EXCL lock file
+  const lockPath = statePath + '.lock';
+  const STALE_MS = 5 * 60 * 1000;
+  let lockAcquired = false;
   try {
-    if (existsSync(statePath)) processed = JSON.parse(readFileSync(statePath, 'utf8')) as string[];
-  } catch { processed = []; }
-  if (processed.includes(burnTxHash)) {
+    writeFileSync(lockPath, `${process.pid}`, { flag: 'wx' });
+    lockAcquired = true;
+  } catch {
+    // Check for stale lock
+    try {
+      const st = statSync(lockPath);
+      if (Date.now() - st.mtimeMs > STALE_MS) {
+        unlinkSync(lockPath);
+        writeFileSync(lockPath, `${process.pid}`, { flag: 'wx' });
+        lockAcquired = true;
+      } else {
+        fail('LOCKED', 'Another testnet:auto run is in progress (lock file exists).', 'Wait for the other run to finish or remove the lock file if stale.');
+      }
+    } catch {
+      // stat failed (file gone between check and stat) — retry once
+      try {
+        writeFileSync(lockPath, `${process.pid}`, { flag: 'wx' });
+        lockAcquired = true;
+      } catch {
+        fail('LOCKED', 'Another testnet:auto run is in progress.', 'Wait or remove stale lock.');
+      }
+    }
+  }
+  // N9: wrap remaining logic in try/finally to release lock
+  try {
+    if (existsSync(statePath)) { try { processed = JSON.parse(readFileSync(statePath, 'utf8')) as string[]; } catch { processed = []; } }
+    if (processed.includes(burnTxHash)) {
     fail('REPLAY', 'burnTxHash already settled by a previous run.', 'Use a fresh burn hash per run.');
   }
 
@@ -130,9 +167,12 @@ async function main(): Promise<void> {
   }
   const dest = env.destinationAddress;
   const rpcUrl = process.env.SOROBAN_RPC_URL ?? 'https://soroban-testnet.stellar.org';
-  // O14: reuse validated keypair from createAnchorCCTPFromEnv instead of re-parsing secret
-  const { Keypair } = await import('@stellar/stellar-sdk');
-  const keypair = Keypair.fromSecret((process.env.STELLAR_SECRET ?? process.env.STELLAR_TESTNET_SECRET ?? '').trim());
+  // M9: reuse validated keypair from createAnchorCCTPFromEnv; fallback for backward-compat
+  let keypair = env.keypair;
+  if (!keypair) {
+    const { Keypair } = await import('@stellar/stellar-sdk');
+    keypair = Keypair.fromSecret((process.env.STELLAR_SECRET ?? process.env.STELLAR_TESTNET_SECRET ?? '').trim());
+  }
 
   let evmBurnTxHash: string | undefined;
   if (!burnTxHash) {
@@ -144,6 +184,13 @@ async function main(): Promise<void> {
       fail('INVALID_CONFIG', 'EVM_PRIVATE_KEY malformed (want 0x + 64 hex).', 'Export the raw hex key, 0x-prefixed, into .env.testnet only.');
     }
     const evmRpc = (process.env.EVM_RPC_URL ?? 'https://sepolia.base.org').trim();
+    // O6: EVM_RPC_URL must be https (http allowed only for localhost)
+    if (!evmRpc.startsWith('https://')) {
+      const evmHost = evmRpc.replace(/^https?:\/\//, '').split('/')[0].split(':')[0];
+      if (!evmRpc.startsWith('http://localhost') && evmHost !== 'localhost') {
+        fail('INVALID_CONFIG', 'EVM_RPC_URL must be https (http allowed only for localhost).', 'Set EVM_RPC_URL to an https endpoint.');
+      }
+    }
     const expectedChainId = Number(process.env.EVM_CHAIN_ID ?? 84532);
     const account = privateKeyToAccount(evmKey as `0x${string}`);
     log(`[STEP] [burn] evm=${account.address} chain=${expectedChainId} amount=${amount.toString()}`);
@@ -272,6 +319,12 @@ async function main(): Promise<void> {
     }) + '\n'
   );
   if (!proven) process.exit(1);
+  } finally {
+    // N9: release lock file
+    if (lockAcquired) {
+      try { unlinkSync(lockPath); } catch { /* best-effort */ }
+    }
+  }
 }
 
 main().catch((err) => fail('INTERNAL', String((err as Error)?.message || err), 'Re-run; replay store makes receive() idempotent.'));

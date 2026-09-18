@@ -111,6 +111,8 @@ export interface EnvConfigResult {
   destinationAddress: string;
   network: 'testnet' | 'mainnet';
   hasSigner: boolean;
+  /** Validated Keypair when STELLAR_SECRET present; avoids re-derivation in callers. */
+  keypair?: Keypair;
 }
 
 /**
@@ -166,7 +168,26 @@ export function createAnchorCCTPFromEnv(
           const tx = TransactionBuilder.fromXDR(xdr, passphrase) as unknown as {
             sign(kp: Keypair): void;
             toXDR(): string;
+            operations: Array<{ type: string; func?: { _value?: { _attributes?: { contractAddress?: { _value?: Buffer } } } } }>;
           };
+          // O7: structural guard — must be Soroban invokeHostFunction
+          const hasInvoke = tx.operations.some((op) => op.type === 'invokeHostFunction');
+          if (!hasInvoke) {
+            throw new InvalidConfigError('signer refused: XDR contains no invokeHostFunction operation');
+          }
+          // O7: when forwarderContractId known, verify target matches
+          if (forwarder !== undefined) {
+            const invokeOp = tx.operations.find((op) => op.type === 'invokeHostFunction');
+            const caBuf = invokeOp?.func?._value?._attributes?.contractAddress?._value;
+            if (caBuf && caBuf.length === 32) {
+              const targetContract = StrKey.encodeContract(caBuf);
+              if (targetContract !== forwarder) {
+                throw new InvalidConfigError(
+                  `signer refused: invokeHostFunction targets ${targetContract}, expected ${forwarder}`
+                );
+              }
+            }
+          }
           tx.sign(keypair as Keypair);
           return tx.toXDR();
         };
@@ -175,6 +196,24 @@ export function createAnchorCCTPFromEnv(
   const attestationUrl = env.CIRCLE_ATTESTATION_BASE_URL;
   if (attestationUrl !== undefined && attestationUrl !== '' && !/^https:\/\//.test(attestationUrl)) {
     throw new InvalidConfigError('CIRCLE_ATTESTATION_BASE_URL must be https');
+  }
+
+  // O6: hostname allowlist for HORIZON_URL
+  const horizonUrl = env.HORIZON_URL;
+  if (horizonUrl !== undefined && horizonUrl !== '') {
+    if (!/^https:\/\//.test(horizonUrl)) {
+      throw new InvalidConfigError('HORIZON_URL must be https');
+    }
+    try {
+      const host = new URL(horizonUrl).hostname;
+      const allowed = host.endsWith('.stellar.org') || host === 'localhost';
+      if (!allowed) {
+        throw new InvalidConfigError('HORIZON_URL host not in allowlist (*.stellar.org or localhost)');
+      }
+    } catch (e) {
+      if (e instanceof InvalidConfigError) throw e;
+      throw new InvalidConfigError('HORIZON_URL is not a valid URL');
+    }
   }
 
   const cap = env.SPEND_CAP_XLM ?? env.STELLAR_SPEND_CAP_XLM;
@@ -201,5 +240,5 @@ export function createAnchorCCTPFromEnv(
     },
   });
 
-  return { client, destinationAddress: destination, network, hasSigner: keypair !== undefined };
+  return { client, destinationAddress: destination, network, hasSigner: keypair !== undefined, keypair };
 }
