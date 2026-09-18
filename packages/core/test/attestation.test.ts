@@ -184,6 +184,33 @@ describe('Circle Attestation Client', () => {
     expect(res.signature).toBe('0xonlysig');
   });
 
+  it('encodes burnTxHash with encodeURIComponent in pollAttestation URL', async () => {
+    let capturedUrl = '';
+    const captureFetch = async (url: any) => {
+      capturedUrl = String(url);
+      return {
+        ok: true,
+        json: async () => ({
+          status: 'complete',
+          attestation: '0xatt',
+          message: '0xmsg',
+          signature: '0xsig',
+        }),
+      } as unknown as Response;
+    };
+    const c = new AttestationClient({
+      baseUrl: 'https://iris-api.example.com',
+      fetchImpl: captureFetch as any,
+      pollIntervalMs: 1,
+      maxRetries: 1,
+      logger: () => {},
+    });
+    await c.pollAttestation('0xABC/def');
+    expect(capturedUrl).toBe(
+      `https://iris-api.example.com/v1/attestations/${encodeURIComponent('0xABC/def')}`
+    );
+  });
+
   it('reads CIRCLE_ATTESTATION_BASE_URL from environment when baseUrl not passed', () => {
     const oldEnv = process.env.CIRCLE_ATTESTATION_BASE_URL;
     process.env.CIRCLE_ATTESTATION_BASE_URL = 'https://custom-iris.example.com';
@@ -198,6 +225,29 @@ describe('Circle Attestation Client', () => {
 });
 
 describe('AttestationClient v2 by-txHash (testnet path)', () => {
+  it('encodes txHash with encodeURIComponent in pollAttestationByTx URL', async () => {
+    let capturedUrl = '';
+    const captureFetch = async (url: any) => {
+      capturedUrl = String(url);
+      return {
+        ok: true,
+        json: async () => ({
+          messages: [{ message: '0xmsg', attestation: '0xatt', status: 'complete' }],
+        }),
+      } as unknown as Response;
+    };
+    const client = new AttestationClient({
+      baseUrl: 'https://iris-api.example.com',
+      fetchImpl: captureFetch as any,
+      pollIntervalMs: 1,
+      maxRetries: 1,
+    });
+    await (client as any).pollAttestationByTx(6, '0xABC/def');
+    expect(capturedUrl).toBe(
+      `https://iris-api.example.com/v2/messages/6?transactionHash=${encodeURIComponent('0xABC/def')}`
+    );
+  });
+
   it('pollAttestationByTx hits /v2/messages/{domain}?transactionHash= on sandbox and returns message+attestation', async () => {
     let capturedUrl = '';
     const okFetch = async (url: any) =>

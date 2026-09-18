@@ -90,7 +90,7 @@ export class AttestationClient {
   ): Promise<AttestationResult> {
     const startTime = Date.now();
     const base = this.baseUrl.replace(/\/+$/, '');
-    const url = `${base}/v1/attestations/${burnTxHash}`;
+    const url = `${base}/v1/attestations/${encodeURIComponent(burnTxHash)}`;
 
     for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
       const elapsedMs = Date.now() - startTime;
@@ -165,7 +165,7 @@ export class AttestationClient {
   ): Promise<AttestationResult> {
     const startTime = Date.now();
     const base = this.baseUrl.replace(/\/+$/, '');
-    const url = `${base}/v2/messages/${sourceDomain}?transactionHash=${txHash}`;
+    const url = `${base}/v2/messages/${sourceDomain}?transactionHash=${encodeURIComponent(txHash)}`;
 
     for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
       const elapsedMs = Date.now() - startTime;
