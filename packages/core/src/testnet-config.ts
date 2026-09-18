@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs';
 import { Keypair, Networks, StrKey, TransactionBuilder } from '@stellar/stellar-sdk';
 import { InvalidConfigError } from './errors/index.js';
 import { AnchorCCTP, createAnchorCCTP } from './config.js';
@@ -81,10 +80,19 @@ export function parseTestnetConfig(json: unknown): TestnetPublicConfig {
   };
 }
 
-/** Reads + validates a public testnet JSON config file from disk. */
-export function loadTestnetConfigFromFile(path: string): TestnetPublicConfig {  let text: string;
+/** Reads + validates a public testnet JSON config file from disk (Node-only). */
+export function loadTestnetConfigFromFile(path: string): TestnetPublicConfig {
+  // ponytail: lazy Node fs via getBuiltinModule, no static node:fs import → browser bundle safe
+  const proc = (globalThis as { process?: unknown }).process as
+    | { getBuiltinModule?: (m: string) => { readFileSync(p: string, e: string): string } }
+    | undefined;
+  const fs = proc?.getBuiltinModule?.('node:fs');
+  if (!fs) {
+    throw new InvalidConfigError(`cannot read file ${path} in browser — use parseTestnetConfig instead`);
+  }
+  let text: string;
   try {
-    text = readFileSync(path, 'utf-8');
+    text = fs.readFileSync(path, 'utf-8');
   } catch {
     throw new InvalidConfigError(`cannot read file ${path}`);
   }
@@ -118,7 +126,7 @@ export interface EnvConfigResult {
  * TRUSTLINE_ALLOW_CREATION (true/false), SPEND_CAP_XLM.
  */
 export function createAnchorCCTPFromEnv(
-  env: Record<string, string | undefined> = process.env
+  env: Record<string, string | undefined> = ((globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env ?? {}) as Record<string, string | undefined>
 ): EnvConfigResult {
   const network = env.STELLAR_NETWORK ?? 'testnet';
   if (network !== 'testnet' && network !== 'mainnet') {
@@ -163,17 +171,33 @@ export function createAnchorCCTPFromEnv(
           return tx.toXDR();
         };
 
+  // O6: https pin for attestation base URL
+  const attestationUrl = env.CIRCLE_ATTESTATION_BASE_URL;
+  if (attestationUrl !== undefined && attestationUrl !== '' && !/^https:\/\//.test(attestationUrl)) {
+    throw new InvalidConfigError('CIRCLE_ATTESTATION_BASE_URL must be https');
+  }
+
   const cap = env.SPEND_CAP_XLM ?? env.STELLAR_SPEND_CAP_XLM;
+  // N3: validate SPEND_CAP_XLM is finite >= 0 when present
+  let parsedCap: number | undefined;
+  if (cap !== undefined && cap !== '') {
+    parsedCap = Number(cap);
+    if (!Number.isFinite(parsedCap) || parsedCap < 0) {
+      throw new InvalidConfigError('SPEND_CAP_XLM must be a finite number >= 0');
+    }
+  }
+
   const client = createAnchorCCTP({
     network,
-    attestationBaseUrl: env.CIRCLE_ATTESTATION_BASE_URL,
+    attestationBaseUrl: attestationUrl,
     dustCollectorAddress: dust,
     forwarderContractId: forwarder,
     signer,
     trustline: {
+      // C3: default OFF (opt-in required)
       allowCreation:
-        (env.TRUSTLINE_ALLOW_CREATION ?? 'true').toLowerCase() === 'true',
-      ...(cap === undefined || cap === '' ? {} : { spendCapXlm: Number(cap) }),
+        (env.TRUSTLINE_ALLOW_CREATION ?? 'false').toLowerCase() === 'true',
+      ...(parsedCap === undefined ? {} : { spendCapXlm: parsedCap }),
     },
   });
 

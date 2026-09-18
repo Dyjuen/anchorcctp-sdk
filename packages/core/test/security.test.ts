@@ -35,6 +35,7 @@ describe('Security Checklist Invariant Tests (PRD §7 & §8)', () => {
       sourceDomain: 0,
       burnTxHash: H('cafe0010'),
       destinationAddress: sampleStellarAddress,
+      amount: 1000000n,
     });
     expect(first.settled).toBe(true);
     expect(settledEvents.length).toBe(1);
@@ -45,6 +46,7 @@ describe('Security Checklist Invariant Tests (PRD §7 & §8)', () => {
         sourceDomain: 0,
         burnTxHash: H('cafe0010'),
         destinationAddress: sampleStellarAddress,
+        amount: 1000000n,
       })
     ).rejects.toMatchObject({ code: 'REPLAY_TRANSFER' });
 
@@ -89,6 +91,7 @@ describe('Security Checklist Invariant Tests (PRD §7 & §8)', () => {
         sourceDomain: 99999,
         burnTxHash: H('cafe0013'),
         destinationAddress: sampleStellarAddress,
+        amount: 1000000n,
       })
     ).rejects.toMatchObject({ code: 'INVALID_DOMAIN' });
 

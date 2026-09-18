@@ -1,11 +1,12 @@
 import { assertSupportedDomain } from './domains/index.js';
 import { translateToStellar, submitMint, SignerCallback } from './forwarder/index.js';
 import { convert6to7 } from './decimals/index.js';
-import { ensureTrustline } from './trustline/index.js';
+import { ensureTrustline, TESTNET_USDC_ISSUER } from './trustline/index.js';
 import { ReplayStore, SettlementRecord } from './replay/index.js';
 import { AttestationClient, AttestationResult } from './attestation/index.js';
 import { AnchorCCTPEventEmitter } from './events/index.js';
 import { Logger } from './logger/index.js';
+import { StrKey } from '@stellar/stellar-sdk';
 import {
   ReplayTransferError,
   InvalidAmountError,
@@ -55,6 +56,7 @@ export interface ReceiveContext {
     spendCapXlm?: number;
   };
   defaultForwarderContractId?: string;
+  defaultUsdcIssuer?: string;
   _test?: {
     attestation?: (burnTxHash: string) => Promise<Partial<AttestationResult>>;
     hasTrustline?: () => Promise<boolean>;
@@ -197,6 +199,7 @@ export async function receive(
     spendCapXlm: spendCap,
     hasTrustline,
     createTrustline,
+    usdcIssuer: ctx.defaultUsdcIssuer ?? TESTNET_USDC_ISSUER,
   });
 
   // 9. Soroban Forwarder Mint Submission
@@ -228,6 +231,11 @@ export async function receive(
     param: params.dustCollectorAddress,
     cfg: ctx.defaultDustCollector,
   });
+
+  // M4: validate resolved dust collector is valid StrKey
+  if (!StrKey.isValidEd25519PublicKey(effectiveDustCollector)) {
+    throw new InvalidConfigError(`dustCollectorAddress must be a valid G... StrKey, got: "${effectiveDustCollector}"`);
+  }
 
   // 11. Mark Processed BEFORE emitting (crash between emit and mark → no unmarked settlement)
   const timestamp = new Date().toISOString();

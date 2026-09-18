@@ -426,6 +426,30 @@ describe('receive() Orchestration Engine', () => {
     ).rejects.toMatchObject({ code: 'INVALID_CONFIG' });
   });
 
+  it('M4: invalid dust collector StrKey in resolved path throws', async () => {
+    const sdk = createAnchorCCTP({
+      signer: async () => 'SIGNED_DUST',
+      dustCollectorAddress: 'INVALID_DUST',
+      _test: {
+        attestation: async () => ({
+          status: 'complete',
+          message: goodMsg,
+          signature: goodSig,
+        }),
+        hasTrustline: async () => true,
+      },
+    } as any);
+
+    await expect(
+      sdk.receive({
+        sourceDomain: 0,
+        burnTxHash: H('cafe0d01'),
+        destinationAddress: validDestination,
+        amount: 1000000n,
+      })
+    ).rejects.toMatchObject({ code: 'INVALID_CONFIG' });
+  });
+
   it('C4: onSettled never fires when submitMint fails + replay not marked', async () => {
     const { ReplayStore } = require('../src/replay/index.js');
     const replayStore = new ReplayStore();

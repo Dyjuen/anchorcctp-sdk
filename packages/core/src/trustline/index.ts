@@ -50,11 +50,28 @@ export async function ensureTrustline(
     throw new TrustlineMissingError(params.destination);
   }
 
-  const requiredReserve = params.requiredReserveXlm ?? 0.5;
-  if (params.spendCapXlm !== undefined && requiredReserve > params.spendCapXlm) {
+  // C8: spendCapXlm required, finite, >= 0 when allowCreation true
+  if (params.spendCapXlm === undefined || !Number.isFinite(params.spendCapXlm) || (params.spendCapXlm as number) < 0) {
+    throw new TrustlineCreationError(
+      params.destination,
+      'spendCapXlm is required, must be finite, and >= 0 when allowCreation is true.'
+    );
+  }
+
+  // O9: clamp requiredReserve to min 0.5
+  const requiredReserve = Math.max(params.requiredReserveXlm ?? 0.5, 0.5);
+  if (requiredReserve > (params.spendCapXlm as number)) {
     throw new TrustlineCreationError(
       params.destination,
       `Required reserve of ${requiredReserve} XLM exceeds configured spendCapXlm of ${params.spendCapXlm} XLM.`
+    );
+  }
+
+  // O9: usdcIssuer required (no silent testnet default on mainnet)
+  if (!params.usdcIssuer) {
+    throw new TrustlineCreationError(
+      params.destination,
+      'usdcIssuer is required (no silent testnet default).'
     );
   }
 
@@ -68,7 +85,7 @@ export async function ensureTrustline(
   try {
     const xdr = buildChangeTrustXdr(
       params.destination,
-      params.usdcIssuer || TESTNET_USDC_ISSUER,
+      params.usdcIssuer,
       params.networkPassphrase || Networks.TESTNET
     );
     await params.createTrustline(xdr);

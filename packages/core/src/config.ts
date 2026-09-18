@@ -28,6 +28,7 @@ export interface AnchorCCTPConfig {
   replayStore?: ReplayStore;
   network?: 'testnet' | 'mainnet';
   forwarderContractId?: string;
+  usdcIssuer?: string;
   _test?: Record<string, unknown>;
 }
 
@@ -85,6 +86,7 @@ export function createAnchorCCTP(config: AnchorCCTPConfig): AnchorCCTP {
     defaultDustCollector: config.dustCollectorAddress,
     defaultTrustline: config.trustline,
     defaultForwarderContractId,
+    defaultUsdcIssuer: config.usdcIssuer,
     _test: config._test,
   };
 

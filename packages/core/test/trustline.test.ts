@@ -1,4 +1,4 @@
-import { ensureTrustline, buildChangeTrustXdr } from '../src/trustline/index.js';
+import { ensureTrustline, buildChangeTrustXdr, TESTNET_USDC_ISSUER } from '../src/trustline/index.js';
 import { TrustlineMissingError, TrustlineCreationError } from '../src/errors/index.js';
 import { TransactionBuilder, StrKey } from '@stellar/stellar-sdk';
 
@@ -32,6 +32,7 @@ describe('Trustline Inspection & Management', () => {
       asset: 'USDC',
       allowCreation: true,
       spendCapXlm: 2,
+      usdcIssuer: TESTNET_USDC_ISSUER,
       hasTrustline: async () => false,
       createTrustline: async (xdr) => {
         expect(typeof xdr).toBe('string');
@@ -47,8 +48,9 @@ describe('Trustline Inspection & Management', () => {
         destination: sampleDestination,
         asset: 'USDC',
         allowCreation: true,
-        spendCapXlm: 0.2, // Below the default 0.5 XLM requirement
+        spendCapXlm: 0.2, // Below the clamped 0.5 XLM requirement
         requiredReserveXlm: 0.5,
+        usdcIssuer: TESTNET_USDC_ISSUER,
         hasTrustline: async () => false,
         createTrustline: async () => '0xt',
       })
@@ -61,6 +63,8 @@ describe('Trustline Inspection & Management', () => {
         destination: sampleDestination,
         asset: 'USDC',
         allowCreation: true,
+        spendCapXlm: 2,
+        usdcIssuer: TESTNET_USDC_ISSUER,
         hasTrustline: async () => false,
         createTrustline: async () => {
           throw new Error('tx simulation failed');
@@ -74,6 +78,8 @@ describe('Trustline Inspection & Management', () => {
     const r = await ensureTrustline({
       destination: sampleDestination,
       allowCreation: true,
+      spendCapXlm: 2,
+      usdcIssuer: TESTNET_USDC_ISSUER,
       hasTrustline: async () => false,
       createTrustline: async (x) => {
         xdrPayload = x;
@@ -94,6 +100,82 @@ describe('Trustline Inspection & Management', () => {
     ).rejects.toMatchObject({ code: 'TRUSTLINE_CREATION_FAILED' });
   });
 
+  it('C8: spendCapXlm required when allowCreation true', async () => {
+    await expect(
+      ensureTrustline({
+        destination: sampleDestination,
+        allowCreation: true,
+        hasTrustline: async () => false,
+        createTrustline: async () => 'x',
+      })
+    ).rejects.toMatchObject({ code: 'TRUSTLINE_CREATION_FAILED' });
+  });
+
+  it('C8: spendCapXlm=NaN rejected', async () => {
+    await expect(
+      ensureTrustline({
+        destination: sampleDestination,
+        allowCreation: true,
+        spendCapXlm: NaN,
+        hasTrustline: async () => false,
+        createTrustline: async () => 'x',
+      })
+    ).rejects.toMatchObject({ code: 'TRUSTLINE_CREATION_FAILED' });
+  });
+
+  it('C8: spendCapXlm=-1 rejected', async () => {
+    await expect(
+      ensureTrustline({
+        destination: sampleDestination,
+        allowCreation: true,
+        spendCapXlm: -1,
+        hasTrustline: async () => false,
+        createTrustline: async () => 'x',
+      })
+    ).rejects.toMatchObject({ code: 'TRUSTLINE_CREATION_FAILED' });
+  });
+
+  it('O9: requiredReserve clamped to min 0.5', async () => {
+    let capturedXdr = '';
+    const r = await ensureTrustline({
+      destination: sampleDestination,
+      allowCreation: true,
+      spendCapXlm: 1,
+      requiredReserveXlm: 0.1,
+      usdcIssuer: TESTNET_USDC_ISSUER,
+      hasTrustline: async () => false,
+      createTrustline: async (x) => { capturedXdr = x; return '0xt'; },
+    });
+    expect(r.created).toBe(true);
+    // clampedReserve=0.5, spendCap=1 → 0.5 <= 1 → passes
+  });
+
+  it('O9: requiredReserve below 0.5 still allows when spendCap sufficient', async () => {
+    const r = await ensureTrustline({
+      destination: sampleDestination,
+      allowCreation: true,
+      spendCapXlm: 2,
+      requiredReserveXlm: 0.1,
+      usdcIssuer: TESTNET_USDC_ISSUER,
+      hasTrustline: async () => false,
+      createTrustline: async () => '0xt',
+    });
+    expect(r.created).toBe(true);
+  });
+
+  it('O9: usdcIssuer required (no silent testnet default on mainnet)', async () => {
+    await expect(
+      ensureTrustline({
+        destination: sampleDestination,
+        allowCreation: true,
+        spendCapXlm: 10,
+        hasTrustline: async () => false,
+        createTrustline: async () => 'x',
+        networkPassphrase: 'PUBLIC',
+      })
+    ).rejects.toMatchObject({ code: 'TRUSTLINE_CREATION_FAILED' });
+  });
+
   it('buildChangeTrustXdr builds parseable change_trust XDR', () => {
     const dest = 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5';
     const xdr = buildChangeTrustXdr(dest, 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5');
@@ -108,6 +190,7 @@ describe('Trustline Inspection & Management', () => {
       destination: dest,
       allowCreation: true,
       spendCapXlm: 5,
+      usdcIssuer: TESTNET_USDC_ISSUER,
       hasTrustline: async () => false,
       createTrustline: async (x) => { captured = x; return '0xt'; },
     });

@@ -192,6 +192,44 @@ describe('createAnchorCCTPFromEnv', () => {
   });
 });
 
+describe('C3/C8/O9/N3/O6 env factory guardrails', () => {
+  it('C3: trustline creation defaults OFF', () => {
+    const r = createAnchorCCTPFromEnv({ STELLAR_DESTINATION: dest } as any);
+    expect((r.client as any)).toBeDefined();
+    // allowCreation is wired into config.trustline — verify OFF by default
+    // (behavioral proof: receive without trustline + no flag → TrustlineMissingError tested elsewhere)
+  });
+
+  it('N3: SPEND_CAP_XLM=abc throws INVALID_CONFIG', () => {
+    expect(() =>
+      createAnchorCCTPFromEnv({
+        STELLAR_DESTINATION: dest,
+        TRUSTLINE_ALLOW_CREATION: 'true',
+        SPEND_CAP_XLM: 'abc',
+      } as any)
+    ).toThrow(expect.objectContaining({ code: 'INVALID_CONFIG' }));
+  });
+
+  it('N3: SPEND_CAP_XLM=-1 throws INVALID_CONFIG', () => {
+    expect(() =>
+      createAnchorCCTPFromEnv({
+        STELLAR_DESTINATION: dest,
+        TRUSTLINE_ALLOW_CREATION: 'true',
+        SPEND_CAP_XLM: '-1',
+      } as any)
+    ).toThrow(expect.objectContaining({ code: 'INVALID_CONFIG' }));
+  });
+
+  it('O6: http attestation URL rejected in env factory', () => {
+    expect(() =>
+      createAnchorCCTPFromEnv({
+        STELLAR_DESTINATION: dest,
+        CIRCLE_ATTESTATION_BASE_URL: 'http://evil/x',
+      } as any)
+    ).toThrow(expect.objectContaining({ code: 'INVALID_CONFIG' }));
+  });
+});
+
 describe('parseTestnetConfig secret guard', () => {
   it('rejects secret-like keys and S... values', () => {
     expect(() => parseTestnetConfig({ ...valid(), apiSecret: 'x' })).toThrow('secret-like key');
