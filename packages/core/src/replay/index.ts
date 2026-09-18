@@ -14,25 +14,35 @@ export interface IReplayStoreAdapter {
   getRecord(burnTxHash: string): Promise<SettlementRecord | null> | SettlementRecord | null;
 }
 
+function normalizeKey(h: string): string {
+  return '0x' + h.trim().slice(2).toLowerCase();
+}
+
+/**
+ * @deprecated Production — test-only, data lost on restart. Use FileReplayStore.
+ */
 class InMemoryReplayStore implements IReplayStoreAdapter {
   private readonly store = new Map<string, SettlementRecord>();
 
   isProcessed(burnTxHash: string): boolean {
-    return this.store.has(burnTxHash);
+    return this.store.has(normalizeKey(burnTxHash));
   }
 
   markProcessed(burnTxHash: string, record: SettlementRecord): void {
-    this.store.set(burnTxHash, record);
+    const key = normalizeKey(burnTxHash);
+    this.store.set(key, { ...record, burnTxHash: key });
   }
 
   getRecord(burnTxHash: string): SettlementRecord | null {
-    return this.store.get(burnTxHash) || null;
+    return this.store.get(normalizeKey(burnTxHash)) || null;
   }
 }
 
 /**
  * Idempotency store to track processed CCTP burn transactions and prevent double-crediting.
  */
+export { FileReplayStore } from './file-store.js';
+
 export class ReplayStore {
   private readonly adapter: IReplayStoreAdapter;
 
