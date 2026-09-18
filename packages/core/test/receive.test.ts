@@ -24,6 +24,7 @@ describe('receive() Orchestration Engine', () => {
     return createAnchorCCTP({
       signer: async (x) => 'SIGNED_TX_123',
       dustCollectorAddress: validDestination,
+      forwarderContractId: 'CA66Q2WFBND6V4UEB7RD4SAXSVIWMD6RA4X3U32ELVFGXV5PJK4T4VSZ',
       _test: {
         attestation: async () => ({
           status: 'complete',
@@ -175,6 +176,7 @@ describe('receive() Orchestration Engine', () => {
       pollIntervalMs: 1,
       logger: (msg) => logs.push(msg),
       signer: async (xdr) => 'SIGNED_REAL',
+      forwarderContractId: 'CA66Q2WFBND6V4UEB7RD4SAXSVIWMD6RA4X3U32ELVFGXV5PJK4T4VSZ',
       _test: {
         hasTrustline: async () => true,
       },
@@ -196,6 +198,7 @@ describe('receive() Orchestration Engine', () => {
     let trustlineCreated = false;
     const sdk = createAnchorCCTP({
       signer: async () => 'DEFAULT_SIGNER',
+      forwarderContractId: 'CA66Q2WFBND6V4UEB7RD4SAXSVIWMD6RA4X3U32ELVFGXV5PJK4T4VSZ',
       trustline: {
         allowCreation: true,
         spendCapXlm: 5,
@@ -248,6 +251,7 @@ describe('receive() Orchestration Engine', () => {
 
     const sdk = createAnchorCCTP({
       signer: async () => 'SIGNED_POLL_HOOK',
+      forwarderContractId: 'CA66Q2WFBND6V4UEB7RD4SAXSVIWMD6RA4X3U32ELVFGXV5PJK4T4VSZ',
       _test: {
         pollAttestation: async (burnTxHash: string, onPoll: (attempt: number, elapsedMs: number) => void) => {
           mockPollCalled = true;
@@ -320,6 +324,7 @@ describe('receive() Orchestration Engine', () => {
     const spy = jest.spyOn(forwarderMod, 'submitMint');
     const sdk = createAnchorCCTP({
       signer: async (x) => 'SIGNED_SEQ_TX',
+      forwarderContractId: 'CA66Q2WFBND6V4UEB7RD4SAXSVIWMD6RA4X3U32ELVFGXV5PJK4T4VSZ',
       _test: {
         attestation: async () => ({
           status: 'complete',
@@ -369,6 +374,7 @@ describe('receive() Orchestration Engine', () => {
   it('O5/M1: normalizes replay key case (0xABC same as 0xabc)', async () => {
     const sdk = createAnchorCCTP({
       signer: async (x) => 'SIGNED_NORM',
+      forwarderContractId: 'CA66Q2WFBND6V4UEB7RD4SAXSVIWMD6RA4X3U32ELVFGXV5PJK4T4VSZ',
       _test: {
         attestation: async () => ({
           status: 'complete',
@@ -430,6 +436,7 @@ describe('receive() Orchestration Engine', () => {
     const sdk = createAnchorCCTP({
       signer: async () => 'SIGNED_DUST',
       dustCollectorAddress: 'INVALID_DUST',
+      forwarderContractId: 'CA66Q2WFBND6V4UEB7RD4SAXSVIWMD6RA4X3U32ELVFGXV5PJK4T4VSZ',
       _test: {
         attestation: async () => ({
           status: 'complete',

@@ -17,11 +17,8 @@ export function buildCctpForwarderHookData(forwardRecipientStrkey: string): `0x$
     throw new Error(`Invalid forward recipient: ${forwardRecipientStrkey}`);
   }
 
-  const payload = Buffer.from(forwardRecipientStrkey, 'utf8');
-  const buf = Buffer.alloc(32 + payload.length);
-  buf.writeUInt32BE(0, 24);
-  buf.writeUInt32BE(payload.length, 28);
-  payload.copy(buf, 32);
-
-  return `0x${buf.toString('hex')}`;
+  if (StrKey.isValidEd25519PublicKey(forwardRecipientStrkey)) {
+    return `0x${Buffer.from(StrKey.decodeEd25519PublicKey(forwardRecipientStrkey)).toString('hex')}`;
+  }
+  return `0x${Buffer.from(StrKey.decodeContract(forwardRecipientStrkey)).toString('hex')}`;
 }

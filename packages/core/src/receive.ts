@@ -206,6 +206,10 @@ export async function receive(
   const forwarderContractId =
     params.forwarderContractId ?? ctx.defaultForwarderContractId;
 
+  if (!forwarderContractId) {
+    throw new MintFailedError(burnTxHash, 'forwarderContractId required. Pass params.forwarderContractId or config.network/forwarderContractId.');
+  }
+
   let mintResult: Awaited<ReturnType<typeof submitMint>>;
   try {
     mintResult = await submitMint(

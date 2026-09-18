@@ -75,7 +75,7 @@ export function createAnchorCCTP(config: AnchorCCTPConfig): AnchorCCTP {
   const replayStore = config.replayStore || new ReplayStore();
   const emitter: AnchorCCTPEventEmitter = createEventEmitter();
 
-  const defaultForwarderContractId = config.forwarderContractId ?? resolveForwarder(config.network);
+  const defaultForwarderContractId = config.forwarderContractId ?? (config.network ? resolveForwarder(config.network) : undefined);
 
   const ctx: ReceiveContext = {
     attestationClient,

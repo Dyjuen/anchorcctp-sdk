@@ -1,5 +1,5 @@
 import { StrKey, Contract, TransactionBuilder, Networks, Account, Address, nativeToScVal } from '@stellar/stellar-sdk';
-import { MintFailedError, ForwarderContractError } from '../errors/index.js';
+import { MintFailedError, ForwarderContractError, InvalidConfigError, InvalidAddressError } from '../errors/index.js';
 
 export interface MintParams {
   message: string;
@@ -19,11 +19,15 @@ export const DEFAULT_FORWARDER = TESTNET_FORWARDER;
 
 export function resolveForwarder(network?: 'testnet' | 'mainnet'): string {
   if (network === 'mainnet') return MAINNET_FORWARDER;
-  return TESTNET_FORWARDER;
+  if (network === 'testnet') return TESTNET_FORWARDER;
+  throw new InvalidConfigError('network required: "testnet" | "mainnet" (no silent testnet default).');
 }
 
 function hexToBytes(hex: string): Buffer {
   const clean = hex.startsWith('0x') ? hex.slice(2) : hex;
+  if (!/^[0-9a-fA-F]+$/.test(clean) || clean.length % 2 !== 0 || clean.length === 0) {
+    throw new ForwarderContractError('input', 'Invalid hex: charset+even-length required.');
+  }
   return Buffer.from(clean, 'hex');
 }
 
@@ -62,7 +66,7 @@ export function buildMintAndForwardXdr(params: MintParams): string {
  */
 export function translateToStellar(evmAddress: string): string {
   if (typeof evmAddress !== 'string') {
-    throw new Error('Address must be a string');
+    throw new InvalidAddressError(String(evmAddress), 'Address must be a string');
   }
 
   const trimmed = evmAddress.trim();
@@ -82,12 +86,17 @@ export function translateToStellar(evmAddress: string): string {
   }
 
   if (cleanHex.length !== 64 || !/^[0-9a-fA-F]+$/.test(cleanHex)) {
-    throw new Error(`Invalid address format: cannot translate "${evmAddress}" to Stellar public key.`);
+    throw new InvalidAddressError(evmAddress, 'cannot translate to Stellar public key');
   }
 
   const buffer = Buffer.from(cleanHex, 'hex');
   if (buffer.length !== 32) {
-    throw new Error(`Expected 32 bytes for Stellar public key derivation, received ${buffer.length} bytes.`);
+    throw new InvalidAddressError(evmAddress, `expected 32 bytes, received ${buffer.length}`);
+  }
+
+  // Reject zero addresses (20 or 32 byte)
+  if (buffer.every(b => b === 0)) {
+    throw new InvalidAddressError(evmAddress, 'zero address not allowed');
   }
 
   return StrKey.encodeEd25519PublicKey(buffer);

@@ -131,6 +131,18 @@ export class InvalidBurnHashError extends AnchorCCTPError {
   }
 }
 
+/**
+ * Thrown when a Stellar/EVM address is invalid or represents a zero-address.
+ */
+export class InvalidAddressError extends AnchorCCTPError {
+  readonly code = 'INVALID_ADDRESS';
+  readonly remediation = 'Provide a valid G... StrKey or 0x 20/32-byte non-zero hex address.';
+
+  constructor(public readonly address: string, reason?: string) {
+    super(`Invalid address "${address}"${reason ? `: ${reason}` : ''}.`);
+  }
+}
+
 export class ReplayTransferError extends AnchorCCTPError {
   readonly code = 'REPLAY_TRANSFER';
   readonly remediation = 'This burn transaction has already been processed and settled. Check existing settlement records.';

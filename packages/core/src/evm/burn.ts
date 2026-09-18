@@ -51,8 +51,8 @@ export function planBurn(params: PlanBurnParams): BurnPlan {
   const burnToken = params.burnToken ?? BASE_SEPOLIA_USDC;
   const messenger = params.messenger ?? EVM_TESTNET_MESSENGER;
   const maxFee = params.maxFee ?? 5000n;
-  if (!ADDRESS_RE.test(burnToken)) throw new Error(`Invalid burnToken: ${burnToken}`);
-  if (!ADDRESS_RE.test(messenger)) throw new Error(`Invalid messenger: ${messenger}`);
+  if (!ADDRESS_RE.test(burnToken) || burnToken === '0x' + '00'.repeat(20)) throw new Error(`Invalid burnToken: ${burnToken}`);
+  if (!ADDRESS_RE.test(messenger) || messenger === '0x' + '00'.repeat(20)) throw new Error(`Invalid messenger: ${messenger}`);
   if (maxFee > params.amount) throw new Error(`maxFee exceeds amount: ${maxFee} > ${params.amount}`);
   const fwd = contractStrkeyToBytes32(params.forwarderContractId);
   return {

@@ -19,6 +19,7 @@ describe('Security Checklist Invariant Tests (PRD §7 & §8)', () => {
     const sdk = createAnchorCCTP({
       signer: async () => 'SIGNED_REPLAY_TX',
       dustCollectorAddress: sampleStellarAddress,
+      forwarderContractId: 'CA66Q2WFBND6V4UEB7RD4SAXSVIWMD6RA4X3U32ELVFGXV5PJK4T4VSZ',
       _test: {
         attestation: async () => ({
           status: 'complete',

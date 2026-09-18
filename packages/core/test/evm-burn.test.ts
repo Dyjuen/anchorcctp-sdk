@@ -76,6 +76,18 @@ describe('planBurn', () => {
       planBurn({ amount: 2n ** 64n, stellarDestination: DEST, forwarderContractId: FWD }),
     ).toThrow(expect.objectContaining({ code: 'INVALID_BURN_AMOUNT' }));
   });
+
+  test('rejects zero burnToken address', () => {
+    expect(() =>
+      planBurn({ amount: 1000n, stellarDestination: DEST, forwarderContractId: FWD, burnToken: '0x' + '00'.repeat(20) }),
+    ).toThrow('Invalid burnToken');
+  });
+
+  test('rejects zero messenger address', () => {
+    expect(() =>
+      planBurn({ amount: 1000n, stellarDestination: DEST, forwarderContractId: FWD, messenger: '0x' + '00'.repeat(20) }),
+    ).toThrow('Invalid messenger');
+  });
 });
 
 function fakes(overrides?: {

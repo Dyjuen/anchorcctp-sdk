@@ -1,5 +1,5 @@
 import { translateToStellar, submitMint, buildMintAndForwardXdr, resolveForwarder, TESTNET_FORWARDER, MAINNET_FORWARDER } from '../src/forwarder/index.js';
-import { MintFailedError, ForwarderContractError } from '../src/errors/index.js';
+import { MintFailedError, ForwarderContractError, InvalidConfigError, InvalidAddressError } from '../src/errors/index.js';
 import { StrKey, TransactionBuilder } from '@stellar/stellar-sdk';
 
 describe('Forwarder & Address Translation', () => {
@@ -71,7 +71,7 @@ describe('Forwarder & Address Translation', () => {
     };
     await expect(
       submitMint(
-        { message: '0xmsg', signature: '0xsig', destination },
+        { message: '0x' + 'ab'.repeat(40), signature: '0x' + 'cd'.repeat(70), destination },
         failingSigner
       )
     ).rejects.toThrow(MintFailedError);
@@ -140,21 +140,20 @@ describe('Forwarder network selection', () => {
     expect(MAINNET_FORWARDER).toBe('CBZL2IH7F6BIDAA3WBNXYKIXSATJGMSW7K5P5MJ6STX5RXN47TZJDF5T');
     expect(resolveForwarder('testnet')).toBe(TESTNET_FORWARDER);
     expect(resolveForwarder('mainnet')).toBe(MAINNET_FORWARDER);
-    expect(resolveForwarder(undefined)).toBe(TESTNET_FORWARDER);
   });
 });
 
 describe('Forwarder branch coverage', () => {
   it('translateToStellar rejects non-string input', () => {
-    expect(() => translateToStellar(123 as any)).toThrow('Address must be a string');
+    expect(() => translateToStellar(123 as any)).toThrow(InvalidAddressError);
   });
 
   it('translateToStellar rejects invalid hex with 0x prefix', () => {
-    expect(() => translateToStellar('0xZZZ')).toThrow('Invalid address format');
+    expect(() => translateToStellar('0xZZZ')).toThrow(InvalidAddressError);
   });
 
   it('translateToStellar rejects hex with wrong length', () => {
-    expect(() => translateToStellar('0x' + 'ab'.repeat(10))).toThrow('Invalid address format');
+    expect(() => translateToStellar('0x' + 'ab'.repeat(10))).toThrow(InvalidAddressError);
   });
 
   it('submitMint re-throws ForwarderContractError as-is', async () => {
@@ -195,5 +194,41 @@ describe('Forwarder branch coverage', () => {
       message: '0xab', signature: '0xcd', destination: StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 0x33)),
       forwarderContractId: 'CINVALID',
     })).toThrow(ForwarderContractError);
+  });
+});
+
+describe('M2: hexToBytes strict validation', () => {
+  const dest = StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 0x33));
+
+  it('rejects non-hex charset in message', () => {
+    expect(() => buildMintAndForwardXdr({ message: '0xZZZ', signature: '0x1234', destination: dest })).toThrow(ForwarderContractError);
+  });
+
+  it('rejects odd-length hex in signature', () => {
+    expect(() => buildMintAndForwardXdr({ message: '0x' + 'ab'.repeat(32), signature: '0xabc', destination: dest })).toThrow(ForwarderContractError);
+  });
+});
+
+describe('C9: resolveForwarder requires explicit network', () => {
+  it('throws InvalidConfigError when called with undefined', () => {
+    expect(() => resolveForwarder(undefined)).toThrow(InvalidConfigError);
+    expect(() => resolveForwarder(undefined)).toThrow(expect.objectContaining({ code: 'INVALID_CONFIG' }));
+  });
+
+  it('returns correct IDs for explicit values', () => {
+    expect(resolveForwarder('testnet')).toBe(TESTNET_FORWARDER);
+    expect(resolveForwarder('mainnet')).toBe(MAINNET_FORWARDER);
+  });
+});
+
+describe('M5/O4: translateToStellar rejects zero addresses', () => {
+  it('rejects 20-byte zero address', () => {
+    expect(() => translateToStellar('0x' + '00'.repeat(20))).toThrow(InvalidAddressError);
+    expect(() => translateToStellar('0x' + '00'.repeat(20))).toThrow(expect.objectContaining({ code: 'INVALID_ADDRESS' }));
+  });
+
+  it('rejects 32-byte zero address', () => {
+    expect(() => translateToStellar('0x' + '00'.repeat(32))).toThrow(InvalidAddressError);
+    expect(() => translateToStellar('0x' + '00'.repeat(32))).toThrow(expect.objectContaining({ code: 'INVALID_ADDRESS' }));
   });
 });
