@@ -15,9 +15,9 @@ describe('anchor-cctp init', () => {
     const { stdout, code } = await runCli([
       'init',
       '--domain', '27',
-      '--usdc-issuer', 'GBISSUER1234567890123456789012345678901234567890123456789012',
-      '--forwarder', 'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC',
-      '--dust-collector', 'GDDUST1234567890123456789012345678901234567890123456789012',
+      '--usdc-issuer', 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5',
+      '--forwarder', 'CA66Q2WFBND6V4UEB7RD4SAXSVIWMD6RA4X3U32ELVFGXV5PJK4T4VSZ',
+      '--dust-collector', 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5',
       '--output', out
     ]);
     expect(code).toBe(0);
@@ -42,6 +42,77 @@ describe('anchor-cctp init', () => {
     expect(o.remediation).toBeDefined();
   });
 
+  test('init rejects invalid dust collector StrKey', async () => {
+    const { stdout, code } = await runCli([
+      'init',
+      '--dust-collector', 'GDDUSTCOLLECTOR00000000000000000000000000000000000000000000',
+      '--output', out
+    ]);
+    expect(code).toBe(1);
+    const o = JSON.parse(stdout);
+    expect(o.code).toBe('INVALID_CONFIG');
+  });
+
+  test('init rejects invalid usdc-issuer StrKey', async () => {
+    const { stdout, code } = await runCli([
+      'init',
+      '--usdc-issuer', 'INVALIDISSUER',
+      '--output', out
+    ]);
+    expect(code).toBe(1);
+    const o = JSON.parse(stdout);
+    expect(o.code).toBe('INVALID_CONFIG');
+  });
+
+  test('init rejects invalid forwarder StrKey', async () => {
+    const { stdout, code } = await runCli([
+      'init',
+      '--forwarder', 'NOT_A_FORWARDER',
+      '--output', out
+    ]);
+    expect(code).toBe(1);
+    const o = JSON.parse(stdout);
+    expect(o.code).toBe('INVALID_CONFIG');
+  });
+
+  test('init rejects quotes and newlines in address values', async () => {
+    const { code: code1 } = await runCli(['init', '--usdc-issuer', 'G"INJECT', '--output', out]);
+    expect(code1).toBe(1);
+    const { code: code2 } = await runCli(['init', '--usdc-issuer', "G'INJECT", '--output', out]);
+    expect(code2).toBe(1);
+  });
+
+  test('init blocks path traversal without --force', async () => {
+    const { stdout, code } = await runCli([
+      'init',
+      '--output', '../../tmp/evil.toml'
+    ]);
+    expect(code).toBe(1);
+    const o = JSON.parse(stdout);
+    expect(o.code).toBe('PATH_SECURITY');
+  });
+
+  test('init refuses to overwrite existing file without --force', async () => {
+    const { writeFileSync } = require('node:fs');
+    writeFileSync(out, 'existing', 'utf8');
+    const { stdout, code } = await runCli(['init', '--output', out]);
+    expect(code).toBe(1);
+    const o = JSON.parse(stdout);
+    expect(o.code).toBe('FILE_EXISTS');
+    const { unlinkSync } = require('node:fs');
+    unlinkSync(out);
+  });
+
+  test('init uses testnet forwarder default (CA66... not CDLZ...)', async () => {
+    const { stdout, code } = await runCli(['init', '--output', out]);
+    expect(code).toBe(0);
+    const o = JSON.parse(stdout);
+    expect(o.configBlock).toContain('CA66Q2WFBND6V4UEB7RD4SAXSVIWMD6RA4X3U32ELVFGXV5PJK4T4VSZ');
+    expect(o.configBlock).not.toContain('CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC');
+    const { unlinkSync } = require('node:fs');
+    unlinkSync(out);
+  });
+
   test('runInitCommand direct function execution with flags and error branches', async () => {
     let stdoutData = '';
     let stderrData = '';
@@ -54,12 +125,12 @@ describe('anchor-cctp init', () => {
       return true;
     });
 
-    // All flags
+    // All flags with valid StrKeys
     const code = await runInitCommand([
       '--domain', '27',
-      '--usdc-issuer', 'GBISSUER123',
-      '--forwarder', 'CDLZFC3',
-      '--dust-collector', 'GDDUST123',
+      '--usdc-issuer', 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5',
+      '--forwarder', 'CA66Q2WFBND6V4UEB7RD4SAXSVIWMD6RA4X3U32ELVFGXV5PJK4T4VSZ',
+      '--dust-collector', 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5',
       '--output', out,
     ]);
     expect(code).toBe(0);

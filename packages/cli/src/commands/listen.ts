@@ -23,11 +23,44 @@ export async function runListenCommand(args: string[]): Promise<number> {
     if (arg === '--address' && args[i + 1] !== undefined) {
       options.address = args[++i];
     } else if (arg === '--limit' && args[i + 1] !== undefined) {
-      options.limit = Number.parseInt(args[++i], 10);
+      const raw = args[++i];
+      const n = Number.parseInt(raw, 10);
+      if (!Number.isFinite(n)) {
+        process.stdout.write(JSON.stringify({
+          error: `Invalid --limit value: "${raw}". Must be a finite integer.`,
+          code: 'INVALID_ARGUMENT',
+          remediation: 'Pass a valid integer for --limit.'
+        }, null, 2) + '\n');
+        process.stderr.write(`[ERROR] Invalid --limit: ${raw}\n`);
+        return 1;
+      }
+      options.limit = n;
     } else if (arg === '--poll-interval' && args[i + 1] !== undefined) {
-      options.pollIntervalMs = Number.parseInt(args[++i], 10);
+      const raw = args[++i];
+      const n = Number.parseInt(raw, 10);
+      if (!Number.isFinite(n)) {
+        process.stdout.write(JSON.stringify({
+          error: `Invalid --poll-interval value: "${raw}". Must be a finite integer.`,
+          code: 'INVALID_ARGUMENT',
+          remediation: 'Pass a valid integer (ms) for --poll-interval.'
+        }, null, 2) + '\n');
+        process.stderr.write(`[ERROR] Invalid --poll-interval: ${raw}\n`);
+        return 1;
+      }
+      options.pollIntervalMs = n;
     } else if (arg === '--rate-limit' && args[i + 1] !== undefined) {
-      options.rateLimitPerSec = Number.parseInt(args[++i], 10);
+      const raw = args[++i];
+      const n = Number.parseInt(raw, 10);
+      if (!Number.isFinite(n)) {
+        process.stdout.write(JSON.stringify({
+          error: `Invalid --rate-limit value: "${raw}". Must be a finite integer.`,
+          code: 'INVALID_ARGUMENT',
+          remediation: 'Pass a valid integer for --rate-limit.'
+        }, null, 2) + '\n');
+        process.stderr.write(`[ERROR] Invalid --rate-limit: ${raw}\n`);
+        return 1;
+      }
+      options.rateLimitPerSec = n;
     } else if (arg === '--simulate') {
       options.simulate = true;
     } else if (arg === '--horizon-url' && args[i + 1] !== undefined) {
@@ -102,7 +135,8 @@ export async function runListenCommand(args: string[]): Promise<number> {
         destination: stellarAddress,
         amount: '100.0000000',
         dust: '0',
-        txHash: '0x' + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join(''),
+        txHash: '0xSIM' + '0'.repeat(59),
+        simulate: true,
         timestamp: new Date().toISOString(),
       };
       process.stdout.write(JSON.stringify(event2) + '\n');
@@ -111,6 +145,20 @@ export async function runListenCommand(args: string[]): Promise<number> {
 
     process.stderr.write(`[INFO] Stream ended after ${count} events.\n`);
     return 0;
+  }
+
+  // Validate horizon URL: https-only (allow http for localhost)
+  if (options.horizonUrl) {
+    const isLocalhost = /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/i.test(options.horizonUrl);
+    if (!/^https:\/\//.test(options.horizonUrl) && !isLocalhost) {
+      process.stdout.write(JSON.stringify({
+        error: `Horizon URL must use HTTPS: "${options.horizonUrl}"`,
+        code: 'INVALID_CONFIG',
+        remediation: 'Use https:// for Horizon URLs. http:// is only allowed for localhost.'
+      }, null, 2) + '\n');
+      process.stderr.write(`[ERROR] Non-HTTPS Horizon URL rejected: ${options.horizonUrl}\n`);
+      return 1;
+    }
   }
 
   // Live Horizon poll stub (full streaming deferred to week3)

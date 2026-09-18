@@ -1,8 +1,8 @@
-import { AttestationClient, AnchorCCTPError } from '@anchor-cctp/core-sdk';
+import { AttestationClient, AnchorCCTPError, assertSupportedDomain } from '@anchor-cctp/core-sdk';
 
 export async function runVerifyCommand(args: string[]): Promise<number> {
   let txHash: string | undefined;
-  let sourceDomain = 0;
+  let sourceDomain: number | undefined;
   let baseUrl: string | undefined;
   let maxRetries = 30;
   let pollIntervalMs = 1000;
@@ -43,6 +43,63 @@ export async function runVerifyCommand(args: string[]): Promise<number> {
     return 1;
   }
 
+  // Validate txHash: 0x + 64 hex chars
+  if (!/^0x[0-9a-fA-F]{64}$/.test(txHash)) {
+    process.stdout.write(
+      JSON.stringify(
+        {
+          error: `Invalid txHash format: "${txHash}". Must be 0x + 64 hex characters.`,
+          code: 'INVALID_HASH',
+          remediation: 'Provide EVM transaction hash as 0x + 64 hex characters.',
+        },
+        null,
+        2
+      ) + '\n'
+    );
+    process.stderr.write(`[ERROR] Invalid txHash format: ${txHash}\n`);
+    return 1;
+  }
+
+  // Validate sourceDomain: must be integer in CCTP allowlist
+  const resolvedDomain = sourceDomain ?? 0;
+  try {
+    assertSupportedDomain(resolvedDomain);
+  } catch {
+    process.stdout.write(
+      JSON.stringify(
+        {
+          error: `Unsupported source domain: ${resolvedDomain}.`,
+          code: 'INVALID_DOMAIN',
+          remediation: 'Provide a supported sourceDomain (e.g. 0 for Ethereum, 6 for Base, 27 for Stellar).',
+        },
+        null,
+        2
+      ) + '\n'
+    );
+    process.stderr.write(`[ERROR] Unsupported source domain: ${resolvedDomain}\n`);
+    return 1;
+  }
+
+  // Validate baseUrl: https-only (allow http for localhost)
+  if (baseUrl !== undefined) {
+    const isLocalhost = /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/i.test(baseUrl);
+    if (!/^https:\/\//.test(baseUrl) && !isLocalhost) {
+      process.stdout.write(
+        JSON.stringify(
+          {
+            error: `baseUrl must use HTTPS: "${baseUrl}"`,
+            code: 'INVALID_CONFIG',
+            remediation: 'Use https:// for attestation API URLs. http:// is only allowed for localhost.',
+          },
+          null,
+          2
+        ) + '\n'
+      );
+      process.stderr.write(`[ERROR] Non-HTTPS baseUrl rejected: ${baseUrl}\n`);
+      return 1;
+    }
+  }
+
   const resolvedBase = baseUrl ?? (testnet ? 'https://iris-api-sandbox.circle.com' : undefined);
   const client = new AttestationClient({
     baseUrl: resolvedBase,
@@ -52,7 +109,7 @@ export async function runVerifyCommand(args: string[]): Promise<number> {
 
   try {
     process.stderr.write(`[INFO] Polling attestation for ${txHash}...\n`);
-    const result = await client.pollAttestationByTx(sourceDomain, txHash, (attempt, elapsedMs) => {
+    const result = await client.pollAttestationByTx(resolvedDomain, txHash, (attempt, elapsedMs) => {
       process.stderr.write(`[DEBUG] Attempt ${attempt} (${elapsedMs}ms elapsed)...\n`);
     });
 
@@ -62,7 +119,7 @@ export async function runVerifyCommand(args: string[]): Promise<number> {
       txHash,
       attested: result.status === 'complete' && isVerified,
       status: result.status,
-      sourceDomain,
+      sourceDomain: resolvedDomain,
       destinationDomain: 27,
       attestation: result.attestation,
       message: result.message,

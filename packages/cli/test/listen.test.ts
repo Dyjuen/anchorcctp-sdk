@@ -64,6 +64,63 @@ describe('anchor-cctp listen', () => {
     }
   }, 15000);
 
+  test('listen rejects NaN limit', async () => {
+    const { stdout, code } = await runCli([
+      'listen', validAddress, '--limit', 'abc'
+    ]);
+    expect(code).toBe(1);
+    const o = JSON.parse(stdout);
+    expect(o.code).toBe('INVALID_ARGUMENT');
+  });
+
+  test('listen rejects NaN poll-interval', async () => {
+    const { stdout, code } = await runCli([
+      'listen', validAddress, '--poll-interval', 'abc'
+    ]);
+    expect(code).toBe(1);
+    const o = JSON.parse(stdout);
+    expect(o.code).toBe('INVALID_ARGUMENT');
+  });
+
+  test('listen rejects NaN rate-limit', async () => {
+    const { stdout, code } = await runCli([
+      'listen', validAddress, '--rate-limit', 'abc'
+    ]);
+    expect(code).toBe(1);
+    const o = JSON.parse(stdout);
+    expect(o.code).toBe('INVALID_ARGUMENT');
+  });
+
+  test('listen rejects non-localhost http horizon-url', async () => {
+    const { stdout, code } = await runCli([
+      'listen', validAddress, '--horizon-url', 'http://evil.example.com'
+    ]);
+    expect(code).toBe(1);
+    const o = JSON.parse(stdout);
+    expect(o.code).toBe('INVALID_CONFIG');
+  });
+
+  test('listen allows http localhost horizon-url', async () => {
+    const { stdout, code } = await runCli([
+      'listen', validAddress, '--simulate', '--horizon-url', 'http://127.0.0.1:8080'
+    ]);
+    expect(code).toBe(0);
+    const lines = stdout.trim().split('\n').filter((l) => l.trim().length > 0);
+    expect(lines.length).toBeGreaterThanOrEqual(1);
+  });
+
+  test('listen simulate marks sentinel txHash + simulate:true', async () => {
+    const { stdout, code } = await runCli([
+      'listen', validAddress, '--simulate', '--limit', '2'
+    ]);
+    expect(code).toBe(0);
+    const lines = stdout.trim().split('\n').filter((l) => l.trim().length > 0);
+    const event2 = JSON.parse(lines[1]);
+    expect(event2.txHash).toMatch(/^0xSIM[0-9a-f]{59}$/);
+    expect(event2.simulate).toBe(true);
+    expect(event2.amount).toBe('100.0000000');
+  });
+
   test('runListenCommand direct function execution and address validation', async () => {
     let stdoutData = '';
     const writeStdoutSpy = jest.spyOn(process.stdout, 'write').mockImplementation((str) => {
