@@ -13,12 +13,13 @@ import {
   signWithFreighter,
   getAccountBalances,
   checkNetworkMatch,
+  fetchBalances,
 } from './freighter.js';
 
 const G = 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5';
 
 beforeEach(() => vi.resetAllMocks());
-afterEach(() => { vi.unstubAllGlobals?.(); });
+afterEach(() => { vi.unstubAllGlobals?.(); vi.unstubAllEnvs?.(); });
 
 describe('connectFreighter', () => {
   it('returns explicit not-installed state instead of a fake mock account', async () => {
@@ -113,6 +114,45 @@ describe('getAccountBalances', () => {
     vi.stubGlobal('fetch', vi.fn());
     await expect(getAccountBalances(G, 'http://evil/x')).rejects.toThrow(/https/i);
     expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+});
+
+describe('fetchBalances', () => {
+  // loadNetworkConfig needs these env vars to not throw
+  const requiredEnv = {
+    VITE_NETWORK: 'testnet',
+    VITE_SOROBAN_RPC_URL: 'https://soroban-testnet.stellar.org',
+    VITE_USDC_ISSUER: 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5',
+    VITE_FORWARDER_CONTRACT_ID: 'CBBEEQSCIJBEEQSCIJBEEQSCIJBEEQSCIJBEEQSCIJBEEQSCIJBEE5XW',
+    VITE_ATTESTATION_URL: 'https://attestation.example.com',
+  };
+
+  it('uses configured horizon url', async () => {
+    for (const [k, v] of Object.entries(requiredEnv)) vi.stubEnv(k, v);
+    vi.stubEnv('VITE_HORIZON_URL', 'https://horizon-testnet.stellar.org');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true, json: async () => ({ balances: [{ asset_type: 'native', balance: '5' }] }),
+    }));
+    const b = await fetchBalances(G);
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('https://horizon-testnet.stellar.org/accounts/'));
+    expect(b[0].balance).toBe('5');
+  });
+  it('rejects invalid address before fetch', async () => {
+    for (const [k, v] of Object.entries(requiredEnv)) vi.stubEnv(k, v);
+    const spy = vi.fn();
+    vi.stubGlobal('fetch', spy);
+    await expect(fetchBalances('NOPE')).rejects.toThrow(/Invalid address/i);
+    expect(spy).not.toHaveBeenCalled();
+  });
+  it('trims padded address', async () => {
+    for (const [k, v] of Object.entries(requiredEnv)) vi.stubEnv(k, v);
+    vi.stubEnv('VITE_HORIZON_URL', 'https://horizon-testnet.stellar.org');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true, json: async () => ({ balances: [] }),
+    }));
+    await fetchBalances('  ' + G + '  ');
+    expect(globalThis.fetch).toHaveBeenCalledWith(expect.stringContaining('/accounts/' + G));
   });
 });
 

@@ -1,4 +1,6 @@
 import * as freighter from '@stellar/freighter-api';
+import { StrKey } from '@stellar/stellar-sdk';
+import { loadNetworkConfig } from '../config/network.js';
 
 export interface WalletState {
   connected: boolean;
@@ -7,6 +9,8 @@ export interface WalletState {
   error?: string;
   isSimulated?: boolean;
   needsInstall?: boolean;
+  balances?: Array<{ asset_type: string; balance: string }>;
+  networkPassphrase?: string;
 }
 
 export async function checkFreighterInstalled(): Promise<boolean> {
@@ -145,7 +149,7 @@ export async function getAccountBalances(address: string, horizonUrl: string): P
   if (!horizonUrl.startsWith('https://')) {
     throw new Error('Horizon URL must use https');
   }
-  const res = await fetch(`${horizonUrl}/accounts/${address}`);
+  const res = await fetch(`${horizonUrl}/accounts/${encodeURIComponent(address)}`);
   if (res.status === 404) {
     throw new Error(`Account unfunded: send testnet XLM from friendbot.stellar.org to ${address}`);
   }
@@ -154,4 +158,21 @@ export async function getAccountBalances(address: string, horizonUrl: string): P
   }
   const data = await res.json();
   return data.balances;
+}
+
+/** Throw if wallet's network passphrase doesn't match expected. */
+export async function checkNetworkMatch(expectedPassphrase: string): Promise<void> {
+  const { getNetwork } = await import('@stellar/freighter-api');
+  const res = (await getNetwork()) as { networkPassphrase?: string; error?: string };
+  if (res.error) throw new Error(res.error);
+  if (res.networkPassphrase !== expectedPassphrase) {
+    throw new Error(`Network mismatch: wallet on ${res.networkPassphrase ?? 'unknown'}, expected ${expectedPassphrase}`);
+  }
+}
+
+/** Fetch account balances from Horizon using configured URL. Validates address first. */
+export async function fetchBalances(address: string): Promise<Array<{ asset_type: string; balance: string }>> {
+  if (!StrKey.isValidEd25519PublicKey(address.trim())) throw new Error('Invalid address');
+  const { horizonUrl } = loadNetworkConfig();
+  return getAccountBalances(address.trim(), horizonUrl);
 }
