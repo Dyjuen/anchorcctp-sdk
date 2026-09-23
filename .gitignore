@@ -16,3 +16,4 @@ docs/superpowers/
 docs/evidence/testnet-auto.processed.json
 scripts/dist/
 .claude
+apps/demo/dist-server/
