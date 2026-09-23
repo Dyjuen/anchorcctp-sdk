@@ -7,6 +7,8 @@ packages/*/coverage/
 .env
 .env.*
 !.env.example
+!apps/demo/.env.testnet.example
+!apps/demo/.env.mainnet.example
 .DS_Store
 .worktrees/
 /stellar.toml
