@@ -130,14 +130,14 @@ describe('executeBurn', () => {
   test('approve-then-burn order', async () => {
     const { publicClient, walletClient, writes } = fakes();
     const result = await executeBurn({ publicClient, walletClient, account, plan, expectedChainId: 84532 });
-    expect(writes).toEqual(['approve', 'depositForBurn']);
+    expect(writes).toEqual(['approve', 'depositForBurnWithHook']);
     expect(result.burnTxHash).toBe('0xdeadbeef');
   });
 
   test('skip-approve when allowance sufficient', async () => {
     const { publicClient, walletClient, writes } = fakes({ allowance: 9_999_999n });
     await executeBurn({ publicClient, walletClient, account, plan, expectedChainId: 84532 });
-    expect(writes).toEqual(['depositForBurn']);
+    expect(writes).toEqual(['depositForBurnWithHook']);
   });
 
   test('chainId mismatch → EVM_CHAIN_PIN', async () => {

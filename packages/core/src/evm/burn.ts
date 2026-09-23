@@ -16,7 +16,7 @@ export const ERC20_ABI = parseAbi([
 ]);
 
 export const MESSENGER_ABI = parseAbi([
-  'function depositForBurn(uint256 amount, uint32 destinationDomain, bytes32 mintRecipient, address burnToken, bytes32 destinationCaller, uint256 maxFee, uint32 minFinalityThreshold, bytes hookData) returns (uint64)',
+  'function depositForBurnWithHook(uint256 amount, uint32 destinationDomain, bytes32 mintRecipient, address burnToken, bytes32 destinationCaller, uint256 maxFee, uint32 minFinalityThreshold, bytes hookData) returns (uint64)',
 ]);
 
 export interface BurnPlan {
@@ -126,7 +126,7 @@ export async function executeBurn(params: ExecuteBurnParams): Promise<{ burnTxHa
     if (approveRcpt.status !== 'success') throw new BurnError('APPROVE_FAILED', `receipt=${approveRcpt.status}.`);
   }
   const burnTxHash = await walletClient.writeContract({
-    address: plan.messenger, abi: MESSENGER_ABI, functionName: 'depositForBurn',
+    address: plan.messenger, abi: MESSENGER_ABI, functionName: 'depositForBurnWithHook',
     args: [plan.amount, plan.destinationDomain, plan.mintRecipient, plan.burnToken,
       plan.destinationCaller, plan.maxFee, plan.minFinalityThreshold, plan.hookData],
     ...(typeof rawAccount === 'object' ? { account: rawAccount } : { account }),

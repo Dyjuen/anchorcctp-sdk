@@ -41,7 +41,7 @@ describe('buildCctpForwarderHookData', () => {
 
     const calldata = encodeFunctionData({
       abi: MESSENGER_ABI,
-      functionName: 'depositForBurn',
+      functionName: 'depositForBurnWithHook',
       args: [1n, 27, fakeMint, burnToken, fakeCaller, 5000n, 1000, hookData],
     });
 
