@@ -58,6 +58,7 @@ export interface ReceiveContext {
   };
   defaultForwarderContractId?: string;
   defaultUsdcIssuer?: string;
+  network?: 'testnet' | 'mainnet';
   _test?: {
     attestation?: (burnTxHash: string) => Promise<Partial<AttestationResult>>;
     hasTrustline?: () => Promise<boolean>;
@@ -119,6 +120,11 @@ export async function receive(
 
   // 5. Address translation & validation
   const stellarDestination = translateToStellar(destinationAddress);
+
+  // 5b. Mainnet fail-closed: usdcIssuer required (no testnet default on mainnet)
+  if (ctx.network === 'mainnet' && !ctx.defaultUsdcIssuer) {
+    throw new InvalidConfigError('usdcIssuer is required on mainnet (no testnet default).');
+  }
 
   // 6. Attestation Polling
   ctx.logger.info('Starting CCTP attestation polling', { burnTxHash, sourceDomain });

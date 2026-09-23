@@ -308,6 +308,38 @@ describe('O7: signer XDR structural guard', () => {
   });
 });
 
+describe('sorobanRpcUrl in EnvConfigResult', () => {
+  it('returns sorobanRpcUrl when SOROBAN_RPC_URL is https', () => {
+    const r = createAnchorCCTPFromEnv({
+      STELLAR_DESTINATION: dest,
+      SOROBAN_RPC_URL: 'https://soroban-testnet.stellar.org',
+    } as any);
+    expect(r.sorobanRpcUrl).toBe('https://soroban-testnet.stellar.org');
+  });
+
+  it('sorobanRpcUrl undefined when SOROBAN_RPC_URL absent', () => {
+    const r = createAnchorCCTPFromEnv({ STELLAR_DESTINATION: dest } as any);
+    expect(r.sorobanRpcUrl).toBeUndefined();
+  });
+
+  it('sorobanRpcUrl undefined when SOROBAN_RPC_URL empty', () => {
+    const r = createAnchorCCTPFromEnv({
+      STELLAR_DESTINATION: dest,
+      SOROBAN_RPC_URL: '',
+    } as any);
+    expect(r.sorobanRpcUrl).toBeUndefined();
+  });
+
+  it('rejects http SOROBAN_RPC_URL', () => {
+    expect(() =>
+      createAnchorCCTPFromEnv({
+        STELLAR_DESTINATION: dest,
+        SOROBAN_RPC_URL: 'http://evil/x',
+      } as any)
+    ).toThrow(/SOROBAN_RPC_URL.*https/i);
+  });
+});
+
 describe('N9: single-process lock file guard', () => {
   it('concurrent second run fails with LOCKED', () => {
     const dir = mkdtempSync(join(tmpdir(), 'cctp-lock-'));
