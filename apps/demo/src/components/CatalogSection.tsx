@@ -40,9 +40,7 @@ export const CatalogSection: React.FC<CatalogSectionProps> = ({
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedDomainId, setSelectedDomainId] = useState<number>(0);
-  const [burnTxHash, setBurnTxHash] = useState<string>(
-    '0x9a8f4c2e1b3d7a8c6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d'
-  );
+  const [burnTxHash, setBurnTxHash] = useState<string>('');
   const [usdcAmount, setUsdcAmount] = useState<string>('100.00');
   const [simError, setSimError] = useState<string>('none');
 
@@ -77,14 +75,14 @@ export const CatalogSection: React.FC<CatalogSectionProps> = ({
 
   const getDomainLogo = (domainId: number) => {
     switch (domainId) {
-      case 0: return 'https://cryptologos.cc/logos/ethereum-eth-logo.svg?v=035';
-      case 1: return 'https://cryptologos.cc/logos/avalanche-avax-logo.svg?v=035';
-      case 2: return 'https://cryptologos.cc/logos/optimism-ethereum-op-logo.svg?v=035';
-      case 3: return 'https://cryptologos.cc/logos/arbitrum-arb-logo.svg?v=035';
-      case 5: return 'https://cryptologos.cc/logos/solana-sol-logo.svg?v=035';
-      case 6: return 'https://raw.githubusercontent.com/base-org/brand-kit/main/logo/symbol/Base_Symbol_Blue.svg';
-      case 7: return 'https://cryptologos.cc/logos/polygon-matic-logo.svg?v=035';
-      default: return 'https://cryptologos.cc/logos/usd-coin-usdc-logo.svg?v=035';
+      case 0: return '/logos/ethereum.svg';
+      case 1: return '/logos/avalanche.svg';
+      case 2: return '/logos/optimism.svg';
+      case 3: return '/logos/arbitrum.svg';
+      case 5: return '/logos/solana.svg';
+      case 6: return '/logos/base.svg';
+      case 7: return '/logos/polygon.svg';
+      default: return '/logos/usdc.svg';
     }
   };
 

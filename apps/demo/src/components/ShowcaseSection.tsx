@@ -232,7 +232,7 @@ export const ShowcaseSection: React.FC = () => {
 
               <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 text-xs font-mono text-slate-300 space-y-1">
                 <p className="text-emerald-400 font-bold">// Iris Attestation Payload</p>
-                <p className="truncate text-slate-400">0x0000000000000000000000000000000000000000000000000000000000000000</p>
+                <p className="truncate text-slate-400">0x…attestation_bytes</p>
               </div>
             </div>
           </motion.div>

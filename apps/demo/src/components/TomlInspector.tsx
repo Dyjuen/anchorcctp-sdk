@@ -1,25 +1,32 @@
 import React, { useState } from 'react';
 import { Copy, Check, FileText } from 'lucide-react';
+import { loadNetworkConfig } from '../config/network.js';
 
 export const TomlInspector: React.FC = () => {
   const [copied, setCopied] = useState(false);
 
-  const tomlContent = `# SEP-CCTP Anchor Configuration
+  let tomlContent: string;
+  try {
+    const cfg = loadNetworkConfig();
+    tomlContent = `# SEP-CCTP Anchor Configuration
 # Published at /.well-known/stellar.toml
 
 [[CURRENCIES]]
 code = "USDC"
-issuer = "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
+issuer = "${cfg.usdcIssuer}"
 cctp_domain = 27
-cctp_forwarder = "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC"
+cctp_forwarder = "${cfg.forwarderContractId}"
 
 [CCTP]
 CCTP_DOMAIN = 27
-FORWARDER_ADDRESS = "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC"
+FORWARDER_ADDRESS = "${cfg.forwarderContractId}"
 SUPPORTED_SOURCE_DOMAINS = [0, 1, 2, 3, 4, 5, 6, 7, 10, 11, 12, 13, 14, 16, 18, 19, 21, 22, 25, 28, 29, 30, 31, 32, 37]
 DUST_HANDLING = "collector_sweep"
 DUST_COLLECTOR_ACCOUNT = "GDDUSTCOLLECTOR00000000000000000000000000000000000000000000"
 `;
+  } catch {
+    tomlContent = '# Error: failed to load network config — check VITE_* env vars';
+  }
 
   const handleCopy = () => {
     navigator.clipboard.writeText(tomlContent);
