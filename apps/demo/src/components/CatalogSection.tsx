@@ -190,6 +190,12 @@ export const CatalogSection: React.FC<CatalogSectionProps> = ({
       const es = new EventSource(url);
       esRef.current = es;
 
+      // Stream opened but no frame yet (real-mode Iris poll can take minutes):
+      // move off the stale "verifying" label so the finality reminder shows.
+      es.onopen = () => {
+        setDeposit((s) => (s.step === 'verifying' ? reduceDeposit(s, { type: 'receiving', attempt: 0 }) : s));
+      };
+
       es.onmessage = (ev) => {
         try {
           const data = JSON.parse(ev.data);
@@ -585,7 +591,7 @@ export const CatalogSection: React.FC<CatalogSectionProps> = ({
                   {deposit.step === 'attesting' && (
                     <>
                       <RefreshCw className="w-3 h-3 animate-spin text-blue-400" />
-                      <span>Polling Iris attestation (attempt {deposit.attempts})… Circle finalization takes minutes — leave this open.</span>
+                      <span>Polling Iris attestation{deposit.attempts > 0 ? ` (attempt ${deposit.attempts})` : ' — connected, waiting for first response'}… Circle finalization takes minutes — leave this open.</span>
                     </>
                   )}
                   {deposit.step === 'submitting' && (
