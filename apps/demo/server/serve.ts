@@ -4,8 +4,8 @@
 
 import { createServer, IncomingMessage, ServerResponse } from 'node:http';
 import { createRequire } from 'node:module';
-import { normalizeBurnTxHash, assertSupportedDomain, FileReplayStore } from '@anchor-cctp/core-sdk';
-import { validateEventParams, publicConfigBundle, SimTimeline } from './events.js';
+import { normalizeBurnTxHash, assertSupportedDomain, FileReplayStore, createAnchorCCTPFromEnv } from '@anchor-cctp/core-sdk';
+import { validateEventParams, publicConfigBundle, SimTimeline, postInitiate, gateRealStream, createIntentStore, createRealGate, RateLimitBuckets, collectSseReal } from './events.js';
 
 const require = createRequire(import.meta.url);
 const { StrKey } = require('@stellar/stellar-sdk') as typeof import('@stellar/stellar-sdk');
@@ -23,6 +23,19 @@ if (!SIM_MODE && !env.STELLAR_SECRET) {
 }
 
 const replayStore = new FileReplayStore(REPLAY_STORE_PATH);
+
+// ─── Real-Mode Init ──────────────────────────────────────────────────────────
+
+const MAX_MINT_AMOUNT_USDC = env.MAX_MINT_AMOUNT_USDC ? BigInt(env.MAX_MINT_AMOUNT_USDC) : undefined;
+const intentStore = createIntentStore();
+const buckets = new RateLimitBuckets(() => Date.now());
+const activeReceives = { count: 0 };
+const realGate = createRealGate({ maxConcurrentReceives: 5, active: () => activeReceives.count });
+
+let cctpClient: ReturnType<typeof createAnchorCCTPFromEnv> | null = null;
+if (!SIM_MODE) {
+  cctpClient = createAnchorCCTPFromEnv(process.env as Record<string, string | undefined>);
+}
 
 // ─── Origin Allowlist ────────────────────────────────────────────────────────
 
@@ -89,13 +102,18 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
   // ─── POST /api/receive:initiate ──────────────────────────────────
   if (method === 'POST' && url.startsWith('/api/receive:initiate')) {
     setApiHeaders(res);
-    const origin = req.headers.origin;
-    const originStr = Array.isArray(origin) ? origin[0] : origin;
-    if (!originStr || !ALLOWED_ORIGINS.includes(originStr)) {
-      return jsonRes(res, 403, { error: { code: 'FORBIDDEN', remediation: 'Request from disallowed origin.' } });
-    }
-    // ponytail: real mint logic deferred to Task 6
-    return jsonRes(res, 200, { ok: true });
+    let body = '';
+    for await (const chunk of req) body += chunk;
+    let parsed: unknown;
+    try { parsed = JSON.parse(body); } catch { parsed = undefined; }
+    const postResult = await postInitiate({
+      headers: Object.fromEntries(Object.entries(req.headers).map(([k, v]) => [k, v])),
+      body: parsed,
+      ip: getIp(req),
+      buckets,
+      intentStore,
+    });
+    return jsonRes(res, postResult.status, postResult.body);
   }
 
   // ─── GET /api/events (SSE stream) ───────────────────────────────
@@ -131,9 +149,34 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
       return;
     }
 
-    // real mode: ponytail — full SSE with attestation polling deferred to Task 6
-    res.write(`data: ${JSON.stringify({ type: 'error', code: 'NOT_IMPLEMENTED', remediation: 'Real mode SSE pending Task 6.' })}\n\n`);
-    res.end();
+    // real mode: gated SSE via core receive
+    const gateRes = await gateRealStream(validated, { intents: intentStore, maxMintBase6: MAX_MINT_AMOUNT_USDC });
+    if (gateRes.status !== 200) {
+      return sseError(res, gateRes.status, (gateRes.body as { error?: { code?: string } })?.error?.code ?? 'UNKNOWN', (gateRes.body as { error?: { remediation?: string } })?.error?.remediation ?? 'Request rejected.');
+    }
+    if (!realGate.tryAcquire()) {
+      return sseError(res, 429, 'RATE_LIMITED', 'Too many concurrent receives. Try again later.');
+    }
+    activeReceives.count++;
+    const keepalive = setInterval(() => { try { res.write(': keepalive\n\n'); } catch { /* client gone */ } }, 25_000);
+    const cleanup = () => { clearInterval(keepalive); activeReceives.count = Math.max(0, activeReceives.count - 1); };
+    req.on('close', cleanup);
+    try {
+      const events = await collectSseReal(validated, {
+        store: replayStore,
+        clientFactory: () => cctpClient!.client,
+      });
+      for (const event of events) {
+        res.write(`data: ${JSON.stringify(event)}\n\n`);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      const code = msg.includes('400') ? 'INVALID_PARAMS' : 'RECEIVE_FAILED';
+      res.write(`data: ${JSON.stringify({ type: 'error', code, remediation: 'Receive failed. Retry later.' })}\n\n`);
+    } finally {
+      cleanup();
+      res.end();
+    }
     return;
   }
 
@@ -152,6 +195,10 @@ const server = createServer(async (req, res) => {
       sseError(res, 500, 'INTERNAL', 'An unexpected error occurred.');
     }
   }
+});
+
+server.on('close', () => {
+  buckets.dispose();
 });
 
 server.listen(PORT, () => {

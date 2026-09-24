@@ -24,6 +24,9 @@ export interface SseEvent {
   attempt?: number;
   simulated?: boolean;
   mintTxHash?: string;
+  stellarAmount?: string;
+  dust?: string;
+  txHash?: string;
   code?: string;
   remediation?: string;
 }
@@ -60,6 +63,36 @@ function preNormalizeHash(h: string): string {
   return h.trim().replace(/^0X/, '0x');
 }
 
+// ─── Intent Store ────────────────────────────────────────────────────────────
+
+/** In-memory intent store with TTL sweep. Keys: `${hash}|${address}|${amountBase6}`. */
+export function createIntentStore(ttlMs = 30 * 60 * 1000) {
+  const entries = new Map<string, number>(); // key → expiresAt
+  const sweepInterval = setInterval(() => {
+    const now = Date.now();
+    for (const [k, v] of entries) { if (v <= now) entries.delete(k); }
+  }, 60_000);
+
+  function key(hash: string, addr: string, amount: string): string {
+    const normalizedAmount = String(parseAmountBase6(amount));
+    return `${hash}|${addr}|${normalizedAmount}`;
+  }
+
+  return {
+    record(hash: string, addr: string, amount: string): void {
+      entries.set(key(hash, addr, amount), Date.now() + ttlMs);
+    },
+    async has(hash: string, addr: string, amount: string): Promise<boolean> {
+      const k = key(hash, addr, amount);
+      const exp = entries.get(k);
+      if (exp === undefined) return false;
+      if (exp <= Date.now()) { entries.delete(k); return false; }
+      return true;
+    },
+    [Symbol.dispose](): void { clearInterval(sweepInterval); },
+  };
+}
+
 // ─── Rate Limiting ───────────────────────────────────────────────────────────
 
 interface BucketEntry { expiresAt: number; count: number }
@@ -67,6 +100,8 @@ interface BucketEntry { expiresAt: number; count: number }
 export class RateLimitBuckets {
   private perIp = new Map<string, BucketEntry>();
   private perIpAddr = new Map<string, BucketEntry>();
+  private perIpPost = new Map<string, BucketEntry>();
+  private maxPerIpPost: number;
   private globalStreams = 0;
   private sweepInterval: ReturnType<typeof setInterval> | null = null;
 
@@ -76,7 +111,9 @@ export class RateLimitBuckets {
     private readonly maxPerIp = 60,
     private readonly maxPerIpAddr = 10,
     private readonly maxGlobal = 50,
+    maxPerIpPost?: number,
   ) {
+    this.maxPerIpPost = maxPerIpPost ?? 20;
     this.sweepInterval = setInterval(() => this.sweep(), 30_000);
   }
 
@@ -107,6 +144,17 @@ export class RateLimitBuckets {
     this.globalStreams++;
   }
 
+  /** POST-specific per-IP rate check (address not required). */
+  checkPostRate(ip: string): boolean {
+    const e = this.getOrCreate(this.perIpPost, ip);
+    return e.count < this.maxPerIpPost;
+  }
+
+  consumePost(ip: string): void {
+    const e = this.getOrCreate(this.perIpPost, ip);
+    e.count++;
+  }
+
   releaseGlobal(): void {
     if (this.globalStreams > 0) this.globalStreams--;
   }
@@ -119,6 +167,7 @@ export class RateLimitBuckets {
     const now = this.now();
     for (const [k, v] of this.perIp) { if (v.expiresAt <= now) this.perIp.delete(k); }
     for (const [k, v] of this.perIpAddr) { if (v.expiresAt <= now) this.perIpAddr.delete(k); }
+    for (const [k, v] of this.perIpPost) { if (v.expiresAt <= now) this.perIpPost.delete(k); }
   }
 
   dispose(): void {
@@ -230,19 +279,52 @@ export function publicConfigBundle(env: Record<string, string | undefined>): Pub
 interface PostReq {
   headers: Record<string, string | string[] | undefined>;
   body?: unknown;
+  ip?: string;
+  buckets?: RateLimitBuckets;
+  intentStore?: ReturnType<typeof createIntentStore>;
 }
 
 /**
  * POST /api/receive:initiate — mint intent endpoint.
  * Requires valid Origin header in allowlist → 403 otherwise.
+ * When ip/buckets/intentStore provided: validates body, records intent, enforces POST rate limit.
  */
 export async function postInitiate(req: PostReq): Promise<{ status: number; body?: unknown }> {
   const origin = req.headers.origin;
   const originStr = Array.isArray(origin) ? origin[0] : origin;
+
+  // Origin check
   if (!originStr || !ALLOWED_ORIGINS.includes(originStr)) {
     return { status: 403, body: { error: { code: 'FORBIDDEN', remediation: 'Request from disallowed origin.' } } };
   }
-  // ponytail: real mint logic deferred to Task 6 — stub for now
+
+  // POST per-IP rate limit (when buckets provided)
+  if (req.buckets && req.ip) {
+    if (!req.buckets.checkPostRate(req.ip)) {
+      return { status: 429, body: { error: { code: 'RATE_LIMITED', remediation: 'Too many requests. Slow down.' } } };
+    }
+    req.buckets.consumePost(req.ip);
+  }
+
+  // Validate body via existing validator
+  const body = req.body as Record<string, unknown> | undefined;
+  if (!body) {
+    return { status: 400, body: { error: { code: 'INVALID_PARAMS', remediation: 'Missing request body.' } } };
+  }
+
+  let validated: ValidatedParams;
+  try {
+    validated = validateEventParams(body);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'bad request';
+    return { status: 400, body: { error: { code: 'INVALID_PARAMS', remediation: msg.replace(/^400\s*/, '') } } };
+  }
+
+  // Record intent
+  if (req.intentStore) {
+    req.intentStore.record(validated.burnTxHash, validated.address, String(validated.amount));
+  }
+
   return { status: 200, body: { ok: true } };
 }
 
@@ -253,6 +335,179 @@ export async function postInitiate(req: PostReq): Promise<{ status: number; body
  */
 export function fileStoreAt(path: string): FileReplayStore {
   return new FileReplayStore(path);
+}
+
+// ─── Generic Remediation Map ─────────────────────────────────────────────────
+
+const SECRET_RE = /S[A-Z2-7]{55}/g;
+
+function remediationFor(err: unknown): { code: string; remediation: string } {
+  const name = err?.constructor?.name ?? '';
+  if (name === 'AttestationTimeoutError') return { code: 'ATTESTATION_TIMEOUT', remediation: 'Circle has not attested yet. Retry later.' };
+  if (name === 'InvalidAmountError' || name === 'InvalidBurnHashError' || name === 'InvalidDomainError') return { code: 'INVALID_PARAMS', remediation: 'Check hash, domain, and amount.' };
+  if (name === 'ReplayTransferError') return { code: 'ALREADY_PROCESSED', remediation: 'This transfer was already processed.' };
+  return { code: 'RECEIVE_FAILED', remediation: 'Receive failed. Retry later.' };
+}
+
+function logErrorSafe(params: { burnTxHash: string; sourceDomain: number; attempt?: number; code: string }, err: unknown): void {
+  const raw = err instanceof Error ? err.message : String(err);
+  const redacted = raw.replace(SECRET_RE, '[redacted]');
+  console.error('[events]', JSON.stringify({ ...params, error: redacted }));
+}
+
+// ─── GET /api/events Gate ────────────────────────────────────────────────────
+
+interface GateResult { status: 200 | 400 | 403 | 429; body?: unknown }
+
+/**
+ * Validates GET /api/events params: POST intent required (403), amount cap enforced (400).
+ */
+export async function gateRealStream(
+  params: ValidatedParams,
+  deps: { intents: { has(hash: string, addr: string, amount: string): Promise<boolean> }; maxMintBase6?: bigint },
+): Promise<GateResult> {
+  if (!await deps.intents.has(params.burnTxHash, params.address, String(params.amount))) {
+    return { status: 403, body: { error: { code: 'NO_INTENT', remediation: 'POST /api/receive:initiate first.' } } };
+  }
+  if (deps.maxMintBase6 !== undefined && params.amount > deps.maxMintBase6) {
+    return { status: 400, body: { error: { code: 'AMOUNT_TOO_LARGE', remediation: `Amount exceeds MAX_MINT_AMOUNT_USDC.` } } };
+  }
+  return { status: 200 };
+}
+
+// ─── Concurrency Gate ────────────────────────────────────────────────────────
+
+/**
+ * Triple-key single-flight + concurrency cap for real-mode receives.
+ */
+export function createRealGate(opts: { maxConcurrentReceives: number; active: () => number }) {
+  return {
+    tryAcquire(): boolean {
+      return opts.active() < opts.maxConcurrentReceives;
+    },
+  };
+}
+
+// ─── Collect SSE (Real Mode) ────────────────────────────────────────────────
+
+/** Module-level single-flight map for real mode: `${hash}|${addr}|${amount}` → promise. */
+const _realFlightMap = new Map<string, Promise<SseEvent[]>>();
+
+interface CollectRealDeps {
+  store: IReplayStoreAdapter;
+  clientFactory: (params: ValidatedParams) => {
+    receive(params: { sourceDomain: number; burnTxHash: string; destinationAddress: string; amount: bigint }, ctx?: unknown): Promise<{ amount: bigint; dust: bigint; txHash: string; settled: boolean }>;
+  };
+  log?: { info(msg: string, data?: unknown): void; error(msg: string, data?: unknown): void };
+}
+
+/**
+ * Real-mode SSE collector. Single-flight per normalized triple-key.
+ * Wires to `client.on('onReceiving'|'onSettled'|'onError', ...)` for streaming events.
+ * markProcessed is handled inside core receive — never double-mark here.
+ */
+export async function collectSseReal(
+  params: ValidatedParams,
+  deps: CollectRealDeps,
+): Promise<SseEvent[]> {
+  const { store, clientFactory } = deps;
+
+  // Replay check first — short-circuit, no receive call
+  if (await store.isProcessed(params.burnTxHash)) {
+    return [{ type: 'settled' }];
+  }
+
+  // Single-flight: normalized triple-key
+  const normalized = normalizeBurnTxHash(preNormalizeHash(params.burnTxHash));
+  const flightKey = `${normalized}|${params.address}|${params.amount}`;
+
+  const existing = _realFlightMap.get(flightKey);
+  if (existing) return existing;
+
+  const promise = _doCollectReal(params, deps);
+  _realFlightMap.set(flightKey, promise);
+
+  // Evict on settle (success or failure) so next call re-polls
+  promise.finally(() => _realFlightMap.delete(flightKey));
+
+  return promise;
+}
+
+async function _doCollectReal(
+  params: ValidatedParams,
+  deps: CollectRealDeps,
+): Promise<SseEvent[]> {
+  const { store, clientFactory } = deps;
+  const events: SseEvent[] = [];
+
+  // Build capture arrays — these feed SSE frames
+  const listeners = {
+    onReceiving: [] as Array<(d: unknown) => void>,
+    onSettled: [] as Array<(d: unknown) => void>,
+    onError: [] as Array<(d: unknown) => void>,
+  };
+
+  // Capture emitter events → SSE frames
+  listeners.onReceiving.push((d: unknown) => {
+    const payload = d as { attempt?: number };
+    events.push({ type: 'receiving', attempt: payload.attempt });
+  });
+  listeners.onSettled.push((d: unknown) => {
+    const payload = d as { amount: bigint; dust: bigint; txHash: string };
+    events.push({ type: 'settled', stellarAmount: String(payload.amount), dust: String(payload.dust), txHash: payload.txHash });
+  });
+  listeners.onError.push((d: unknown) => {
+    const payload = d as { error: unknown };
+    const { code, remediation } = remediationFor(payload.error);
+    events.push({ type: 'error', code, remediation });
+    logErrorSafe({ burnTxHash: params.burnTxHash, sourceDomain: params.sourceDomain, code }, payload.error);
+  });
+
+  // Minimal emitter for mock compatibility — ctx.emitter.on() routes to our capture arrays
+  const _mockEmitter = {
+    on(event: string, cb: (d: unknown) => void) {
+      const key = event as 'onReceiving' | 'onSettled' | 'onError';
+      if (key in listeners) listeners[key].push(cb);
+    },
+  };
+
+  const client = clientFactory(params);
+
+  // Wire client.on() if available (real AnchorCCTP); else mock already used ctx.emitter.on()
+  const originalOn = (client as unknown as { on(e: string, cb: (d: unknown) => void): unknown }).on?.bind(client);
+  if (originalOn) {
+    originalOn('onReceiving', (d: unknown) => { for (const cb of listeners.onReceiving) cb(d); });
+    originalOn('onSettled', (d: unknown) => { for (const cb of listeners.onSettled) cb(d); });
+    originalOn('onError', (d: unknown) => { for (const cb of listeners.onError) cb(d); });
+  }
+
+  try {
+    const result = await client.receive({
+      sourceDomain: params.sourceDomain,
+      burnTxHash: params.burnTxHash,
+      destinationAddress: params.address,
+      amount: params.amount,
+    }, { emitter: _mockEmitter });
+
+    // If receive resolved but no onSettled event was emitted, build settled frame
+    if (!events.some(e => e.type === 'settled')) {
+      events.push({ type: 'settled', stellarAmount: String(result.amount), dust: String(result.dust), txHash: result.txHash });
+    }
+
+    return events;
+  } catch (err) {
+    // ReplayTransferError from core → ALREADY_PROCESSED error event
+    if (err?.constructor?.name === 'ReplayTransferError') {
+      events.push({ type: 'error', code: 'ALREADY_PROCESSED', remediation: 'This transfer was already processed.' });
+      return events;
+    }
+
+    // All other errors → generic remediation map
+    const { code, remediation } = remediationFor(err);
+    events.push({ type: 'error', code, remediation });
+    logErrorSafe({ burnTxHash: params.burnTxHash, sourceDomain: params.sourceDomain, code }, err);
+    throw err;
+  }
 }
 
 // ─── Single-Flight Tracking ──────────────────────────────────────────────────
