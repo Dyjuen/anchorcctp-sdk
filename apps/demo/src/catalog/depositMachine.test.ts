@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { reduceDeposit, initialDeposit, parseUsdcBase6, buildEventsUrl, assertAddressUnchanged } from './depositMachine.js';
+import { reduceDeposit, initialDeposit, parseUsdcBase6, buildEventsUrl, assertAddressUnchanged, simErrorEvent } from './depositMachine.js';
 
 const G = 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5';
 
@@ -42,5 +42,26 @@ describe('reduceDeposit', () => {
   it('aborts on address drift', () => {
     const drifted = 'G' + 'A'.repeat(55);
     expect(() => assertAddressUnchanged(G, drifted)).toThrow(/Network mismatch/i);
+  });
+});
+
+describe('simErrorEvent', () => {
+  it('returns null for none', () => {
+    expect(simErrorEvent('none')).toBeNull();
+  });
+  it('maps rejected-signing to actionable error event', () => {
+    const e = simErrorEvent('rejected-signing');
+    expect(e).toEqual({ type: 'error', message: expect.stringMatching(/signing rejected/i) });
+  });
+  it('maps insufficient-xlm to actionable error event', () => {
+    const e = simErrorEvent('insufficient-xlm');
+    expect(e).toEqual({ type: 'error', message: expect.stringMatching(/insufficient xlm/i) });
+  });
+  it('maps network-mismatch to actionable error event', () => {
+    const e = simErrorEvent('network-mismatch');
+    expect(e).toEqual({ type: 'error', message: expect.stringMatching(/network mismatch/i) });
+  });
+  it('returns null for unknown values', () => {
+    expect(simErrorEvent('bogus')).toBeNull();
   });
 });

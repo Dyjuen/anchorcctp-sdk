@@ -26,6 +26,7 @@ import {
   parseUsdcBase6,
   buildEventsUrl,
   assertAddressUnchanged,
+  simErrorEvent,
 } from '../catalog/depositMachine';
 
 interface CatalogSectionProps {
@@ -116,7 +117,7 @@ export const CatalogSection: React.FC<CatalogSectionProps> = ({
     try {
       const config = loadNetworkConfig();
       setNetworkOk(true);
-      setNetworkLabel(config.network.toUpperCase());
+      setNetworkLabel(config.passphrase);
     } catch {
       setNetworkOk(false);
       setNetworkLabel('Config error');
@@ -147,6 +148,13 @@ export const CatalogSection: React.FC<CatalogSectionProps> = ({
 
     // Close any existing EventSource
     esRef.current?.close();
+
+    // Error simulation: inject synthetic event instead of opening SSE stream
+    const simEvt = simErrorEvent(simError);
+    if (simEvt) {
+      setDeposit(reduceDeposit({ ...initialDeposit, step: 'verifying' }, simEvt));
+      return;
+    }
 
     const startTime = Date.now();
     setDeposit({ ...initialDeposit, step: 'verifying' });

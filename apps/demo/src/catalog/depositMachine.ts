@@ -77,3 +77,17 @@ export function assertAddressUnchanged(connected: string, live: string): void {
     throw new Error('Network mismatch: wallet address changed');
   }
 }
+
+/** Map a simError select value to a synthetic DepositEvent, or null for 'none'. */
+export function simErrorEvent(value: string): DepositEvent | null {
+  switch (value) {
+    case 'rejected-signing':
+      return { type: 'error', message: 'Freighter signing rejected — unlock wallet and approve the transaction' };
+    case 'insufficient-xlm':
+      return { type: 'error', message: 'Insufficient XLM balance — fund with testnet friendbot: https://friendbot.stellar.org' };
+    case 'network-mismatch':
+      return { type: 'error', message: 'Network mismatch — switch Freighter wallet to the correct network and retry' };
+    default:
+      return null;
+  }
+}
