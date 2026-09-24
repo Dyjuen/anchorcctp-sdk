@@ -5,7 +5,8 @@
   "description": "AnchorCCTP SDK Demo Anchor & Web UI",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "node scripts/dev-all.mjs",
+    "predev": "npm run demo:server:build",
     "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint .",

@@ -2,13 +2,9 @@
 // SSE event server: sim + real modes, rate limiting, single-flight, replay.
 // ponytail: server-only module — never bundled for browser.
 
-import { createRequire } from 'node:module';
 import { normalizeBurnTxHash, assertSupportedDomain, FileReplayStore } from '@anchor-cctp/core-sdk';
 import type { IReplayStoreAdapter } from '@anchor-cctp/core-sdk';
-
-// ponytail: StrKey from stellar-sdk — lazy require to stay ESM-safe
-const require = createRequire(import.meta.url);
-const { StrKey } = require('@stellar/stellar-sdk') as typeof import('@stellar/stellar-sdk');
+import { StrKey } from '@stellar/stellar-sdk';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
