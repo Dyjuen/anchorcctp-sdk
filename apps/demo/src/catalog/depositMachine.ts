@@ -78,7 +78,7 @@ export function buildEventsUrl(params: {
 
 export async function postReceiveIntent(
   fetcher: typeof fetch,
-  params: { burnTxHash: string; address: string; amount: string },
+  params: { burnTxHash: string; address: string; amount: string; sourceDomain: number },
 ): Promise<void> {
   const res = await fetcher('/api/receive:initiate', {
     method: 'POST',

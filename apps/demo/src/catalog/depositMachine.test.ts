@@ -85,11 +85,11 @@ describe('real settled', () => {
   });
   it('postReceiveIntent throws server remediation on 403', async () => {
     const fetcher = async () => ({ ok: false, status: 403, json: async () => ({ error: { code: 'FORBIDDEN', remediation: 'Stream not authorized.' } }) });
-    await expect(postReceiveIntent(fetcher as never, { burnTxHash: '0x1', address: G, amount: '1.00' })).rejects.toThrow(/not authorized/i);
+    await expect(postReceiveIntent(fetcher as never, { burnTxHash: '0x1', address: G, amount: '1.00', sourceDomain: 0 })).rejects.toThrow(/not authorized/i);
   });
   it('postReceiveIntent resolves on 200', async () => {
     const fetcher = async () => ({ ok: true, status: 200, json: async () => ({ ok: true }) });
-    await expect(postReceiveIntent(fetcher as never, { burnTxHash: '0x1', address: G, amount: '1.00' })).resolves.toBeUndefined();
+    await expect(postReceiveIntent(fetcher as never, { burnTxHash: '0x1', address: G, amount: '1.00', sourceDomain: 0 })).resolves.toBeUndefined();
   });
 });
 

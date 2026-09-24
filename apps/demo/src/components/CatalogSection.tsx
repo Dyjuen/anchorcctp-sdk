@@ -178,7 +178,7 @@ export const CatalogSection: React.FC<CatalogSectionProps> = ({
       }
 
       // Intent-first: POST before opening SSE stream
-      await postReceiveIntent(fetch, { burnTxHash, address: wallet.address, amount: usdcAmount });
+      await postReceiveIntent(fetch, { burnTxHash, address: wallet.address, amount: usdcAmount, sourceDomain: activeDomain.domainId });
 
       const url = buildEventsUrl({
         address: wallet.address,
