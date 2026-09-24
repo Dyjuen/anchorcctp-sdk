@@ -5,6 +5,7 @@
 import { normalizeBurnTxHash, assertSupportedDomain, FileReplayStore } from '@anchor-cctp/core-sdk';
 import type { IReplayStoreAdapter } from '@anchor-cctp/core-sdk';
 import { StrKey } from '@stellar/stellar-sdk';
+import type { IncomingMessage, ServerResponse } from 'node:http';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -617,4 +618,25 @@ export function createSseHandler(deps: SseHandlerDeps) {
   }
 
   return { mockRequest, lastStatus, dispose: () => buckets.dispose() };
+}
+
+// ─── Body Reader ───────────────────────────────────────────────────────────
+
+const MAX_BODY_BYTES = 4096;
+
+/** Read request body with a hard byte cap. Returns { body } or { error: true } after writing 413. */
+export async function readBodyCapped(
+  req: IncomingMessage,
+  res: ServerResponse,
+): Promise<{ body: string } | { error: true }> {
+  let body = '';
+  for await (const chunk of req) {
+    body += chunk;
+    if (body.length > MAX_BODY_BYTES) {
+      res.writeHead(413, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: { code: 'PAYLOAD_TOO_LARGE', remediation: 'Request body too large.' } }));
+      return { error: true };
+    }
+  }
+  return { body };
 }

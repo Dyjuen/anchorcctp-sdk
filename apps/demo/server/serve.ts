@@ -4,7 +4,7 @@
 
 import { createServer, IncomingMessage, ServerResponse } from 'node:http';
 import { normalizeBurnTxHash, assertSupportedDomain, FileReplayStore, createAnchorCCTPFromEnv } from '@anchor-cctp/core-sdk';
-import { validateEventParams, publicConfigBundle, SimTimeline, postInitiate, gateRealStream, createIntentStore, createRealGate, RateLimitBuckets, collectSseReal } from './events.js';
+import { validateEventParams, publicConfigBundle, SimTimeline, postInitiate, gateRealStream, createIntentStore, createRealGate, RateLimitBuckets, collectSseReal, readBodyCapped } from './events.js';
 import { StrKey } from '@stellar/stellar-sdk';
 
 // ─── Env ─────────────────────────────────────────────────────────────────────
@@ -99,10 +99,10 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
   // ─── POST /api/receive:initiate ──────────────────────────────────
   if (method === 'POST' && url.startsWith('/api/receive:initiate')) {
     setApiHeaders(res);
-    let body = '';
-    for await (const chunk of req) body += chunk;
+    const bodyResult = await readBodyCapped(req, res);
+    if ('error' in bodyResult) return;
     let parsed: unknown;
-    try { parsed = JSON.parse(body); } catch { parsed = undefined; }
+    try { parsed = JSON.parse(bodyResult.body); } catch { parsed = undefined; }
     const postResult = await postInitiate({
       headers: Object.fromEntries(Object.entries(req.headers).map(([k, v]) => [k, v])),
       body: parsed,
@@ -156,7 +156,8 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
     }
     activeReceives.count++;
     const keepalive = setInterval(() => { try { res.write(': keepalive\n\n'); } catch { /* client gone */ } }, 25_000);
-    const cleanup = () => { clearInterval(keepalive); activeReceives.count = Math.max(0, activeReceives.count - 1); };
+    let cleaned = false;
+    const cleanup = () => { if (cleaned) return; cleaned = true; clearInterval(keepalive); activeReceives.count = Math.max(0, activeReceives.count - 1); };
     req.on('close', cleanup);
     try {
       const events = await collectSseReal(validated, {

@@ -1,6 +1,4 @@
 import * as freighter from '@stellar/freighter-api';
-import { StrKey } from '@stellar/stellar-sdk';
-import { loadNetworkConfig } from '../config/network.js';
 
 export interface WalletState {
   connected: boolean;
@@ -9,9 +7,6 @@ export interface WalletState {
   error?: string;
   isSimulated?: boolean;
   needsInstall?: boolean;
-  balances?: Array<{ asset_type: string; balance: string }>;
-  balancesError?: string;
-  networkPassphrase?: string;
 }
 
 export async function checkFreighterInstalled(): Promise<boolean> {
@@ -60,20 +55,13 @@ export async function connectFreighter(opts?: { allowSimulated?: boolean }): Pro
       return {
         connected: false,
         address: null,
-        error: addrError || 'User denied access or wallet is locked',
+        error: addrError ?? 'User denied access or wallet is locked',
       };
     }
 
     // Verify network passphrase (must match STELLAR_NETWORK_PASSPHRASE)
-    const { getNetwork } = await import('@stellar/freighter-api');
-    const { networkPassphrase, error: netError } = await getNetwork();
-    if (netError) {
-      return {
-        connected: false,
-        address: null,
-        error: typeof netError === 'string' ? netError : 'Wallet network unavailable',
-      };
-    }
+    const { getNetworkPassphrase } = await import('@stellar/freighter-api');
+    const networkPassphrase = await getNetworkPassphrase();
     const expectedPassphrase =
       (import.meta as any).env?.VITE_STELLAR_NETWORK_PASSPHRASE ??
       'Test SDF Network ; September 2015';
@@ -87,21 +75,14 @@ export async function connectFreighter(opts?: { allowSimulated?: boolean }): Pro
       };
     }
 
-    // Fetch balances via Horizon — non-blocking: balance failure must not sink connect
-    let balanceInfo: WalletState['balances'];
-    let balancesError: string | undefined;
-    try {
-      balanceInfo = await fetchBalances(address);
-    } catch (err: unknown) {
-      balancesError = err instanceof Error ? err.message : String(err);
-    }
+    // Fetch balances via Horizon
+    const balanceInfo = await fetchBalances(address);
 
     return {
       connected: true,
       address,
       networkPassphrase,
       balances: balanceInfo,
-      balancesError,
     };
   } catch (err: unknown) {
     return {
@@ -120,12 +101,9 @@ export async function signWithFreighter(
   xdr: string,
   networkPassphrase: string = 'Test SDF Network ; September 2015'
 ): Promise<string> {
-  const { signTransaction, getNetwork } = await import('@stellar/freighter-api');
+  const { signTransaction, getNetworkPassphrase } = await import('@stellar/freighter-api');
 
-  const { networkPassphrase: currentPassphrase, error: netError } = await getNetwork();
-  if (netError) {
-    throw new Error(typeof netError === 'string' ? netError : 'Wallet network unavailable');
-  }
+  const currentPassphrase = await getNetworkPassphrase();
   if (currentPassphrase !== networkPassphrase) {
     throw new Error(`Network mismatch: wallet on ${currentPassphrase}, expected ${networkPassphrase}`);
   }
@@ -171,7 +149,7 @@ export async function getAccountBalances(address: string, horizonUrl: string): P
   if (!horizonUrl.startsWith('https://')) {
     throw new Error('Horizon URL must use https');
   }
-  const res = await fetch(`${horizonUrl}/accounts/${encodeURIComponent(address)}`);
+  const res = await fetch(`${horizonUrl}/accounts/${address}`);
   if (res.status === 404) {
     throw new Error(`Account unfunded: send testnet XLM from friendbot.stellar.org to ${address}`);
   }
@@ -180,21 +158,4 @@ export async function getAccountBalances(address: string, horizonUrl: string): P
   }
   const data = await res.json();
   return data.balances;
-}
-
-/** Throw if wallet's network passphrase doesn't match expected. */
-export async function checkNetworkMatch(expectedPassphrase: string): Promise<void> {
-  const { getNetwork } = await import('@stellar/freighter-api');
-  const res = (await getNetwork()) as { networkPassphrase?: string; error?: string };
-  if (res.error) throw new Error(res.error);
-  if (res.networkPassphrase !== expectedPassphrase) {
-    throw new Error(`Network mismatch: wallet on ${res.networkPassphrase ?? 'unknown'}, expected ${expectedPassphrase}`);
-  }
-}
-
-/** Fetch account balances from Horizon using configured URL. Validates address first. */
-export async function fetchBalances(address: string): Promise<Array<{ asset_type: string; balance: string }>> {
-  if (!StrKey.isValidEd25519PublicKey(address.trim())) throw new Error('Invalid address');
-  const { horizonUrl } = loadNetworkConfig();
-  return getAccountBalances(address.trim(), horizonUrl);
 }

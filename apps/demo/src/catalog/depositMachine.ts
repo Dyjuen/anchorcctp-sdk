@@ -107,6 +107,13 @@ export function extractLiveAddress(result: unknown): string | null {
   return null;
 }
 
+/** Extract error message from SSE error event data. Server sends {type:'error', code, remediation}. */
+export function sseErrorMessage(data: Record<string, unknown>): string {
+  if (typeof data.remediation === 'string') return data.remediation;
+  if (typeof data.message === 'string') return data.message;
+  return 'Unknown error';
+}
+
 /** Map a simError select value to a synthetic DepositEvent, or null for 'none'. */
 export function simErrorEvent(value: string): DepositEvent | null {
   switch (value) {

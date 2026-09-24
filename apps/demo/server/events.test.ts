@@ -3,7 +3,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { validateEventParams, publicConfigBundle, SimTimeline, postInitiate, fileStoreAt, collectSse, createSseHandler, parseAmountBase6, collectSseReal, gateRealStream, createIntentStore, createRealGate, RateLimitBuckets } from './events.js';
+import { validateEventParams, publicConfigBundle, SimTimeline, postInitiate, fileStoreAt, collectSse, createSseHandler, parseAmountBase6, collectSseReal, gateRealStream, createIntentStore, createRealGate, RateLimitBuckets, readBodyCapped } from './events.js';
 const tmpPath = () => join(mkdtempSync(join(tmpdir(), 'replay-')), 'replay.json');
 
 const G = 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5';
@@ -220,5 +220,38 @@ describe('collectSseReal', () => {
       )).rejects.toThrow();
     } finally { spy.mockRestore(); }
     expect(logged.join('\n')).not.toMatch(/S[A-Z2-7]{55}/);
+  });
+});
+
+describe('readBodyCapped', () => {
+  function mockReq(chunks: string[]) {
+    return { [Symbol.asyncIterator]: function* () { for (const c of chunks) yield c; } } as never;
+  }
+  function mockRes() {
+    const state: { status?: number; body?: string } = {};
+    return {
+      writeHead: (s: number) => { state.status = s; },
+      end: (b: string) => { state.body = b; },
+      _state: state,
+    } as never;
+  }
+  it('reads normal body', async () => {
+    const res = mockRes();
+    const r = await readBodyCapped(mockReq(['hello']), res);
+    expect(r).toEqual({ body: 'hello' });
+  });
+  it('rejects body exceeding 4096 chars with 413', async () => {
+    const res = mockRes();
+    const big = 'x'.repeat(4097);
+    const r = await readBodyCapped(mockReq([big]), res);
+    expect(r).toEqual({ error: true });
+    expect(res._state.status).toBe(413);
+    expect(JSON.parse(res._state.body!)).toMatchObject({ error: { code: 'PAYLOAD_TOO_LARGE' } });
+  });
+  it('accepts body exactly at 4096 chars', async () => {
+    const res = mockRes();
+    const exact = 'y'.repeat(4096);
+    const r = await readBodyCapped(mockReq([exact]), res);
+    expect(r).toEqual({ body: exact });
   });
 });

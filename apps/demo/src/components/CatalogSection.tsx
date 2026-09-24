@@ -29,6 +29,7 @@ import {
   simErrorEvent,
   extractLiveAddress,
   postReceiveIntent,
+  sseErrorMessage,
 } from '../catalog/depositMachine';
 
 interface CatalogSectionProps {
@@ -216,7 +217,7 @@ export const CatalogSection: React.FC<CatalogSectionProps> = ({
             es.close();
             esRef.current = null;
           } else if (data.type === 'error') {
-            setDeposit((s) => reduceDeposit(s, { type: 'error', message: data.message ?? 'Unknown error' }));
+            setDeposit((s) => reduceDeposit(s, { type: 'error', message: sseErrorMessage(data) }));
             es.close();
             esRef.current = null;
           }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { reduceDeposit, initialDeposit, parseUsdcBase6, buildEventsUrl, assertAddressUnchanged, simErrorEvent, extractLiveAddress, postReceiveIntent } from './depositMachine.js';
+import { reduceDeposit, initialDeposit, parseUsdcBase6, buildEventsUrl, assertAddressUnchanged, simErrorEvent, extractLiveAddress, postReceiveIntent, sseErrorMessage } from './depositMachine.js';
 
 const G = 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5';
 
@@ -90,5 +90,17 @@ describe('real settled', () => {
   it('postReceiveIntent resolves on 200', async () => {
     const fetcher = async () => ({ ok: true, status: 200, json: async () => ({ ok: true }) });
     await expect(postReceiveIntent(fetcher as never, { burnTxHash: '0x1', address: G, amount: '1.00' })).resolves.toBeUndefined();
+  });
+});
+
+describe('sseErrorMessage', () => {
+  it('prefers remediation over message', () => {
+    expect(sseErrorMessage({ type: 'error', code: 'X', remediation: 'Fix this.', message: 'ignored' })).toBe('Fix this.');
+  });
+  it('falls back to message when no remediation', () => {
+    expect(sseErrorMessage({ type: 'error', message: 'Something broke' })).toBe('Something broke');
+  });
+  it('returns Unknown error when neither present', () => {
+    expect(sseErrorMessage({ type: 'error', code: 'X' })).toBe('Unknown error');
   });
 });
