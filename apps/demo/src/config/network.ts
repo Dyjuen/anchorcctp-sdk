@@ -20,13 +20,19 @@ function fail(why: string): never { throw new Error(`NETWORK_CONFIG ${why}`); }
 
 /**
  * In browser: import.meta.env (Vite-injected VITE_* vars).
- * In vitest: vi.stubEnv writes to process.env, so fall back to it.
+ * In vitest: vi.stubEnv writes process.env, so per-key process.env
+ * overrides win (required: real .env files also populate import.meta.env,
+ * which would otherwise shadow stubs).
  */
 function resolveEnv(): Record<string, string | undefined> {
-  const im = (import.meta as unknown as { env?: Record<string, string | undefined> }).env;
-  if (im?.VITE_NETWORK) return im;
-  if (typeof process !== 'undefined') return process.env as Record<string, string | undefined>;
-  return {};
+  const im = (import.meta as unknown as { env?: Record<string, string | undefined> }).env ?? {};
+  const out: Record<string, string | undefined> = { ...im };
+  if (typeof process !== 'undefined' && process.env) {
+    for (const [k, v] of Object.entries(process.env)) {
+      if (k.startsWith('VITE_')) out[k] = v;
+    }
+  }
+  return out;
 }
 
 export function loadNetworkConfig(env: Record<string, string | undefined> = resolveEnv()): NetworkConfig {

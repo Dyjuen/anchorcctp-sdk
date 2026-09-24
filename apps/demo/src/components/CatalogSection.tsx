@@ -27,6 +27,7 @@ import {
   buildEventsUrl,
   assertAddressUnchanged,
   simErrorEvent,
+  extractLiveAddress,
 } from '../catalog/depositMachine';
 
 interface CatalogSectionProps {
@@ -165,7 +166,7 @@ export const CatalogSection: React.FC<CatalogSectionProps> = ({
 
       // Re-fetch address from wallet and assert no drift
       const { getAddress } = await import('@stellar/freighter-api');
-      const liveAddress = await getAddress();
+      const liveAddress = extractLiveAddress(await getAddress());
       if (liveAddress) {
         assertAddressUnchanged(wallet.address, liveAddress);
       }

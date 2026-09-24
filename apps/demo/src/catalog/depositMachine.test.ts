@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { reduceDeposit, initialDeposit, parseUsdcBase6, buildEventsUrl, assertAddressUnchanged, simErrorEvent } from './depositMachine.js';
+import { reduceDeposit, initialDeposit, parseUsdcBase6, buildEventsUrl, assertAddressUnchanged, simErrorEvent, extractLiveAddress } from './depositMachine.js';
 
 const G = 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5';
 
@@ -42,6 +42,12 @@ describe('reduceDeposit', () => {
   it('aborts on address drift', () => {
     const drifted = 'G' + 'A'.repeat(55);
     expect(() => assertAddressUnchanged(G, drifted)).toThrow(/Network mismatch/i);
+  });
+  it('extracts address from getAddress object shape', () => {
+    expect(extractLiveAddress({ address: G })).toBe(G);
+    expect(extractLiveAddress(G)).toBe(G);
+    expect(extractLiveAddress({ address: '' })).toBeNull();
+    expect(extractLiveAddress(null)).toBeNull();
   });
 });
 

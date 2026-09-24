@@ -78,6 +78,15 @@ export function assertAddressUnchanged(connected: string, live: string): void {
   }
 }
 
+/** Normalize freighter-api getAddress() result ({address} object or legacy string) to address or null. */
+export function extractLiveAddress(result: unknown): string | null {
+  if (typeof result === 'string') return result || null;
+  if (result && typeof result === 'object' && typeof (result as { address?: unknown }).address === 'string') {
+    return ((result as { address: string }).address) || null;
+  }
+  return null;
+}
+
 /** Map a simError select value to a synthetic DepositEvent, or null for 'none'. */
 export function simErrorEvent(value: string): DepositEvent | null {
   switch (value) {
