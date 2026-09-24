@@ -91,6 +91,7 @@ export function createAnchorCCTP(config: AnchorCCTPConfig): AnchorCCTP {
     defaultTrustline: trustline,
     defaultForwarderContractId,
     defaultUsdcIssuer: config.usdcIssuer,
+    network: config.network,
     _test: config._test,
   };
 

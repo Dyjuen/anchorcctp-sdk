@@ -5,129 +5,12 @@ import { useEffect, useRef } from "react";
 import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { cn } from "../../lib/utils";
+import "./AnimatedFooter.css";
 
 // Register ScrollTrigger safely for React
 if (typeof window !== "undefined") {
   gsap.registerPlugin(ScrollTrigger);
 }
-
-// -------------------------------------------------------------------------
-// 1. THEME-ADAPTIVE INLINE STYLES
-// -------------------------------------------------------------------------
-const STYLES = `
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&display=swap');
-
-.cinematic-footer-wrapper {
-  font-family: 'Plus Jakarta Sans', sans-serif;
-  -webkit-font-smoothing: antialiased;
-  
-  /* Dynamic Variables using standard shadcn/tailwind v4 tokens */
-  --pill-bg-1: color-mix(in oklch, var(--foreground) 3%, transparent);
-  --pill-bg-2: color-mix(in oklch, var(--foreground) 1%, transparent);
-  --pill-shadow: color-mix(in oklch, var(--background) 50%, transparent);
-  --pill-highlight: color-mix(in oklch, var(--foreground) 10%, transparent);
-  --pill-inset-shadow: color-mix(in oklch, var(--background) 80%, transparent);
-  --pill-border: color-mix(in oklch, var(--foreground) 8%, transparent);
-  
-  --pill-bg-1-hover: color-mix(in oklch, var(--foreground) 8%, transparent);
-  --pill-bg-2-hover: color-mix(in oklch, var(--foreground) 2%, transparent);
-  --pill-border-hover: color-mix(in oklch, var(--foreground) 20%, transparent);
-  --pill-shadow-hover: color-mix(in oklch, var(--background) 70%, transparent);
-  --pill-highlight-hover: color-mix(in oklch, var(--foreground) 20%, transparent);
-}
-
-@keyframes footer-breathe {
-  0% { transform: translate(-50%, -50%) scale(1); opacity: 0.6; }
-  100% { transform: translate(-50%, -50%) scale(1.1); opacity: 1; }
-}
-
-@keyframes footer-scroll-marquee {
-  from { transform: translateX(0); }
-  to { transform: translateX(-50%); }
-}
-
-@keyframes footer-heartbeat {
-  0%, 100% { transform: scale(1); filter: drop-shadow(0 0 5px color-mix(in oklch, var(--destructive) 50%, transparent)); }
-  15%, 45% { transform: scale(1.2); filter: drop-shadow(0 0 10px color-mix(in oklch, var(--destructive) 80%, transparent)); }
-  30% { transform: scale(1); }
-}
-
-.animate-footer-breathe {
-  animation: footer-breathe 8s ease-in-out infinite alternate;
-}
-
-.animate-footer-scroll-marquee {
-  animation: footer-scroll-marquee 40s linear infinite;
-}
-
-.animate-footer-heartbeat {
-  animation: footer-heartbeat 2s cubic-bezier(0.25, 1, 0.5, 1) infinite;
-}
-
-/* Theme-adaptive Grid Background */
-.footer-bg-grid {
-  background-size: 60px 60px;
-  background-image: 
-    linear-gradient(to right, color-mix(in oklch, var(--foreground) 3%, transparent) 1px, transparent 1px),
-    linear-gradient(to bottom, color-mix(in oklch, var(--foreground) 3%, transparent) 1px, transparent 1px);
-  mask-image: linear-gradient(to bottom, transparent, black 30%, black 70%, transparent);
-  -webkit-mask-image: linear-gradient(to bottom, transparent, black 30%, black 70%, transparent);
-}
-
-/* Theme-adaptive Aurora Glow */
-.footer-aurora {
-  background: radial-gradient(
-    circle at 50% 50%, 
-    color-mix(in oklch, var(--primary) 15%, transparent) 0%, 
-    color-mix(in oklch, var(--secondary) 15%, transparent) 40%, 
-    transparent 70%
-  );
-}
-
-/* Glass Pill Theming */
-.footer-glass-pill {
-  background: linear-gradient(145deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.02) 100%);
-  box-shadow: 
-      0 10px 30px -10px rgba(0,0,0,0.5), 
-      inset 0 1px 1px rgba(255,255,255,0.1), 
-      inset 0 -1px 2px rgba(0,0,0,0.8);
-  border: 1px solid rgba(255,255,255,0.15);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.footer-glass-pill:hover {
-  background: linear-gradient(145deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.05) 100%);
-  border-color: rgba(255,255,255,0.3);
-  box-shadow: 
-      0 20px 40px -10px rgba(0,0,0,0.7), 
-      inset 0 1px 1px rgba(255,255,255,0.2);
-  color: #fff;
-}
-
-/* Giant Background Text Masking */
-.footer-giant-bg-text {
-  font-size: 26vw;
-  line-height: 0.75;
-  font-weight: 900;
-  letter-spacing: -0.05em;
-  color: transparent;
-  -webkit-text-stroke: 1px color-mix(in oklch, var(--foreground) 5%, transparent);
-  background: linear-gradient(180deg, color-mix(in oklch, var(--foreground) 10%, transparent) 0%, transparent 60%);
-  -webkit-background-clip: text;
-  background-clip: text;
-}
-
-/* Metallic Text Glow */
-.footer-text-glow {
-  background: linear-gradient(180deg, var(--foreground) 0%, color-mix(in oklch, var(--foreground) 40%, transparent) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  filter: drop-shadow(0px 0px 20px color-mix(in oklch, var(--foreground) 15%, transparent));
-}
-`;
 
 // -------------------------------------------------------------------------
 // 2. MAGNETIC BUTTON PRIMITIVE (Zero Dependency)
@@ -277,9 +160,7 @@ export function AnimatedFooter({ onNavigate }: { onNavigate?: (page: 'home' | 'p
 
   return (
     <>
-      <style dangerouslySetInnerHTML={{ __html: STYLES }} />
-      
-      {/* 
+      {/*
         The "Curtain Reveal" Wrapper:
         It sits in standard flow. Because it has clip-path, its contents
         are ONLY visible within its bounding box. 

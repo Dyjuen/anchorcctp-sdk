@@ -113,6 +113,8 @@ export interface EnvConfigResult {
   hasSigner: boolean;
   /** Validated Keypair when STELLAR_SECRET present; avoids re-derivation in callers. */
   keypair?: Keypair;
+  /** Validated Soroban RPC URL when SOROBAN_RPC_URL env var is present and https. */
+  sorobanRpcUrl?: string;
 }
 
 /**
@@ -216,6 +218,12 @@ export function createAnchorCCTPFromEnv(
     }
   }
 
+  // SOROBAN_RPC_URL: optional, must be https when present
+  const sorobanRpcUrl = env.SOROBAN_RPC_URL;
+  if (sorobanRpcUrl !== undefined && sorobanRpcUrl !== '' && !/^https:\/\//.test(sorobanRpcUrl)) {
+    throw new InvalidConfigError('SOROBAN_RPC_URL must be https');
+  }
+
   const cap = env.SPEND_CAP_XLM ?? env.STELLAR_SPEND_CAP_XLM;
   // N3: validate SPEND_CAP_XLM is finite >= 0 when present
   let parsedCap: number | undefined;
@@ -240,5 +248,12 @@ export function createAnchorCCTPFromEnv(
     },
   });
 
-  return { client, destinationAddress: destination, network, hasSigner: keypair !== undefined, keypair };
+  return {
+    client,
+    destinationAddress: destination,
+    network,
+    hasSigner: keypair !== undefined,
+    keypair,
+    ...(sorobanRpcUrl !== undefined && sorobanRpcUrl !== '' ? { sorobanRpcUrl } : {}),
+  };
 }

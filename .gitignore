@@ -7,6 +7,8 @@ packages/*/coverage/
 .env
 .env.*
 !.env.example
+!apps/demo/.env.testnet.example
+!apps/demo/.env.mainnet.example
 .DS_Store
 .worktrees/
 /stellar.toml
@@ -14,3 +16,4 @@ docs/superpowers/
 docs/evidence/testnet-auto.processed.json
 scripts/dist/
 .claude
+apps/demo/dist-server/

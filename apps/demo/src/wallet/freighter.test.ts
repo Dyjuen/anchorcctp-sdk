@@ -5,6 +5,9 @@ vi.mock('@stellar/freighter-api', () => ({
   getAddress: vi.fn(),
   signTransaction: vi.fn(),
   getNetwork: vi.fn(),
+  getNetworkPassphrase: vi.fn(),
+  isAllowed: vi.fn().mockResolvedValue(true),
+  setAllowed: vi.fn(),
 }));
 
 import * as freighterApi from '@stellar/freighter-api';
@@ -13,12 +16,19 @@ import {
   signWithFreighter,
   getAccountBalances,
   checkNetworkMatch,
+  fetchBalances,
 } from './freighter.js';
 
 const G = 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5';
+const TESTNET_PASS = 'Test SDF Network ; September 2015';
 
-beforeEach(() => vi.resetAllMocks());
-afterEach(() => { vi.unstubAllGlobals?.(); });
+beforeEach(() => {
+  vi.clearAllMocks();
+  // Restore defaults stripped by clearAllMocks
+  vi.mocked(freighterApi.isAllowed).mockResolvedValue(true as any);
+  vi.mocked(freighterApi.getNetworkPassphrase).mockResolvedValue(TESTNET_PASS);
+});
+afterEach(() => { vi.unstubAllGlobals?.(); vi.unstubAllEnvs?.(); });
 
 describe('connectFreighter', () => {
   it('returns explicit not-installed state instead of a fake mock account', async () => {
@@ -42,7 +52,7 @@ describe('connectFreighter', () => {
     vi.mocked(freighterApi.getAddress).mockResolvedValue({ address: '', error: 'declined' } as any);
     const res = await connectFreighter();
     expect(res.connected).toBe(false);
-    expect(res.error).toMatch(/declined/i);
+    expect(res.error).toMatch(/denied|declined/i);
   });
 
   it('throws when isConnected resolves with error string', async () => {
@@ -66,9 +76,15 @@ describe('signWithFreighter', () => {
   });
 
   it('passes custom passphrase to signTransaction', async () => {
+    vi.mocked(freighterApi.getNetworkPassphrase).mockResolvedValue('Public Global Stellar Network ; September 2015');
     const spy = vi.mocked(freighterApi.signTransaction).mockResolvedValue({ signedTxXdr: 'OK', error: '' } as any);
     await signWithFreighter('AAAA', 'Public Global Stellar Network ; September 2015');
     expect(spy).toHaveBeenCalledWith('AAAA', { networkPassphrase: 'Public Global Stellar Network ; September 2015' });
+  });
+
+  it('throws on network passphrase mismatch', async () => {
+    vi.mocked(freighterApi.getNetworkPassphrase).mockResolvedValue('Wrong Network ; September 2015');
+    await expect(signWithFreighter('AAAA')).rejects.toThrow(/Network mismatch/i);
   });
 });
 
@@ -113,6 +129,44 @@ describe('getAccountBalances', () => {
     vi.stubGlobal('fetch', vi.fn());
     await expect(getAccountBalances(G, 'http://evil/x')).rejects.toThrow(/https/i);
     expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+});
+
+describe('fetchBalances', () => {
+  const requiredEnv = {
+    VITE_NETWORK: 'testnet',
+    VITE_SOROBAN_RPC_URL: 'https://soroban-testnet.stellar.org',
+    VITE_USDC_ISSUER: 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5',
+    VITE_FORWARDER_CONTRACT_ID: 'CBBEEQSCIJBEEQSCIJBEEQSCIJBEEQSCIJBEEQSCIJBEEQSCIJBEE5XW',
+    VITE_ATTESTATION_URL: 'https://attestation.example.com',
+  };
+
+  it('uses configured horizon url', async () => {
+    for (const [k, v] of Object.entries(requiredEnv)) vi.stubEnv(k, v);
+    vi.stubEnv('VITE_HORIZON_URL', 'https://horizon-testnet.stellar.org');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true, json: async () => ({ balances: [{ asset_type: 'native', balance: '5' }] }),
+    }));
+    const b = await fetchBalances(G);
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('https://horizon-testnet.stellar.org/accounts/'));
+    expect(b[0].balance).toBe('5');
+  });
+  it('rejects invalid address before fetch', async () => {
+    for (const [k, v] of Object.entries(requiredEnv)) vi.stubEnv(k, v);
+    const spy = vi.fn();
+    vi.stubGlobal('fetch', spy);
+    await expect(fetchBalances('NOPE')).rejects.toThrow(/Invalid address/i);
+    expect(spy).not.toHaveBeenCalled();
+  });
+  it('trims padded address', async () => {
+    for (const [k, v] of Object.entries(requiredEnv)) vi.stubEnv(k, v);
+    vi.stubEnv('VITE_HORIZON_URL', 'https://horizon-testnet.stellar.org');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true, json: async () => ({ balances: [] }),
+    }));
+    await fetchBalances('  ' + G + '  ');
+    expect(globalThis.fetch).toHaveBeenCalledWith(expect.stringContaining('/accounts/' + G));
   });
 });
 
