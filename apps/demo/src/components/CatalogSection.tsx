@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   CCTP_DOMAINS,
@@ -14,9 +14,19 @@ import {
   Shield,
   Layers,
   Sparkles,
-  Search,
+  Wifi,
+  WifiOff,
 } from 'lucide-react';
-import { WalletState, signWithFreighter } from '../wallet/freighter';
+import { WalletState, fetchBalances } from '../wallet/freighter';
+import { loadNetworkConfig } from '../config/network';
+import {
+  DepositState,
+  initialDeposit,
+  reduceDeposit,
+  parseUsdcBase6,
+  buildEventsUrl,
+  assertAddressUnchanged,
+} from '../catalog/depositMachine';
 
 interface CatalogSectionProps {
   wallet: WalletState;
@@ -28,20 +38,24 @@ export const CatalogSection: React.FC<CatalogSectionProps> = ({
   onConnectWallet,
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [selectedDomainId, setSelectedDomainId] = useState<number>(0); // Ethereum default
+  const [selectedDomainId, setSelectedDomainId] = useState<number>(0);
   const [burnTxHash, setBurnTxHash] = useState<string>(
     '0x9a8f4c2e1b3d7a8c6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d'
   );
   const [usdcAmount, setUsdcAmount] = useState<string>('100.00');
+  const [simError, setSimError] = useState<string>('none');
 
-  // Settlement flow state
-  const [isProcessing, setIsProcessing] = useState<boolean>(false);
-  const [currentStep, setCurrentStep] = useState<number>(0);
-  const [settlementResult, setSettlementResult] = useState<{
-    mintTxHash: string;
-    stellarAmount: string;
-    dust: string;
-  } | null>(null);
+  // Deposit state machine
+  const [deposit, setDeposit] = useState<DepositState>(initialDeposit);
+
+  // Balance + network state
+  const [xlmBalance, setXlmBalance] = useState<string | null>(null);
+  const [usdcBalance, setUsdcBalance] = useState<string | null>(null);
+  const [networkOk, setNetworkOk] = useState<boolean | null>(null);
+  const [networkLabel, setNetworkLabel] = useState<string>('');
+
+  const esRef = useRef<EventSource | null>(null);
+  const connectedAddressRef = useRef<string | null>(null);
 
   const categories = [
     { id: 'all', label: 'All Domains' },
@@ -69,9 +83,61 @@ export const CatalogSection: React.FC<CatalogSectionProps> = ({
       case 5: return 'https://cryptologos.cc/logos/solana-sol-logo.svg?v=035';
       case 6: return 'https://raw.githubusercontent.com/base-org/brand-kit/main/logo/symbol/Base_Symbol_Blue.svg';
       case 7: return 'https://cryptologos.cc/logos/polygon-matic-logo.svg?v=035';
-      default: return 'https://cryptologos.cc/logos/usd-coin-usdc-logo.svg?v=035'; // Default to USDC logo for unknown domains
+      default: return 'https://cryptologos.cc/logos/usd-coin-usdc-logo.svg?v=035';
     }
   };
+
+  const refreshBalances = async () => {
+    if (!wallet.address) return;
+    try {
+      const balances = await fetchBalances(wallet.address);
+      let xlm: string | null = null;
+      let usdc: string | null = null;
+      for (const b of balances) {
+        if (b.asset_type === 'native') {
+          xlm = b.balance;
+        } else if (
+          b.asset_type === 'credit_alphanum12' &&
+          'asset_code' in b &&
+          (b as { asset_code?: string }).asset_code === 'USDC'
+        ) {
+          usdc = b.balance;
+        }
+      }
+      setXlmBalance(xlm);
+      setUsdcBalance(usdc);
+    } catch {
+      setXlmBalance(null);
+      setUsdcBalance(null);
+    }
+  };
+
+  const checkNetwork = () => {
+    try {
+      const config = loadNetworkConfig();
+      setNetworkOk(true);
+      setNetworkLabel(config.network.toUpperCase());
+    } catch {
+      setNetworkOk(false);
+      setNetworkLabel('Config error');
+    }
+  };
+
+  useEffect(() => {
+    if (wallet.connected && wallet.address) {
+      refreshBalances();
+      checkNetwork();
+    } else {
+      setXlmBalance(null);
+      setUsdcBalance(null);
+      setNetworkOk(null);
+      setNetworkLabel('');
+    }
+    return () => {
+      esRef.current?.close();
+      esRef.current = null;
+    };
+  }, [wallet.connected, wallet.address]);
 
   const handleExecuteDeposit = async () => {
     if (!wallet.connected || !wallet.address) {
@@ -79,42 +145,75 @@ export const CatalogSection: React.FC<CatalogSectionProps> = ({
       return;
     }
 
-    setIsProcessing(true);
-    setSettlementResult(null);
-    setCurrentStep(1);
+    // Close any existing EventSource
+    esRef.current?.close();
+
+    const startTime = Date.now();
+    setDeposit({ ...initialDeposit, step: 'verifying' });
+    connectedAddressRef.current = wallet.address;
 
     try {
-      await new Promise((r) => setTimeout(r, 600));
-      setCurrentStep(2);
-      await new Promise((r) => setTimeout(r, 900));
-      setCurrentStep(3);
+      const rawUnits = parseUsdcBase6(usdcAmount);
 
-      const jsonPayload = JSON.stringify({
-        action: 'cctp_mint',
-        destination: wallet.address,
+      const config = loadNetworkConfig();
+
+      // Re-fetch address from wallet and assert no drift
+      const { getAddress } = await import('@stellar/freighter-api');
+      const liveAddress = await getAddress();
+      if (liveAddress) {
+        assertAddressUnchanged(wallet.address, liveAddress);
+      }
+
+      const url = buildEventsUrl({
+        address: wallet.address,
         burnTxHash,
+        sourceDomain: activeDomain.domainId,
       });
-      await signWithFreighter(btoa(encodeURIComponent(jsonPayload)));
-      await new Promise((r) => setTimeout(r, 700));
 
-      setCurrentStep(4);
-      const rawUnits = BigInt(Math.floor(parseFloat(usdcAmount) * 1_000_000));
-      const { stellarAmount, dust } = convert6to7(rawUnits);
+      const es = new EventSource(url);
+      esRef.current = es;
 
-      const mintTx =
-        '0x' +
-        Array.from({ length: 64 }, () =>
-          Math.floor(Math.random() * 16).toString(16)
-        ).join('');
+      es.onmessage = (ev) => {
+        try {
+          const data = JSON.parse(ev.data);
+          if (data.type === 'receiving') {
+            setDeposit((s) => reduceDeposit(s, { type: 'receiving', attempt: data.attempt ?? 1 }));
+          } else if (data.type === 'submitting') {
+            setDeposit((s) => reduceDeposit(s, { type: 'submitting' }));
+          } else if (data.type === 'settled') {
+            const { stellarAmount, dust } = convert6to7(rawUnits);
+            setDeposit((s) =>
+              reduceDeposit(s, {
+                type: 'settled',
+                stellarAmount: formatStellarUnits(stellarAmount),
+                dust: dust.toString(),
+                txHash: data.txHash ?? 'SIM-0001',
+                simulated: data.simulated ?? (data.txHash ?? '').startsWith('SIM-'),
+              })
+            );
+            es.close();
+            esRef.current = null;
+          } else if (data.type === 'error') {
+            setDeposit((s) => reduceDeposit(s, { type: 'error', message: data.message ?? 'Unknown error' }));
+            es.close();
+            esRef.current = null;
+          }
+        } catch {
+          // Ignore malformed SSE events
+        }
+      };
 
-      setSettlementResult({
-        mintTxHash: mintTx,
-        stellarAmount: formatStellarUnits(stellarAmount),
-        dust: dust.toString(),
-      });
-      setIsProcessing(false);
+      es.onerror = () => {
+        es.close();
+        esRef.current = null;
+        setDeposit((s) => reduceDeposit(s, { type: 'error', message: 'SSE connection lost' }));
+      };
     } catch (err) {
-      setIsProcessing(false);
+      setDeposit({
+        ...initialDeposit,
+        step: 'error',
+        errorDetails: err instanceof Error ? err.message : 'Unknown error',
+      });
     }
   };
 
@@ -122,7 +221,7 @@ export const CatalogSection: React.FC<CatalogSectionProps> = ({
     <section id="catalog" className="py-16 relative bg-white dark:bg-[#070C18] border-t border-slate-200 dark:border-slate-800 w-full overflow-hidden">
       <div className="w-full max-w-[1700px] mx-auto px-6 sm:px-10 lg:px-16 space-y-10">
         {/* Header Section */}
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, margin: "-50px" }}
@@ -158,7 +257,7 @@ export const CatalogSection: React.FC<CatalogSectionProps> = ({
 
         {/* Main Catalog Grid Layout */}
         <div className="grid grid-cols-12 gap-6 lg:gap-8 items-start w-full">
-          {/* Left Column: Domain Slots Grid (Compact natural card heights) */}
+          {/* Left Column: Domain Slots Grid */}
           <motion.div layout className="col-span-7 grid grid-cols-2 gap-4 w-full">
             <AnimatePresence mode="popLayout">
             {filteredDomains.slice(0, 6).map((domain) => {
@@ -183,7 +282,6 @@ export const CatalogSection: React.FC<CatalogSectionProps> = ({
                       : 'bg-slate-900/60 border-slate-800 hover:border-slate-700 hover:bg-slate-900/90'
                   }`}
                 >
-                  {/* Active highlight bar indicator */}
                   {isSelected && (
                     <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 via-cyan-400 to-blue-600" />
                   )}
@@ -228,7 +326,7 @@ export const CatalogSection: React.FC<CatalogSectionProps> = ({
           </motion.div>
 
           {/* Right Column: Featured Interactive Deposit Card */}
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, x: 20 }}
             whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true, margin: "-50px" }}
@@ -263,6 +361,7 @@ export const CatalogSection: React.FC<CatalogSectionProps> = ({
                     type="number"
                     value={usdcAmount}
                     onChange={(e) => setUsdcAmount(e.target.value)}
+                    disabled={deposit.step !== 'idle' && deposit.step !== 'error'}
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm font-extrabold text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all font-mono"
                   />
                 </div>
@@ -275,6 +374,7 @@ export const CatalogSection: React.FC<CatalogSectionProps> = ({
                     type="text"
                     value={burnTxHash}
                     onChange={(e) => setBurnTxHash(e.target.value)}
+                    disabled={deposit.step !== 'idle' && deposit.step !== 'error'}
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-xs font-mono text-slate-300 focus:ring-2 focus:ring-blue-500 outline-none transition-all truncate"
                   />
                 </div>
@@ -296,13 +396,81 @@ export const CatalogSection: React.FC<CatalogSectionProps> = ({
                 </div>
               </div>
 
+              {/* Balance + Network Badge */}
+              {wallet.connected && wallet.address && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between p-3 bg-slate-950/60 rounded-xl border border-slate-800">
+                    <div className="flex items-center space-x-4 text-xs font-mono">
+                      <span className="text-slate-400">
+                        XLM <span className="text-white font-bold">{xlmBalance ?? '…'}</span>
+                      </span>
+                      <span className="text-slate-600">·</span>
+                      <span className="text-slate-400">
+                        USDC <span className="text-white font-bold">{usdcBalance ?? '…'}</span>
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    {networkOk === true ? (
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-emerald-500/15 border border-emerald-500/30 text-emerald-400">
+                        <Wifi className="w-3 h-3 mr-1" />
+                        {networkLabel} ✓
+                      </span>
+                    ) : networkOk === false ? (
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-rose-500/15 border border-rose-500/30 text-rose-400">
+                        <WifiOff className="w-3 h-3 mr-1" />
+                        {networkLabel}
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+              )}
+
+              {/* Error Simulation Select */}
+              {wallet.connected && (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                    Simulate Error
+                  </label>
+                  <select
+                    value={simError}
+                    onChange={(e) => setSimError(e.target.value)}
+                    disabled={deposit.step !== 'idle' && deposit.step !== 'error'}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-xs font-bold text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                  >
+                    <option value="none" className="bg-slate-900 text-white">None</option>
+                    <option value="rejected-signing" className="bg-slate-900 text-white">Freighter signing rejected</option>
+                    <option value="insufficient-xlm" className="bg-slate-900 text-white">Insufficient XLM balance</option>
+                    <option value="network-mismatch" className="bg-slate-900 text-white">Network mismatch (mainnet)</option>
+                  </select>
+                </div>
+              )}
+
+              {/* Review Line */}
+              {wallet.connected && (
+                <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800 text-xs font-mono space-y-1">
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Amount:</span>
+                    <span className="text-white font-bold">{usdcAmount} USDC</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Destination:</span>
+                    <span className="text-white font-bold truncate max-w-[200px]">{wallet.address}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Network:</span>
+                    <span className="text-white font-bold">{networkLabel || '…'}</span>
+                  </div>
+                </div>
+              )}
+
               {/* Action CTA Button */}
               <button
                 onClick={wallet.connected ? handleExecuteDeposit : onConnectWallet}
-                disabled={isProcessing}
-                className="w-full py-4 rounded-xl bg-[#3E6BFF] hover:bg-[#345CE0] text-white font-extrabold text-xs sm:text-sm transition-all shadow-lg shadow-blue-500/20 flex items-center justify-center space-x-2 cursor-pointer"
+                disabled={deposit.step !== 'idle' && deposit.step !== 'error'}
+                className="w-full py-4 rounded-xl bg-[#3E6BFF] hover:bg-[#345CE0] text-white font-extrabold text-xs sm:text-sm transition-all shadow-lg shadow-blue-500/20 flex items-center justify-center space-x-2 cursor-pointer disabled:opacity-50 disabled:cursor-wait"
               >
-                {isProcessing ? (
+                {deposit.step !== 'idle' && deposit.step !== 'error' ? (
                   <>
                     <RefreshCw className="w-4 h-4 animate-spin" />
                     <span>Processing CCTP Ingestion...</span>
@@ -319,15 +487,60 @@ export const CatalogSection: React.FC<CatalogSectionProps> = ({
             </div>
 
             {/* Settlement Receipt */}
-            {settlementResult && (
+            {deposit.step === 'settled' && deposit.receipt && (
               <div className="mt-4 p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-xl space-y-2 text-xs font-mono">
+                {deposit.receipt.simulated && deposit.receipt.txHash.startsWith('SIM-') && (
+                  <div className="text-center text-amber-400 font-extrabold text-[11px] uppercase tracking-wider mb-2">
+                    ⚠ SIMULATED — No real transaction submitted
+                  </div>
+                )}
                 <div className="flex justify-between text-emerald-400 font-bold">
                   <span>Minting Output:</span>
-                  <span>{settlementResult.stellarAmount} USDC</span>
+                  <span>{deposit.receipt.stellarAmount} USDC</span>
+                </div>
+                <div className="flex justify-between text-slate-400">
+                  <span>Dust Sweep:</span>
+                  <span>{deposit.receipt.dust} base units</span>
                 </div>
                 <div className="flex justify-between text-slate-400">
                   <span>Stellar Tx:</span>
-                  <span className="truncate max-w-[140px] text-white">{settlementResult.mintTxHash}</span>
+                  <span className="truncate max-w-[140px] text-white">{deposit.receipt.txHash}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Error Display */}
+            {deposit.step === 'error' && deposit.errorDetails && (
+              <div className="mt-4 p-4 bg-rose-950/40 border border-rose-800/60 rounded-xl space-y-2">
+                <div className="flex items-center text-rose-300 font-extrabold text-xs">
+                  <AlertCircle className="w-4 h-4 mr-1.5 text-rose-400 shrink-0" />
+                  {deposit.errorDetails}
+                </div>
+              </div>
+            )}
+
+            {/* Step Indicator */}
+            {deposit.step !== 'idle' && deposit.step !== 'settled' && deposit.step !== 'error' && (
+              <div className="mt-4 p-3 bg-slate-950/60 rounded-xl border border-slate-800 text-xs font-mono">
+                <div className="flex items-center space-x-2 text-slate-400">
+                  {deposit.step === 'verifying' && (
+                    <>
+                      <RefreshCw className="w-3 h-3 animate-spin text-blue-400" />
+                      <span>Verifying wallet address…</span>
+                    </>
+                  )}
+                  {deposit.step === 'attesting' && (
+                    <>
+                      <RefreshCw className="w-3 h-3 animate-spin text-blue-400" />
+                      <span>Polling Iris attestation (attempt {deposit.attempts})…</span>
+                    </>
+                  )}
+                  {deposit.step === 'submitting' && (
+                    <>
+                      <RefreshCw className="w-3 h-3 animate-spin text-blue-400" />
+                      <span>Submitting Soroban mint…</span>
+                    </>
+                  )}
                 </div>
               </div>
             )}
