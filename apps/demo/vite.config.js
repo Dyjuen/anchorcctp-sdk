@@ -13,5 +13,13 @@ export default defineConfig({
       '@anchor-cctp/core-sdk': path.resolve(__dirname, '../../packages/core/dist/esm/index.js'),
     },
   },
+  server: {
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
+    },
+  },
 })
 
