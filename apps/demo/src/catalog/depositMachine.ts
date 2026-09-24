@@ -61,15 +61,35 @@ export function buildEventsUrl(params: {
   address: string;
   burnTxHash: string;
   sourceDomain: number;
+  amount?: string;
 }): string {
-  return (
+  let u =
     '/api/events?address=' +
     encodeURIComponent(params.address) +
     '&burnTxHash=' +
     encodeURIComponent(params.burnTxHash) +
     '&sourceDomain=' +
-    encodeURIComponent(String(params.sourceDomain))
-  );
+    encodeURIComponent(String(params.sourceDomain));
+  if (params.amount !== undefined) {
+    u += '&amount=' + encodeURIComponent(params.amount);
+  }
+  return u;
+}
+
+export async function postReceiveIntent(
+  fetcher: typeof fetch,
+  params: { burnTxHash: string; address: string; amount: string },
+): Promise<void> {
+  const res = await fetcher('/api/receive:initiate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    const msg = (body as any)?.error?.remediation ?? `Server returned ${res.status}`;
+    throw new Error(msg);
+  }
 }
 
 export function assertAddressUnchanged(connected: string, live: string): void {
@@ -85,6 +105,13 @@ export function extractLiveAddress(result: unknown): string | null {
     return ((result as { address: string }).address) || null;
   }
   return null;
+}
+
+/** Extract error message from SSE error event data. Server sends {type:'error', code, remediation}. */
+export function sseErrorMessage(data: Record<string, unknown>): string {
+  if (typeof data.remediation === 'string') return data.remediation;
+  if (typeof data.message === 'string') return data.message;
+  return 'Unknown error';
 }
 
 /** Map a simError select value to a synthetic DepositEvent, or null for 'none'. */

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { reduceDeposit, initialDeposit, parseUsdcBase6, buildEventsUrl, assertAddressUnchanged, simErrorEvent, extractLiveAddress } from './depositMachine.js';
+import { reduceDeposit, initialDeposit, parseUsdcBase6, buildEventsUrl, assertAddressUnchanged, simErrorEvent, extractLiveAddress, postReceiveIntent, sseErrorMessage } from './depositMachine.js';
 
 const G = 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5';
 
@@ -69,5 +69,38 @@ describe('simErrorEvent', () => {
   });
   it('returns null for unknown values', () => {
     expect(simErrorEvent('bogus')).toBeNull();
+  });
+});
+
+describe('real settled', () => {
+  it('settles without simulated flag and keeps server amounts', () => {
+    const s = reduceDeposit(initialDeposit, { type: 'settled', simulated: false, txHash: 'CA3D...REAL', stellarAmount: '1.0000000', dust: '0' });
+    expect(s.step).toBe('settled');
+    expect(s.receipt?.simulated).not.toBe(true);
+    expect(s.receipt?.stellarAmount).toBe('1.0000000');
+  });
+  it('builds EventSource URL with amount', () => {
+    const u = buildEventsUrl({ address: G, burnTxHash: '0x' + 'ab'.repeat(32), sourceDomain: 0, amount: '100.00' });
+    expect(u).toContain('amount=' + encodeURIComponent('100.00'));
+  });
+  it('postReceiveIntent throws server remediation on 403', async () => {
+    const fetcher = async () => ({ ok: false, status: 403, json: async () => ({ error: { code: 'FORBIDDEN', remediation: 'Stream not authorized.' } }) });
+    await expect(postReceiveIntent(fetcher as never, { burnTxHash: '0x1', address: G, amount: '1.00' })).rejects.toThrow(/not authorized/i);
+  });
+  it('postReceiveIntent resolves on 200', async () => {
+    const fetcher = async () => ({ ok: true, status: 200, json: async () => ({ ok: true }) });
+    await expect(postReceiveIntent(fetcher as never, { burnTxHash: '0x1', address: G, amount: '1.00' })).resolves.toBeUndefined();
+  });
+});
+
+describe('sseErrorMessage', () => {
+  it('prefers remediation over message', () => {
+    expect(sseErrorMessage({ type: 'error', code: 'X', remediation: 'Fix this.', message: 'ignored' })).toBe('Fix this.');
+  });
+  it('falls back to message when no remediation', () => {
+    expect(sseErrorMessage({ type: 'error', message: 'Something broke' })).toBe('Something broke');
+  });
+  it('returns Unknown error when neither present', () => {
+    expect(sseErrorMessage({ type: 'error', code: 'X' })).toBe('Unknown error');
   });
 });

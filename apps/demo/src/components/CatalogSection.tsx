@@ -28,6 +28,8 @@ import {
   assertAddressUnchanged,
   simErrorEvent,
   extractLiveAddress,
+  postReceiveIntent,
+  sseErrorMessage,
 } from '../catalog/depositMachine';
 
 interface CatalogSectionProps {
@@ -73,6 +75,10 @@ export const CatalogSection: React.FC<CatalogSectionProps> = ({
   });
 
   const activeDomain = CCTP_DOMAINS[selectedDomainId] || CCTP_DOMAINS[0];
+
+  const network = React.useMemo(() => {
+    try { return loadNetworkConfig().network; } catch { return 'testnet'; }
+  }, []);
 
   const getDomainLogo = (domainId: number) => {
     switch (domainId) {
@@ -171,10 +177,14 @@ export const CatalogSection: React.FC<CatalogSectionProps> = ({
         assertAddressUnchanged(wallet.address, liveAddress);
       }
 
+      // Intent-first: POST before opening SSE stream
+      await postReceiveIntent(fetch, { burnTxHash, address: wallet.address, amount: usdcAmount });
+
       const url = buildEventsUrl({
         address: wallet.address,
         burnTxHash,
         sourceDomain: activeDomain.domainId,
+        amount: usdcAmount,
       });
 
       const es = new EventSource(url);
@@ -188,20 +198,26 @@ export const CatalogSection: React.FC<CatalogSectionProps> = ({
           } else if (data.type === 'submitting') {
             setDeposit((s) => reduceDeposit(s, { type: 'submitting' }));
           } else if (data.type === 'settled') {
-            const { stellarAmount, dust } = convert6to7(rawUnits);
+            const serverAmount = data.stellarAmount != null;
+            const stellarAmt = serverAmount
+              ? data.stellarAmount
+              : (() => { const { stellarAmount } = convert6to7(rawUnits); return formatStellarUnits(stellarAmount); })();
+            const dustAmt = serverAmount ? (data.dust ?? '0') : (() => { const { dust } = convert6to7(rawUnits); return dust.toString(); })();
+            const tx = data.txHash ?? data.mintTxHash ?? 'SIM-0001';
+            const sim = data.simulated ?? tx.startsWith('SIM-');
             setDeposit((s) =>
               reduceDeposit(s, {
                 type: 'settled',
-                stellarAmount: formatStellarUnits(stellarAmount),
-                dust: dust.toString(),
-                txHash: data.txHash ?? 'SIM-0001',
-                simulated: data.simulated ?? (data.txHash ?? '').startsWith('SIM-'),
+                stellarAmount: stellarAmt,
+                dust: dustAmt,
+                txHash: tx,
+                simulated: sim,
               })
             );
             es.close();
             esRef.current = null;
           } else if (data.type === 'error') {
-            setDeposit((s) => reduceDeposit(s, { type: 'error', message: data.message ?? 'Unknown error' }));
+            setDeposit((s) => reduceDeposit(s, { type: 'error', message: sseErrorMessage(data) }));
             es.close();
             esRef.current = null;
           }
@@ -530,7 +546,18 @@ export const CatalogSection: React.FC<CatalogSectionProps> = ({
                 </div>
                 <div className="flex justify-between text-slate-400">
                   <span>Stellar Tx:</span>
-                  <span className="truncate max-w-[140px] text-white">{deposit.receipt.txHash}</span>
+                  {deposit.receipt.simulated && deposit.receipt.txHash.startsWith('SIM-') ? (
+                    <span className="truncate max-w-[140px] text-white">{deposit.receipt.txHash}</span>
+                  ) : (
+                    <a
+                      href={`https://stellar.expert/explorer/${network}/tx/${deposit.receipt.txHash}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="truncate max-w-[140px] text-white underline hover:text-emerald-400"
+                    >
+                      {deposit.receipt.txHash}
+                    </a>
+                  )}
                 </div>
               </div>
             )}
