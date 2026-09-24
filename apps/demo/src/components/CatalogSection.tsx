@@ -490,6 +490,25 @@ export const CatalogSection: React.FC<CatalogSectionProps> = ({
                   <span>Connect Freighter Wallet</span>
                 )}
               </button>
+              {!wallet.connected && wallet.error && (
+                <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-xs font-mono text-rose-300">
+                  <span className="font-bold">Wallet connection failed: </span>
+                  {wallet.error}
+                  {/install/i.test(wallet.error) && (
+                    <>
+                      {' — '}
+                      <a
+                        href="https://freighter.app"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="underline font-bold"
+                      >
+                        Install Freighter
+                      </a>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Settlement Receipt */}

@@ -10,6 +10,7 @@ export interface WalletState {
   isSimulated?: boolean;
   needsInstall?: boolean;
   balances?: Array<{ asset_type: string; balance: string }>;
+  balancesError?: string;
   networkPassphrase?: string;
 }
 
@@ -64,8 +65,15 @@ export async function connectFreighter(opts?: { allowSimulated?: boolean }): Pro
     }
 
     // Verify network passphrase (must match STELLAR_NETWORK_PASSPHRASE)
-    const { getNetworkPassphrase } = await import('@stellar/freighter-api');
-    const networkPassphrase = await getNetworkPassphrase();
+    const { getNetwork } = await import('@stellar/freighter-api');
+    const { networkPassphrase, error: netError } = await getNetwork();
+    if (netError) {
+      return {
+        connected: false,
+        address: null,
+        error: typeof netError === 'string' ? netError : 'Wallet network unavailable',
+      };
+    }
     const expectedPassphrase =
       (import.meta as any).env?.VITE_STELLAR_NETWORK_PASSPHRASE ??
       'Test SDF Network ; September 2015';
@@ -79,14 +87,21 @@ export async function connectFreighter(opts?: { allowSimulated?: boolean }): Pro
       };
     }
 
-    // Fetch balances via Horizon
-    const balanceInfo = await fetchBalances(address);
+    // Fetch balances via Horizon — non-blocking: balance failure must not sink connect
+    let balanceInfo: WalletState['balances'];
+    let balancesError: string | undefined;
+    try {
+      balanceInfo = await fetchBalances(address);
+    } catch (err: unknown) {
+      balancesError = err instanceof Error ? err.message : String(err);
+    }
 
     return {
       connected: true,
       address,
       networkPassphrase,
       balances: balanceInfo,
+      balancesError,
     };
   } catch (err: unknown) {
     return {
@@ -105,9 +120,12 @@ export async function signWithFreighter(
   xdr: string,
   networkPassphrase: string = 'Test SDF Network ; September 2015'
 ): Promise<string> {
-  const { signTransaction, getNetworkPassphrase } = await import('@stellar/freighter-api');
+  const { signTransaction, getNetwork } = await import('@stellar/freighter-api');
 
-  const currentPassphrase = await getNetworkPassphrase();
+  const { networkPassphrase: currentPassphrase, error: netError } = await getNetwork();
+  if (netError) {
+    throw new Error(typeof netError === 'string' ? netError : 'Wallet network unavailable');
+  }
   if (currentPassphrase !== networkPassphrase) {
     throw new Error(`Network mismatch: wallet on ${currentPassphrase}, expected ${networkPassphrase}`);
   }

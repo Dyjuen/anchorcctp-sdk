@@ -5,7 +5,7 @@ vi.mock('@stellar/freighter-api', () => ({
   getAddress: vi.fn(),
   signTransaction: vi.fn(),
   getNetwork: vi.fn(),
-  getNetworkPassphrase: vi.fn(),
+  getNetworkDetails: vi.fn(),
   isAllowed: vi.fn().mockResolvedValue(true),
   setAllowed: vi.fn(),
 }));
@@ -26,7 +26,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   // Restore defaults stripped by clearAllMocks
   vi.mocked(freighterApi.isAllowed).mockResolvedValue(true as any);
-  vi.mocked(freighterApi.getNetworkPassphrase).mockResolvedValue(TESTNET_PASS);
+  vi.mocked(freighterApi.getNetwork).mockResolvedValue({ network: 'TESTNET', networkPassphrase: TESTNET_PASS } as any);
 });
 afterEach(() => { vi.unstubAllGlobals?.(); vi.unstubAllEnvs?.(); });
 
@@ -61,6 +61,23 @@ describe('connectFreighter', () => {
     expect(res.connected).toBe(false);
     expect(res.error).toMatch(/browser lock/i);
   });
+
+  it('stays connected when balance fetch fails', async () => {
+    for (const [k, v] of Object.entries({
+      VITE_NETWORK: 'testnet',
+      VITE_SOROBAN_RPC_URL: 'https://soroban-testnet.stellar.org',
+      VITE_USDC_ISSUER: 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5',
+      VITE_FORWARDER_CONTRACT_ID: 'CBBEEQSCIJBEEQSCIJBEEQSCIJBEEQSCIJBEEQSCIJBEEQSCIJBEE5XW',
+      VITE_ATTESTATION_URL: 'https://attestation.example.com',
+    })) vi.stubEnv(k, v);
+    vi.mocked(freighterApi.isConnected).mockResolvedValue({ isConnected: true } as any);
+    vi.mocked(freighterApi.getAddress).mockResolvedValue({ address: G } as any);
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Horizon down')));
+    const res = await connectFreighter();
+    expect(res.connected).toBe(true);
+    expect(res.address).toBe(G);
+    expect(res.balancesError).toMatch(/Horizon down/i);
+  });
 });
 
 describe('signWithFreighter', () => {
@@ -76,14 +93,14 @@ describe('signWithFreighter', () => {
   });
 
   it('passes custom passphrase to signTransaction', async () => {
-    vi.mocked(freighterApi.getNetworkPassphrase).mockResolvedValue('Public Global Stellar Network ; September 2015');
+    vi.mocked(freighterApi.getNetwork).mockResolvedValue({ network: 'PUBLIC', networkPassphrase: 'Public Global Stellar Network ; September 2015' } as any);
     const spy = vi.mocked(freighterApi.signTransaction).mockResolvedValue({ signedTxXdr: 'OK', error: '' } as any);
     await signWithFreighter('AAAA', 'Public Global Stellar Network ; September 2015');
     expect(spy).toHaveBeenCalledWith('AAAA', { networkPassphrase: 'Public Global Stellar Network ; September 2015' });
   });
 
   it('throws on network passphrase mismatch', async () => {
-    vi.mocked(freighterApi.getNetworkPassphrase).mockResolvedValue('Wrong Network ; September 2015');
+    vi.mocked(freighterApi.getNetwork).mockResolvedValue({ network: 'WRONG', networkPassphrase: 'Wrong Network ; September 2015' } as any);
     await expect(signWithFreighter('AAAA')).rejects.toThrow(/Network mismatch/i);
   });
 });
