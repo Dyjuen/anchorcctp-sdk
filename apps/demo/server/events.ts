@@ -16,6 +16,7 @@ export interface ValidatedParams {
   address: string;
   burnTxHash: string;
   sourceDomain: number;
+  amount: bigint;
 }
 
 export interface SseEvent {
@@ -144,6 +145,23 @@ export function SimTimeline(_burnTxHash: string, _sourceDomain: number): SseEven
   return events;
 }
 
+// ─── Amount Parsing ──────────────────────────────────────────────────────────
+
+const MAX_CCTP = 2n ** 64n - 1n;
+
+/**
+ * Parses USDC amount string (≤6 decimals) to bigint base units. Throws on invalid format.
+ */
+export function parseAmountBase6(s: string): bigint {
+  const t = s.trim();
+  if (!/^\d+(\.\d{1,6})?$/.test(t)) throw new Error('400 Amount must be positive USDC with ≤6 decimals precision');
+  const [w, f = ''] = t.split('.');
+  const v = BigInt(w) * 1_000_000n + BigInt((f + '000000').slice(0, 6));
+  if (v <= 0n) throw new Error('400 Amount must be > 0');
+  if (v > MAX_CCTP) throw new Error('400 Amount overflow: too large');
+  return v;
+}
+
 // ─── Validation ──────────────────────────────────────────────────────────────
 
 const ALLOWED_ORIGINS = [
@@ -158,17 +176,19 @@ const ALLOWED_ORIGINS = [
  */
 export function validateEventParams(q: Record<string, unknown>): ValidatedParams {
   // reject array values (query string ambiguity)
-  if (Array.isArray(q.address) || Array.isArray(q.burnTxHash) || Array.isArray(q.sourceDomain)) {
+  if (Array.isArray(q.address) || Array.isArray(q.burnTxHash) || Array.isArray(q.sourceDomain) || Array.isArray(q.amount)) {
     throw new Error('400 address, burnTxHash, sourceDomain must not be arrays');
   }
 
   const address = typeof q.address === 'string' ? q.address.trim() : '';
   const burnTxHashRaw = typeof q.burnTxHash === 'string' ? q.burnTxHash.trim() : '';
   const sourceDomainRaw = typeof q.sourceDomain === 'string' ? q.sourceDomain.trim() : '';
+  const amountRaw = typeof q.amount === 'string' ? q.amount.trim() : '';
 
   if (!address) throw new Error('400 address is required');
   if (!burnTxHashRaw) throw new Error('400 burnTxHash is required');
   if (!sourceDomainRaw) throw new Error('400 sourceDomain is required');
+  if (!amountRaw) throw new Error('400 amount is required');
 
   if (!StrKey.isValidEd25519PublicKey(address)) {
     throw new Error('400 address must be a valid G... StrKey');
@@ -184,7 +204,9 @@ export function validateEventParams(q: Record<string, unknown>): ValidatedParams
   // pre-normalize 0X → 0x before core's strict regex
   const burnTxHash = normalizeBurnTxHash(preNormalizeHash(burnTxHashRaw));
 
-  return { address, burnTxHash, sourceDomain };
+  const amount = parseAmountBase6(amountRaw);
+
+  return { address, burnTxHash, sourceDomain, amount };
 }
 
 // ─── Public Config ───────────────────────────────────────────────────────────
