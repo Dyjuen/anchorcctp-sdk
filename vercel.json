@@ -1,0 +1,7 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "installCommand": "npm install",
+  "buildCommand": "npm run build --workspace=@anchor-cctp/core-sdk && npm run build --workspace=@anchor-cctp/demo",
+  "outputDirectory": "apps/demo/dist",
+  "framework": "vite"
+}
