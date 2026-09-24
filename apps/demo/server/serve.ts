@@ -3,12 +3,9 @@
 // ponytail: server-only, esbuild bundles to dist-server/serve.cjs.
 
 import { createServer, IncomingMessage, ServerResponse } from 'node:http';
-import { createRequire } from 'node:module';
 import { normalizeBurnTxHash, assertSupportedDomain, FileReplayStore, createAnchorCCTPFromEnv } from '@anchor-cctp/core-sdk';
 import { validateEventParams, publicConfigBundle, SimTimeline, postInitiate, gateRealStream, createIntentStore, createRealGate, RateLimitBuckets, collectSseReal } from './events.js';
-
-const require = createRequire(import.meta.url);
-const { StrKey } = require('@stellar/stellar-sdk') as typeof import('@stellar/stellar-sdk');
+import { StrKey } from '@stellar/stellar-sdk';
 
 // ─── Env ─────────────────────────────────────────────────────────────────────
 
