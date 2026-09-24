@@ -54,12 +54,12 @@ export async function connectFreighter(opts?: { allowSimulated?: boolean }): Pro
     }
 
     const { getAddress } = await import('@stellar/freighter-api');
-    const address = await getAddress();
-    if (!address) {
+    const { address, error: addrError } = await getAddress();
+    if (addrError || !address) {
       return {
         connected: false,
         address: null,
-        error: 'User denied access or wallet is locked',
+        error: addrError ?? 'User denied access or wallet is locked',
       };
     }
 
@@ -116,7 +116,11 @@ export async function signWithFreighter(
     networkPassphrase,
   });
 
-  return result;
+  if (result.error) {
+    throw new Error(result.error);
+  }
+
+  return result.signedTxXdr;
 }
 
 /**

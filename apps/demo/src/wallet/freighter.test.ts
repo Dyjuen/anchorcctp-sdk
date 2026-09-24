@@ -49,8 +49,7 @@ describe('connectFreighter', () => {
 
   it('surfaces user-decline as disconnected with reason', async () => {
     vi.mocked(freighterApi.isConnected).mockResolvedValue({ isConnected: true } as any);
-    // getAddress returns a string — empty string means user denied
-    vi.mocked(freighterApi.getAddress).mockResolvedValue('' as any);
+    vi.mocked(freighterApi.getAddress).mockResolvedValue({ address: '', error: 'declined' } as any);
     const res = await connectFreighter();
     expect(res.connected).toBe(false);
     expect(res.error).toMatch(/denied|declined/i);
@@ -65,11 +64,15 @@ describe('connectFreighter', () => {
 });
 
 describe('signWithFreighter', () => {
-  it('returns signTransaction result on success', async () => {
+  it('throws typed error on rejection instead of returning xdr', async () => {
+    vi.mocked(freighterApi.signTransaction).mockResolvedValue({ signedTxXdr: '', error: 'rejected' } as any);
+    await expect(signWithFreighter('AAAA')).rejects.toThrow(/rejected/i);
+  });
+
+  it('returns signedTxXdr on success', async () => {
     vi.mocked(freighterApi.signTransaction).mockResolvedValue({ signedTxXdr: 'SIGNED_XDR_BLOB', error: '' } as any);
     const result = await signWithFreighter('AAAA');
-    // signWithFreighter returns the raw signTransaction result
-    expect(result).toEqual({ signedTxXdr: 'SIGNED_XDR_BLOB', error: '' });
+    expect(result).toBe('SIGNED_XDR_BLOB');
   });
 
   it('passes custom passphrase to signTransaction', async () => {
