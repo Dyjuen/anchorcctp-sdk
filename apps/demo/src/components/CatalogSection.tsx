@@ -558,7 +558,7 @@ export const CatalogSection: React.FC<CatalogSectionProps> = ({
                   {deposit.step === 'attesting' && (
                     <>
                       <RefreshCw className="w-3 h-3 animate-spin text-blue-400" />
-                      <span>Polling Iris attestation (attempt {deposit.attempts})…</span>
+                      <span>Polling Iris attestation (attempt {deposit.attempts})… Circle finalization takes minutes — leave this open.</span>
                     </>
                   )}
                   {deposit.step === 'submitting' && (
