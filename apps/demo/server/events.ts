@@ -228,7 +228,8 @@ export function validateEventParams(q: Record<string, unknown>): ValidatedParams
 
   const address = typeof q.address === 'string' ? q.address.trim() : '';
   const burnTxHashRaw = typeof q.burnTxHash === 'string' ? q.burnTxHash.trim() : '';
-  const sourceDomainRaw = typeof q.sourceDomain === 'string' ? q.sourceDomain.trim() : '';
+  const sourceDomainRaw = typeof q.sourceDomain === 'string' ? q.sourceDomain.trim()
+    : typeof q.sourceDomain === 'number' ? String(q.sourceDomain) : '';
   const amountRaw = typeof q.amount === 'string' ? q.amount.trim() : '';
 
   if (!address) throw new Error('400 address is required');

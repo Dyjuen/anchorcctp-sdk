@@ -108,6 +108,10 @@ describe('validateEventParams amount', () => {
     const p = validateEventParams({ address: G, burnTxHash: '0x' + 'ab'.repeat(32), sourceDomain: '0', amount: ' 100.00 ' });
     expect(p.amount).toBe(100000000n);
   });
+  it('accepts numeric sourceDomain (JSON body)', () => {
+    const p = validateEventParams({ address: G, burnTxHash: '0x' + 'ab'.repeat(32), sourceDomain: 6, amount: '0.10' } as never);
+    expect(p.sourceDomain).toBe(6);
+  });
 });
 
 describe('collectSseReal', () => {
