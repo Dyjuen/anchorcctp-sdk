@@ -59,7 +59,7 @@ export async function connectFreighter(opts?: { allowSimulated?: boolean }): Pro
       return {
         connected: false,
         address: null,
-        error: addrError ?? 'User denied access or wallet is locked',
+        error: addrError || 'User denied access or wallet is locked',
       };
     }
 
