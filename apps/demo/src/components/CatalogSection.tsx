@@ -1,10 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import {
-  CCTP_DOMAINS,
-  convert6to7,
-  formatStellarUnits,
-} from '@anchor-cctp/core-sdk';
+import { CCTP_DOMAINS } from '@anchor-cctp/core-sdk';
 import {
   ArrowRight,
   CheckCircle2,
@@ -21,20 +17,47 @@ import { WalletState, fetchBalances } from '../wallet/freighter';
 import { loadNetworkConfig } from '../config/network';
 import {
   DepositState,
+  FeeQuote,
+  StatusFrame,
+  TransferMode,
   initialDeposit,
   reduceDeposit,
   parseUsdcBase6,
-  buildEventsUrl,
   assertAddressUnchanged,
   simErrorEvent,
   extractLiveAddress,
-  postReceiveIntent,
-  sseErrorMessage,
+  isPollingStep,
+  nextPollDelay,
+  quoteFeeOverMax,
 } from '../catalog/depositMachine';
 
 interface CatalogSectionProps {
   wallet: WalletState;
   onConnectWallet: () => void;
+}
+
+/** CCTP domain of the Stellar destination (spec §4: the demo always mints to 27). */
+const STELLAR_CCTP_DOMAIN = 27;
+
+/**
+ * Client-side copy of the fast window. The server owns the real threshold (it
+ * computes `degraded` against the intent's `createdAt`) — this only decides when the
+ * client's own clock says the window has passed, so a frame that omits `degraded`
+ * cannot stall the "continuing as Standard" label.
+ */
+const FAST_WINDOW_FALLBACK_MS = 90_000;
+
+/** One in-flight transfer: everything the poller and the settle call need. */
+interface TransferRun {
+  address: string;
+  burnTxHash: string;
+  amount: string;
+  sourceDomain: number;
+  /** Mode recorded on the intent at initiate — settle must match it byte-for-byte. */
+  mode: TransferMode;
+  intentId: string;
+  maxFee?: string;
+  startedAt: number;
 }
 
 export const CatalogSection: React.FC<CatalogSectionProps> = ({
@@ -46,6 +69,9 @@ export const CatalogSection: React.FC<CatalogSectionProps> = ({
   const [burnTxHash, setBurnTxHash] = useState<string>('');
   const [usdcAmount, setUsdcAmount] = useState<string>('100.00');
   const [simError, setSimError] = useState<string>('none');
+  /** User's fee cap in USDC — empty means "no cap". */
+  const [maxFee, setMaxFee] = useState<string>('');
+  const [quoteError, setQuoteError] = useState<string | null>(null);
 
   // Deposit state machine
   const [deposit, setDeposit] = useState<DepositState>(initialDeposit);
@@ -56,8 +82,13 @@ export const CatalogSection: React.FC<CatalogSectionProps> = ({
   const [networkOk, setNetworkOk] = useState<boolean | null>(null);
   const [networkLabel, setNetworkLabel] = useState<string>('');
 
-  const esRef = useRef<EventSource | null>(null);
-  const connectedAddressRef = useRef<string | null>(null);
+  /** The transfer the poller is driving. Kept through `cancelled` so retry can resume it. */
+  const runRef = useRef<TransferRun | null>(null);
+  /** False once the wait is over (cancel/settle/unmount) — stops the next poll from arming. */
+  const pollingRef = useRef(false);
+  const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Drops quote responses a newer request superseded. */
+  const quoteSeqRef = useRef(0);
 
   const categories = [
     { id: 'all', label: 'All Domains' },
@@ -139,112 +170,332 @@ export const CatalogSection: React.FC<CatalogSectionProps> = ({
       setNetworkOk(null);
       setNetworkLabel('');
     }
-    return () => {
-      esRef.current?.close();
-      esRef.current = null;
-    };
   }, [wallet.connected, wallet.address]);
 
-  const handleExecuteDeposit = async () => {
+  // Spec §7: the poller stops on settled/cancelled/error — and on unmount.
+  useEffect(() => {
+    if (isPollingStep(deposit.step)) return;
+    pollingRef.current = false;
+    stopPolling();
+  }, [deposit.step]);
+
+  useEffect(
+    () => () => {
+      pollingRef.current = false;
+      stopPolling();
+      runRef.current = null;
+    },
+    [],
+  );
+
+  const stopPolling = () => {
+    if (pollTimerRef.current !== null) {
+      clearTimeout(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+  };
+
+  /** Spec §7: 5s with jitter, 15s after 2 minutes — never a fixed `setInterval`,
+   *  because the delay changes with jitter and backoff. */
+  const scheduleNextPoll = () => {
+    stopPolling();
+    const run = runRef.current;
+    if (!run || !pollingRef.current) return;
+    pollTimerRef.current = setTimeout(() => {
+      void pollOnce();
+    }, nextPollDelay(Date.now() - run.startedAt, Math.random));
+  };
+
+  const finishRun = () => {
+    pollingRef.current = false;
+    stopPolling();
+  };
+
+  /**
+   * One status read. Terminates the wait on settled/failed; settles when the
+   * attestation is ready; otherwise re-arms with the jittered delay.
+   */
+  const pollOnce = async () => {
+    const run = runRef.current;
+    if (!run || !pollingRef.current) return;
+
+    let frame: StatusFrame;
+    try {
+      const query = new URLSearchParams({
+        burnTxHash: run.burnTxHash,
+        address: run.address,
+        amount: run.amount,
+      });
+      const res = await fetch(`/api/receive/status?${query.toString()}`);
+      const body = (await res.json().catch(() => ({}))) as StatusFrame & {
+        error?: { remediation?: string };
+      };
+      if (!res.ok) {
+        finishRun();
+        setDeposit((s) =>
+          reduceDeposit(s, {
+            type: 'error',
+            message: body?.error?.remediation ?? `Status request failed (${res.status})`,
+          }),
+        );
+        return;
+      }
+      frame = body;
+    } catch {
+      finishRun();
+      setDeposit((s) => reduceDeposit(s, { type: 'error', message: 'Status request failed — connection lost.' }));
+      return;
+    }
+
+    if (!pollingRef.current) return; // cancelled while the request was in flight
+    setDeposit((s) => reduceDeposit(s, { type: 'status', frame }));
+
+    if (frame.status === 'settled' || frame.status === 'failed') {
+      finishRun();
+      return;
+    }
+    // §7: the Iris signal is handled by the frame itself; this is the elapsed-window
+    // fallback, so "continuing as Standard" appears even if a frame omits `degraded`.
+    if (frame.degraded || Date.now() - run.startedAt > FAST_WINDOW_FALLBACK_MS) {
+      setDeposit((s) => reduceDeposit(s, { type: 'fast-window-expired' }));
+    }
+    if (frame.status === 'ready' || frame.attestationReady) {
+      await settleRun(run);
+      return;
+    }
+    scheduleNextPoll();
+  };
+
+  /** POST /api/receive/settle — the only call that mints (spec §4). */
+  const settleRun = async (run: TransferRun) => {
+    setDeposit((s) => reduceDeposit(s, { type: 'settle-ready' }));
+    try {
+      const res = await fetch('/api/receive/settle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          burnTxHash: run.burnTxHash,
+          address: run.address,
+          amount: run.amount,
+          sourceDomain: run.sourceDomain,
+          transferMode: run.mode,
+          intentId: run.intentId,
+          ...(run.maxFee ? { maxFee: run.maxFee } : {}),
+        }),
+      });
+      const body = (await res.json().catch(() => ({}))) as {
+        receipt?: { stellarAmount?: string; mintTxHash?: string; dust?: string };
+        error?: { code?: string; remediation?: string };
+      };
+      if (!res.ok) {
+        finishRun();
+        setDeposit((s) =>
+          reduceDeposit(s, {
+            type: 'error',
+            message: body?.error?.remediation ?? `Settle failed (${res.status})`,
+          }),
+        );
+        return;
+      }
+      finishRun();
+      setDeposit((s) =>
+        reduceDeposit(s, {
+          type: 'settled',
+          simulated: false,
+          txHash: body.receipt?.mintTxHash ?? 'UNKNOWN',
+          stellarAmount: String(body.receipt?.stellarAmount ?? ''),
+          ...(body.receipt?.dust === undefined ? {} : { dust: body.receipt.dust }),
+        }),
+      );
+    } catch {
+      finishRun();
+      setDeposit((s) =>
+        reduceDeposit(s, {
+          type: 'error',
+          message: 'Settle request failed — check the burn on a Stellar explorer before retrying.',
+        }),
+      );
+    }
+  };
+
+  /** POST /api/receive/initiate, then start the status poller (spec §4/§7). */
+  const startRun = async (mode: TransferMode) => {
+    const address = wallet.address;
+    if (!address) return;
+    try {
+      parseUsdcBase6(usdcAmount);
+
+      // Re-fetch the address and assert no drift before recording the intent.
+      const { getAddress } = await import('@stellar/freighter-api');
+      const liveAddress = extractLiveAddress(await getAddress());
+      if (liveAddress) {
+        assertAddressUnchanged(address, liveAddress);
+      }
+
+      const trimmedMaxFee = maxFee.trim();
+      const res = await fetch('/api/receive/initiate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          burnTxHash,
+          address,
+          amount: usdcAmount,
+          sourceDomain: activeDomain.domainId,
+          transferMode: mode,
+          ...(trimmedMaxFee ? { maxFee: trimmedMaxFee } : {}),
+        }),
+      });
+      const body = (await res.json().catch(() => ({}))) as {
+        intentId?: string;
+        error?: { remediation?: string };
+      };
+      if (!res.ok) {
+        throw new Error(body?.error?.remediation ?? `Initiate failed (${res.status})`);
+      }
+
+      runRef.current = {
+        address,
+        burnTxHash,
+        amount: usdcAmount,
+        sourceDomain: activeDomain.domainId,
+        mode,
+        intentId: body.intentId ?? '',
+        ...(trimmedMaxFee ? { maxFee: trimmedMaxFee } : {}),
+        startedAt: Date.now(),
+      };
+      pollingRef.current = true;
+      setDeposit((s) => reduceDeposit(s, { type: 'burn-submitted', burnTxHash, mode }));
+      scheduleNextPoll();
+    } catch (err) {
+      finishRun();
+      runRef.current = null;
+      setDeposit((s) =>
+        reduceDeposit(s, {
+          type: 'error',
+          message: err instanceof Error ? err.message : 'Unknown error',
+        }),
+      );
+    }
+  };
+
+  /** Quote the fee for a mode. Stale responses are dropped, not rendered. */
+  const refreshQuote = async (mode: TransferMode) => {
+    const seq = ++quoteSeqRef.current;
+    try {
+      const query = new URLSearchParams({
+        sourceDomain: String(activeDomain.domainId),
+        destDomain: String(STELLAR_CCTP_DOMAIN),
+        mode,
+      });
+      const res = await fetch(`/api/fees?${query.toString()}`);
+      const body = (await res.json().catch(() => ({}))) as {
+        minimumFee?: string;
+        finalityThreshold?: number;
+        fastTierAvailable?: boolean;
+        cachedAt?: string;
+        error?: { remediation?: string };
+      };
+      if (seq !== quoteSeqRef.current) return;
+      if (!res.ok) {
+        setQuoteError(body?.error?.remediation ?? `Fee quote unavailable (${res.status}).`);
+        return;
+      }
+      setQuoteError(null);
+      const quote: FeeQuote = {
+        minimumFee: String(body.minimumFee ?? '0'),
+        finalityThreshold: body.finalityThreshold ?? 0,
+        fastTierAvailable: body.fastTierAvailable !== false,
+        cachedAt: body.cachedAt ?? '',
+        mode,
+        fetchedAt: Date.now(),
+      };
+      setDeposit((s) => reduceDeposit(s, { type: 'quote-received', quote }));
+    } catch {
+      if (seq !== quoteSeqRef.current) return;
+      setQuoteError('Fee quote unavailable — retry, or switch to Standard.');
+    }
+  };
+
+  // The panel's inputs live in the machine so the quote rules see them.
+  useEffect(() => {
+    setDeposit((s) => reduceDeposit(s, { type: 'amount', amount: usdcAmount }));
+  }, [usdcAmount]);
+
+  useEffect(() => {
+    setDeposit((s) => reduceDeposit(s, { type: 'max-fee', maxFee }));
+  }, [maxFee]);
+
+  // Panel quote: refetch when the route or the mode changes.
+  useEffect(() => {
+    if (!wallet.connected) return;
+    void refreshQuote(deposit.mode);
+  }, [wallet.connected, activeDomain.domainId, deposit.mode]);
+
+  // Execute asked for a quote (fresh or after the 5-minute rule). `quoting` is the
+  // machine's instruction to fetch; the frame's arrival moves it on to `burning`.
+  useEffect(() => {
+    if (deposit.step !== 'quoting') return;
+    void refreshQuote(deposit.mode);
+  }, [deposit.step]);
+
+  // Execute cleared the panel: register the intent and start polling.
+  useEffect(() => {
+    if (deposit.step !== 'burning' || runRef.current) return;
+    void startRun(deposit.mode);
+  }, [deposit.step]);
+
+  const handleModeChange = (mode: TransferMode) => {
+    setDeposit((s) => reduceDeposit(s, { type: 'mode-change', mode }));
+  };
+
+  const handleExecuteDeposit = () => {
     if (!wallet.connected || !wallet.address) {
       onConnectWallet();
       return;
     }
 
-    // Close any existing EventSource
-    esRef.current?.close();
-
-    // Error simulation: inject synthetic event instead of opening SSE stream
+    // Error simulation: inject synthetic event instead of starting a transfer.
     const simEvt = simErrorEvent(simError);
     if (simEvt) {
-      setDeposit(reduceDeposit({ ...initialDeposit, step: 'verifying' }, simEvt));
+      setDeposit((s) => reduceDeposit({ ...s, step: 'burning' }, simEvt));
       return;
     }
 
-    const startTime = Date.now();
-    setDeposit({ ...initialDeposit, step: 'verifying' });
-    connectedAddressRef.current = wallet.address;
-
-    try {
-      const rawUnits = parseUsdcBase6(usdcAmount);
-
-      const config = loadNetworkConfig();
-
-      // Re-fetch address from wallet and assert no drift
-      const { getAddress } = await import('@stellar/freighter-api');
-      const liveAddress = extractLiveAddress(await getAddress());
-      if (liveAddress) {
-        assertAddressUnchanged(wallet.address, liveAddress);
-      }
-
-      // Intent-first: POST before opening SSE stream
-      await postReceiveIntent(fetch, { burnTxHash, address: wallet.address, amount: usdcAmount, sourceDomain: activeDomain.domainId });
-
-      const url = buildEventsUrl({
-        address: wallet.address,
-        burnTxHash,
-        sourceDomain: activeDomain.domainId,
-        amount: usdcAmount,
-      });
-
-      const es = new EventSource(url);
-      esRef.current = es;
-
-      // Stream opened but no frame yet (real-mode Iris poll can take minutes):
-      // move off the stale "verifying" label so the finality reminder shows.
-      es.onopen = () => {
-        setDeposit((s) => (s.step === 'verifying' ? reduceDeposit(s, { type: 'receiving', attempt: 0 }) : s));
-      };
-
-      es.onmessage = (ev) => {
-        try {
-          const data = JSON.parse(ev.data);
-          if (data.type === 'receiving') {
-            setDeposit((s) => reduceDeposit(s, { type: 'receiving', attempt: data.attempt ?? 1 }));
-          } else if (data.type === 'submitting') {
-            setDeposit((s) => reduceDeposit(s, { type: 'submitting' }));
-          } else if (data.type === 'settled') {
-            const serverAmount = data.stellarAmount != null;
-            const stellarAmt = serverAmount
-              ? data.stellarAmount
-              : (() => { const { stellarAmount } = convert6to7(rawUnits); return formatStellarUnits(stellarAmount); })();
-            const dustAmt = serverAmount ? (data.dust ?? '0') : (() => { const { dust } = convert6to7(rawUnits); return dust.toString(); })();
-            const tx = data.txHash ?? data.mintTxHash ?? 'SIM-0001';
-            const sim = data.simulated ?? tx.startsWith('SIM-');
-            setDeposit((s) =>
-              reduceDeposit(s, {
-                type: 'settled',
-                stellarAmount: stellarAmt,
-                dust: dustAmt,
-                txHash: tx,
-                simulated: sim,
-              })
-            );
-            es.close();
-            esRef.current = null;
-          } else if (data.type === 'error') {
-            setDeposit((s) => reduceDeposit(s, { type: 'error', message: sseErrorMessage(data) }));
-            es.close();
-            esRef.current = null;
-          }
-        } catch {
-          // Ignore malformed SSE events
-        }
-      };
-
-      es.onerror = () => {
-        es.close();
-        esRef.current = null;
-        setDeposit((s) => reduceDeposit(s, { type: 'error', message: 'SSE connection lost' }));
-      };
-    } catch (err) {
-      setDeposit({
-        ...initialDeposit,
-        step: 'error',
-        errorDetails: err instanceof Error ? err.message : 'Unknown error',
-      });
-    }
+    // A previous attempt's run must not block the new one.
+    runRef.current = null;
+    finishRun();
+    setDeposit((s) => reduceDeposit(s, { type: 'execute' }));
   };
+
+  /** Spec §7: cancel stops the wait only — the burn stays valid and retryable. */
+  const handleCancel = () => {
+    finishRun();
+    setDeposit((s) => reduceDeposit(s, { type: 'cancel' }));
+  };
+
+  /** Retry as Standard: resume the same intent and wait on the Standard timeline. */
+  const handleRetryStandard = () => {
+    if (!runRef.current) return;
+    runRef.current = { ...runRef.current, startedAt: Date.now() };
+    pollingRef.current = true;
+    setDeposit((s) => reduceDeposit(s, { type: 'retry-standard' }));
+    scheduleNextPoll();
+  };
+
+  const handleDismissCancelled = () => {
+    runRef.current = null;
+    finishRun();
+    setDeposit({ ...initialDeposit, mode: deposit.mode, amount: usdcAmount, maxFee });
+  };
+
+  /** Inputs and the mode toggle are live until the intent binds them (spec §7). */
+  const isPreBurn = deposit.step === 'idle' || deposit.step === 'error' || deposit.step === 'quoting';
+  const inputsDisabled = !isPreBurn;
+  const waiting = isPollingStep(deposit.step);
+  const inFlight = deposit.step === 'burning' || deposit.step === 'settling';
+  const { quote } = deposit;
+  const overMax = quoteFeeOverMax(deposit);
+  const fastUnavailable = quote !== undefined && !quote.fastTierAvailable;
 
   return (
     <section id="catalog" className="py-16 relative bg-white dark:bg-[#070C18] border-t border-slate-200 dark:border-slate-800 w-full overflow-hidden">
@@ -390,7 +641,7 @@ export const CatalogSection: React.FC<CatalogSectionProps> = ({
                     type="number"
                     value={usdcAmount}
                     onChange={(e) => setUsdcAmount(e.target.value)}
-                    disabled={deposit.step !== 'idle' && deposit.step !== 'error'}
+                    disabled={inputsDisabled}
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm font-extrabold text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all font-mono"
                   />
                 </div>
@@ -403,7 +654,7 @@ export const CatalogSection: React.FC<CatalogSectionProps> = ({
                     type="text"
                     value={burnTxHash}
                     onChange={(e) => setBurnTxHash(e.target.value)}
-                    disabled={deposit.step !== 'idle' && deposit.step !== 'error'}
+                    disabled={inputsDisabled}
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-xs font-mono text-slate-300 focus:ring-2 focus:ring-blue-500 outline-none transition-all truncate"
                   />
                 </div>
@@ -464,7 +715,7 @@ export const CatalogSection: React.FC<CatalogSectionProps> = ({
                   <select
                     value={simError}
                     onChange={(e) => setSimError(e.target.value)}
-                    disabled={deposit.step !== 'idle' && deposit.step !== 'error'}
+                    disabled={inputsDisabled}
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-xs font-bold text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
                   >
                     <option value="none" className="bg-slate-900 text-white">None</option>
@@ -493,16 +744,93 @@ export const CatalogSection: React.FC<CatalogSectionProps> = ({
                 </div>
               )}
 
+              {/* Fee Quote Panel — shown before Execute (spec §7) */}
+              {wallet.connected && (
+                <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800 space-y-3 text-xs font-mono">
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-400 font-bold">Transfer Mode</span>
+                    <div className="flex items-center space-x-1.5">
+                      {(['fast', 'standard'] as TransferMode[]).map((mode) => (
+                        <button
+                          key={mode}
+                          type="button"
+                          onClick={() => handleModeChange(mode)}
+                          disabled={inputsDisabled || (mode === 'fast' && fastUnavailable)}
+                          className={`px-3 py-1 rounded-full text-[11px] font-extrabold transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
+                            deposit.mode === mode
+                              ? 'bg-[#3E6BFF] text-white shadow-md'
+                              : 'bg-slate-900/80 text-slate-400 border border-slate-800 hover:text-white hover:border-slate-700'
+                          }`}
+                        >
+                          {mode === 'fast' ? 'Fast' : 'Standard'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Route:</span>
+                    <span className="text-white font-bold">
+                      {activeDomain.name} → Stellar ({STELLAR_CCTP_DOMAIN})
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Minimum fee:</span>
+                    <span className="text-white font-bold">
+                      {quote ? `${quote.minimumFee} bps` : quoteError ? 'unavailable' : 'quoting…'}
+                    </span>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                      Max Fee (USDC, optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={maxFee}
+                      onChange={(e) => setMaxFee(e.target.value)}
+                      placeholder="No cap"
+                      disabled={inputsDisabled}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs font-mono text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                    />
+                  </div>
+                  {overMax && (
+                    <div className="flex items-start text-amber-400 font-bold">
+                      <AlertCircle className="w-3.5 h-3.5 mr-1.5 mt-0.5 shrink-0" />
+                      <span>
+                        Quoted fee is above your max fee — raise the cap or switch to Standard, or this
+                        transfer would continue as Standard.
+                      </span>
+                    </div>
+                  )}
+                  {fastUnavailable && (
+                    <div className="flex items-start text-amber-400 font-bold">
+                      <AlertCircle className="w-3.5 h-3.5 mr-1.5 mt-0.5 shrink-0" />
+                      <span>Fast allowance unavailable for this route — use Standard.</span>
+                    </div>
+                  )}
+                  {quoteError && (
+                    <div className="flex items-start text-rose-300 font-bold">
+                      <AlertCircle className="w-3.5 h-3.5 mr-1.5 mt-0.5 shrink-0" />
+                      <span>{quoteError}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Action CTA Button */}
               <button
                 onClick={wallet.connected ? handleExecuteDeposit : onConnectWallet}
-                disabled={deposit.step !== 'idle' && deposit.step !== 'error'}
+                disabled={inputsDisabled}
                 className="w-full py-4 rounded-xl bg-[#3E6BFF] hover:bg-[#345CE0] text-white font-extrabold text-xs sm:text-sm transition-all shadow-lg shadow-blue-500/20 flex items-center justify-center space-x-2 cursor-pointer disabled:opacity-50 disabled:cursor-wait"
               >
-                {deposit.step !== 'idle' && deposit.step !== 'error' ? (
+                {inFlight || waiting ? (
                   <>
                     <RefreshCw className="w-4 h-4 animate-spin" />
-                    <span>Processing CCTP Ingestion...</span>
+                    <span>{inFlight ? 'Processing CCTP Ingestion...' : 'Waiting for Circle attestation...'}</span>
+                  </>
+                ) : deposit.step === 'quoting' ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Re-quoting the Circle fee...</span>
                   </>
                 ) : wallet.connected ? (
                   <>
@@ -578,29 +906,84 @@ export const CatalogSection: React.FC<CatalogSectionProps> = ({
               </div>
             )}
 
+            {/* Cancelled — the wait stopped, the burn did not go away (spec §7) */}
+            {deposit.step === 'cancelled' && (
+              <div className="mt-4 p-4 bg-slate-950/60 border border-slate-800 rounded-xl space-y-3">
+                <div className="text-xs font-extrabold text-slate-200">Cancelled — no mint was attempted.</div>
+                <p className="text-xs text-slate-400 font-mono">
+                  Cancelling stops waiting; your burn stays valid — retry anytime.
+                </p>
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={handleRetryStandard}
+                    className="flex-1 py-3 rounded-xl bg-[#3E6BFF] hover:bg-[#345CE0] text-white font-extrabold text-xs transition-all cursor-pointer"
+                  >
+                    Retry as Standard
+                  </button>
+                  <button
+                    onClick={handleDismissCancelled}
+                    className="flex-1 py-3 rounded-xl bg-slate-900/80 border border-slate-800 hover:border-slate-700 text-slate-300 font-extrabold text-xs transition-all cursor-pointer"
+                  >
+                    Start a new transfer
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Step Indicator */}
-            {deposit.step !== 'idle' && deposit.step !== 'settled' && deposit.step !== 'error' && (
-              <div className="mt-4 p-3 bg-slate-950/60 rounded-xl border border-slate-800 text-xs font-mono">
+            {!isPreBurn && deposit.step !== 'settled' && deposit.step !== 'error' && deposit.step !== 'cancelled' && (
+              <div className="mt-4 p-3 bg-slate-950/60 rounded-xl border border-slate-800 text-xs font-mono space-y-3">
                 <div className="flex items-center space-x-2 text-slate-400">
-                  {deposit.step === 'verifying' && (
+                  {deposit.step === 'burning' && (
                     <>
                       <RefreshCw className="w-3 h-3 animate-spin text-blue-400" />
-                      <span>Verifying wallet address…</span>
+                      <span>Verifying wallet and registering the burn…</span>
+                    </>
+                  )}
+                  {deposit.step === 'fast-wait' && (
+                    <>
+                      <RefreshCw className="w-3 h-3 animate-spin text-blue-400" />
+                      <span>
+                        Fast Transfer: attestation expected in seconds (attempt {Math.max(deposit.attempts, 1)})
+                      </span>
+                    </>
+                  )}
+                  {deposit.step === 'degraded-standard' && (
+                    <>
+                      <RefreshCw className="w-3 h-3 animate-spin text-amber-400" />
+                      <span>
+                        Fast allowance unavailable — continuing as Standard (minutes). Cancel or leave open.
+                      </span>
                     </>
                   )}
                   {deposit.step === 'attesting' && (
                     <>
                       <RefreshCw className="w-3 h-3 animate-spin text-blue-400" />
-                      <span>Polling Iris attestation{deposit.attempts > 0 ? ` (attempt ${deposit.attempts})` : ' — connected, waiting for first response'}… Circle finalization takes minutes — leave this open.</span>
+                      <span>
+                        Standard Transfer: attestation expected in minutes (attempt {Math.max(deposit.attempts, 1)})
+                      </span>
                     </>
                   )}
-                  {deposit.step === 'submitting' && (
+                  {deposit.step === 'settling' && (
                     <>
                       <RefreshCw className="w-3 h-3 animate-spin text-blue-400" />
                       <span>Submitting Soroban mint…</span>
                     </>
                   )}
                 </div>
+                {waiting && (
+                  <div className="space-y-2 border-t border-slate-800 pt-3">
+                    <p className="text-slate-500">
+                      Cancelling stops waiting; your burn stays valid — retry anytime.
+                    </p>
+                    <button
+                      onClick={handleCancel}
+                      className="w-full py-2.5 rounded-xl bg-slate-900/80 border border-slate-800 hover:border-rose-500/50 hover:text-rose-300 text-slate-300 font-extrabold text-[11px] transition-all cursor-pointer"
+                    >
+                      Cancel waiting
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </motion.div>
