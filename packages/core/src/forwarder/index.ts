@@ -1,16 +1,19 @@
-import { StrKey, Contract, TransactionBuilder, Networks, Account, Address, nativeToScVal } from '@stellar/stellar-sdk';
+import { StrKey, Contract, TransactionBuilder, Networks, Account, nativeToScVal } from '@stellar/stellar-sdk';
 import { MintFailedError, ForwarderContractError, InvalidConfigError, InvalidAddressError } from '../errors/index.js';
 
 export interface MintParams {
   message: string;
   signature: string;
-  destination: string;
   forwarderContractId?: string;
   horizonUrl?: string;
   networkPassphrase?: string;
   sourceSequence?: string;
-  /** O15: Sponsor account used as transaction source. Must be a valid G... StrKey. */
-  sourceAccount?: string;
+  /**
+   * O15/B2: Sponsor account used as transaction source. Required — the Stellar
+   * recipient travels inside `hookData` (Task 1), so the two-arg
+   * `mint_and_forward(message, attestation)` has no destination to fall back to.
+   */
+  sourceAccount: string;
 }
 
 export type SignerCallback = (xdr: string) => Promise<string>;
@@ -40,20 +43,20 @@ export function buildMintAndForwardXdr(params: MintParams): string {
   const contractId = params.forwarderContractId || DEFAULT_FORWARDER;
   const passphrase = params.networkPassphrase || Networks.TESTNET;
 
-  // O15: sponsor/sourceAccount validation
-  const txSource = params.sourceAccount ?? params.destination;
-  if (params.sourceAccount && !StrKey.isValidEd25519PublicKey(params.sourceAccount)) {
-    throw new InvalidAddressError(params.sourceAccount, 'sourceAccount must be a valid G... StrKey');
+  // O15/B2: sourceAccount is required — no destination fallback exists any more.
+  if (!params.sourceAccount || !StrKey.isValidEd25519PublicKey(params.sourceAccount)) {
+    throw new InvalidAddressError(params.sourceAccount ?? '', 'sourceAccount is required and must be a valid G... StrKey');
   }
 
   try {
-    const source = new Account(txSource, params.sourceSequence ?? '0');
+    const source = new Account(params.sourceAccount, params.sourceSequence ?? '0');
     const contract = new Contract(contractId);
+    // B2: Circle's mint_and_forward(message: Bytes, attestation: Bytes) — recipient
+    // lives in the 88-byte hookData carried by `message`, not in a third argument.
     const op = contract.call(
       'mint_and_forward',
       nativeToScVal(hexToBytes(params.message)),
       nativeToScVal(hexToBytes(params.signature)),
-      new Address(params.destination).toScVal()
     );
     const tx = new TransactionBuilder(source, {
       fee: '100',

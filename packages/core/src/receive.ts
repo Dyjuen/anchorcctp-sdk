@@ -57,6 +57,8 @@ export interface ReceiveContext {
     spendCapXlm?: number;
   };
   defaultForwarderContractId?: string;
+  /** O15/B2: Sponsor G... account used as the mint transaction source. */
+  defaultSponsorAccount?: string;
   defaultUsdcIssuer?: string;
   network?: 'testnet' | 'mainnet';
   _test?: {
@@ -251,16 +253,24 @@ export async function receive(
     throw new InvalidAddressError(params.sponsorAccount, 'sponsorAccount must be a valid G... StrKey');
   }
 
+  // O15/B2: the sponsor is the mint TX source; with `destination` gone there is no
+  // fallback source account, so fail loud rather than passing undefined downward.
+  const sponsor = params.sponsorAccount ?? ctx.defaultSponsorAccount;
+  if (!sponsor) {
+    throw new InvalidConfigError(
+      'sponsorAccount is required. Pass params.sponsorAccount or config.sponsorAccount.'
+    );
+  }
+
   let mintResult: Awaited<ReturnType<typeof submitMint>>;
   try {
     mintResult = await submitMint(
       {
         message: attResult.message,
         signature: attResult.signature,
-        destination: stellarDestination,
         forwarderContractId,
+        sourceAccount: sponsor,
         ...(params.sourceSequence === undefined ? {} : { sourceSequence: params.sourceSequence }),
-        ...(params.sponsorAccount === undefined ? {} : { sourceAccount: params.sponsorAccount }),
       },
       effectiveSigner
     );

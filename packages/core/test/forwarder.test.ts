@@ -1,6 +1,9 @@
 import { translateToStellar, submitMint, buildMintAndForwardXdr, resolveForwarder, TESTNET_FORWARDER, MAINNET_FORWARDER } from '../src/forwarder/index.js';
 import { MintFailedError, ForwarderContractError, InvalidConfigError, InvalidAddressError } from '../src/errors/index.js';
-import { StrKey, TransactionBuilder } from '@stellar/stellar-sdk';
+import { StrKey, TransactionBuilder, Networks } from '@stellar/stellar-sdk';
+
+/** Valid G... sponsor used as the mint transaction source (B2: it is the only source). */
+const SOURCE = StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 0x99));
 
 describe('Forwarder & Address Translation', () => {
   it('translateToStellar returns a G... address for a 32-byte EVM address', () => {
@@ -31,7 +34,6 @@ describe('Forwarder & Address Translation', () => {
   });
 
   it('submitMint delegates signing to caller callback with custom contract ID', async () => {
-    const destination = StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 0x33));
     let captured = '';
     const signer = async (xdr: string) => {
       captured = xdr;
@@ -41,7 +43,7 @@ describe('Forwarder & Address Translation', () => {
       {
         message: '0x' + 'ab'.repeat(40),
         signature: '0x' + 'cd'.repeat(70),
-        destination,
+        sourceAccount: SOURCE,
         forwarderContractId: 'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC',
       },
       signer
@@ -52,52 +54,48 @@ describe('Forwarder & Address Translation', () => {
 
 
   it('submitMint delegates signing to caller callback', async () => {
-    const destination = StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 0x33));
     const signer = async (xdr: string) => {
       expect(typeof xdr).toBe('string');
       return 'SIGNED_' + xdr;
     };
     const r = await submitMint(
-      { message: '0x' + 'ab'.repeat(40), signature: '0x' + 'cd'.repeat(70), destination },
+      { message: '0x' + 'ab'.repeat(40), signature: '0x' + 'cd'.repeat(70), sourceAccount: SOURCE },
       signer
     );
     expect(r.txHash).toMatch(/^SIGNED_/);
   });
 
   it('submitMint wraps signer errors in MintFailedError', async () => {
-    const destination = StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 0x44));
     const failingSigner = async () => {
       throw new Error('signature rejected by user');
     };
     await expect(
       submitMint(
-        { message: '0x' + 'ab'.repeat(40), signature: '0x' + 'cd'.repeat(70), destination },
+        { message: '0x' + 'ab'.repeat(40), signature: '0x' + 'cd'.repeat(70), sourceAccount: SOURCE },
         failingSigner
       )
     ).rejects.toThrow(MintFailedError);
   });
 
   it('buildMintAndForwardXdr builds parseable Stellar XDR', () => {
-    const destination = StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 0x33));
     const xdr = buildMintAndForwardXdr({
       message: '0x' + 'ab'.repeat(40),
       signature: '0x' + 'cd'.repeat(70),
-      destination,
+      sourceAccount: SOURCE,
       forwarderContractId: 'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC',
     });
     expect(typeof xdr).toBe('string');
     const parsed: any = (TransactionBuilder as any).fromXDR(xdr, 'TESTNET');
-    expect(parsed.source).toBe(destination);
+    expect(parsed.source).toBe(SOURCE);
   });
 
   it('submitMint passes real XDR to signer', async () => {
-    const destination = StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 0x33));
     let captured = '';
     const r = await submitMint(
       {
         message: '0x' + 'ab'.repeat(40),
         signature: '0x' + 'cd'.repeat(70),
-        destination,
+        sourceAccount: SOURCE,
       },
       async (x) => {
         captured = x;
@@ -109,12 +107,11 @@ describe('Forwarder & Address Translation', () => {
   });
 
   it('buildMintAndForwardXdr throws ForwarderContractError for invalid contract ID', () => {
-    const destination = StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 0x33));
     expect(() =>
       buildMintAndForwardXdr({
         message: '0x' + 'ab'.repeat(40),
         signature: '0x' + 'cd'.repeat(70),
-        destination,
+        sourceAccount: SOURCE,
         forwarderContractId: 'INVALID_CONTRACT',
       })
     ).toThrow(ForwarderContractError);
@@ -123,11 +120,10 @@ describe('Forwarder & Address Translation', () => {
 
 describe('Forwarder sourceSequence', () => {
   it('buildMintAndForwardXdr honors sourceSequence', () => {
-    const destination = StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 0x33));
     const msg = '0x' + 'ab'.repeat(32);
     const sig = '0x' + 'cd'.repeat(64);
-    const xdrNoSeq = buildMintAndForwardXdr({ message: msg, signature: sig, destination });
-    const xdrWithSeq = buildMintAndForwardXdr({ message: msg, signature: sig, destination, sourceSequence: '987654' });
+    const xdrNoSeq = buildMintAndForwardXdr({ message: msg, signature: sig, sourceAccount: SOURCE });
+    const xdrWithSeq = buildMintAndForwardXdr({ message: msg, signature: sig, sourceAccount: SOURCE, sourceSequence: '987654' });
     expect(xdrNoSeq).not.toBe(xdrWithSeq);
     const tx: any = TransactionBuilder.fromXDR(xdrWithSeq, 'Test SDF Network ; September 2015');
     expect(String(tx.sequence)).toBe('987655');
@@ -157,13 +153,12 @@ describe('Forwarder branch coverage', () => {
   });
 
   it('submitMint re-throws ForwarderContractError as-is', async () => {
-    const destination = StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 0x22));
     await expect(
       submitMint(
         {
           message: '0x' + 'ab'.repeat(40),
           signature: '0x' + 'cd'.repeat(70),
-          destination,
+          sourceAccount: SOURCE,
           forwarderContractId: 'INVALID_CONTRACT',
         },
         async () => 'x',
@@ -172,13 +167,12 @@ describe('Forwarder branch coverage', () => {
   });
 
   it('submitMint wraps non-ForwarderContractError in MintFailedError', async () => {
-    const destination = StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 0x44));
     const failingSigner = async () => {
       throw new Error('wallet rejected');
     };
     await expect(
       submitMint(
-        { message: '0x' + 'ab'.repeat(40), signature: '0x' + 'cd'.repeat(70), destination },
+        { message: '0x' + 'ab'.repeat(40), signature: '0x' + 'cd'.repeat(70), sourceAccount: SOURCE },
         failingSigner,
       )
     ).rejects.toMatchObject({ code: 'MINT_FAILED' });
@@ -191,21 +185,21 @@ describe('Forwarder branch coverage', () => {
 
   it('buildMintAndForwardXdr throws ForwarderContractError on bad contract', () => {
     expect(() => buildMintAndForwardXdr({
-      message: '0xab', signature: '0xcd', destination: StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 0x33)),
+      message: '0xab', signature: '0xcd', sourceAccount: StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 0x33)),
       forwarderContractId: 'CINVALID',
     })).toThrow(ForwarderContractError);
   });
 });
 
 describe('M2: hexToBytes strict validation', () => {
-  const dest = StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 0x33));
+  const src = StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 0x33));
 
   it('rejects non-hex charset in message', () => {
-    expect(() => buildMintAndForwardXdr({ message: '0xZZZ', signature: '0x1234', destination: dest })).toThrow(ForwarderContractError);
+    expect(() => buildMintAndForwardXdr({ message: '0xZZZ', signature: '0x1234', sourceAccount: src })).toThrow(ForwarderContractError);
   });
 
   it('rejects odd-length hex in signature', () => {
-    expect(() => buildMintAndForwardXdr({ message: '0x' + 'ab'.repeat(32), signature: '0xabc', destination: dest })).toThrow(ForwarderContractError);
+    expect(() => buildMintAndForwardXdr({ message: '0x' + 'ab'.repeat(32), signature: '0xabc', sourceAccount: src })).toThrow(ForwarderContractError);
   });
 });
 
@@ -234,7 +228,6 @@ describe('M5/O4: translateToStellar rejects zero addresses', () => {
 });
 
 describe('O15: sourceAccount / sponsor param', () => {
-  const dest = StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 0x33));
   const sponsor = StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 0x77));
   const msg = '0x' + 'ab'.repeat(40);
   const sig = '0x' + 'cd'.repeat(70);
@@ -243,21 +236,19 @@ describe('O15: sourceAccount / sponsor param', () => {
     const xdr = buildMintAndForwardXdr({
       message: msg,
       signature: sig,
-      destination: dest,
       sourceAccount: sponsor,
     });
     const tx: any = TransactionBuilder.fromXDR(xdr, 'TESTNET');
     expect(tx.source).toBe(sponsor);
   });
 
-  it('buildMintAndForwardXdr falls back to destination when sourceAccount absent', () => {
-    const xdr = buildMintAndForwardXdr({
-      message: msg,
-      signature: sig,
-      destination: dest,
-    });
-    const tx: any = TransactionBuilder.fromXDR(xdr, 'TESTNET');
-    expect(tx.source).toBe(dest);
+  it('buildMintAndForwardXdr throws InvalidAddressError when sourceAccount absent', () => {
+    expect(() =>
+      buildMintAndForwardXdr({
+        message: msg,
+        signature: sig,
+      } as any)
+    ).toThrow(InvalidAddressError);
   });
 
   it('buildMintAndForwardXdr throws InvalidAddressError for invalid sourceAccount', () => {
@@ -265,9 +256,26 @@ describe('O15: sourceAccount / sponsor param', () => {
       buildMintAndForwardXdr({
         message: msg,
         signature: sig,
-        destination: dest,
         sourceAccount: 'INVALID_SPONSOR',
       })
     ).toThrow(InvalidAddressError);
+  });
+});
+
+describe('B2: mint_and_forward takes exactly [message, attestation]', () => {
+  it('calls mint_and_forward with exactly [message, attestation], no destination arg', () => {
+    const xdr = buildMintAndForwardXdr({
+      message: '0x' + 'ab'.repeat(64),
+      signature: '0x' + 'cd'.repeat(65),
+      sourceAccount: 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5',
+      sourceSequence: '123',
+    });
+    const tx = TransactionBuilder.fromXDR(xdr, Networks.TESTNET);
+    const op = tx.operations[0] as unknown as {
+      func: { invokeContract(): { functionName(): { toString(): string }; args(): unknown[] } };
+    };
+    const invoked = op.func.invokeContract();
+    expect(invoked.functionName().toString()).toBe('mint_and_forward');
+    expect(invoked.args()).toHaveLength(2);
   });
 });

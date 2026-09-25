@@ -19,8 +19,8 @@ describe('Week2 branch coverage fill', () => {
     expect(c.verifyAttestation('  ' + '0x' + 'ab'.repeat(40) + '  ', '  ' + '0x' + 'cd'.repeat(70) + '  ')).toBe(true);
   });
   it('buildMintAndForwardXdr throws ForwarderContractError on bad contract', () => {
-    const dest = StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 1));
-    expect(() => buildMintAndForwardXdr({ message: '0x' + 'ab'.repeat(40), signature: '0x' + 'cd'.repeat(70), destination: dest, forwarderContractId: 'NOT_A_CONTRACT' })).toThrow(ForwarderContractError);
+    const source = StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 1));
+    expect(() => buildMintAndForwardXdr({ message: '0x' + 'ab'.repeat(40), signature: '0x' + 'cd'.repeat(70), sourceAccount: source, forwarderContractId: 'NOT_A_CONTRACT' })).toThrow(ForwarderContractError);
   });
   it('buildChangeTrustXdr uses default issuer', () => {
     const dest = StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 2));

@@ -25,6 +25,7 @@ function wellFormedMsg(amount: bigint): string {
 
 describe('receive() Orchestration Engine', () => {
   const validDestination = StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 0x55));
+  const validSponsor = StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 0x66));
   const goodSig = '0x' + 'cd'.repeat(70);
   const H = (suffix: string) => '0x' + suffix.padStart(64, '0').slice(0, 64);
 
@@ -32,6 +33,7 @@ describe('receive() Orchestration Engine', () => {
     return createAnchorCCTP({
       signer: async (x) => 'SIGNED_TX_123',
       dustCollectorAddress: validDestination,
+      sponsorAccount: validSponsor,
       forwarderContractId: 'CA66Q2WFBND6V4UEB7RD4SAXSVIWMD6RA4X3U32ELVFGXV5PJK4T4VSZ',
       _test: {
         attestation: async () => ({
@@ -200,6 +202,7 @@ describe('receive() Orchestration Engine', () => {
       pollIntervalMs: 1,
       logger: (msg) => logs.push(msg),
       signer: async (xdr) => 'SIGNED_REAL',
+      sponsorAccount: validSponsor,
       forwarderContractId: 'CA66Q2WFBND6V4UEB7RD4SAXSVIWMD6RA4X3U32ELVFGXV5PJK4T4VSZ',
       _test: {
         hasTrustline: async () => true,
@@ -223,6 +226,7 @@ describe('receive() Orchestration Engine', () => {
     const amount = 1000000n;
     const sdk = createAnchorCCTP({
       signer: async () => 'DEFAULT_SIGNER',
+      sponsorAccount: validSponsor,
       forwarderContractId: 'CA66Q2WFBND6V4UEB7RD4SAXSVIWMD6RA4X3U32ELVFGXV5PJK4T4VSZ',
       trustline: {
         allowCreation: true,
@@ -285,6 +289,7 @@ describe('receive() Orchestration Engine', () => {
 
     const sdk = createAnchorCCTP({
       signer: async () => 'SIGNED_POLL_HOOK',
+      sponsorAccount: validSponsor,
       forwarderContractId: 'CA66Q2WFBND6V4UEB7RD4SAXSVIWMD6RA4X3U32ELVFGXV5PJK4T4VSZ',
       _test: {
         pollAttestation: async (burnTxHash: string, onPoll: (attempt: number, elapsedMs: number) => void) => {
@@ -359,6 +364,7 @@ describe('receive() Orchestration Engine', () => {
     const spy = jest.spyOn(forwarderMod, 'submitMint');
     const sdk = createAnchorCCTP({
       signer: async (x) => 'SIGNED_SEQ_TX',
+      sponsorAccount: validSponsor,
       forwarderContractId: 'CA66Q2WFBND6V4UEB7RD4SAXSVIWMD6RA4X3U32ELVFGXV5PJK4T4VSZ',
       _test: {
         attestation: async () => ({
@@ -411,6 +417,7 @@ describe('receive() Orchestration Engine', () => {
     const amount = 1000000n;
     const sdk = createAnchorCCTP({
       signer: async (x) => 'SIGNED_NORM',
+      sponsorAccount: validSponsor,
       forwarderContractId: 'CA66Q2WFBND6V4UEB7RD4SAXSVIWMD6RA4X3U32ELVFGXV5PJK4T4VSZ',
       _test: {
         attestation: async () => ({
@@ -589,6 +596,7 @@ describe('receive() Orchestration Engine', () => {
     const sdk = createAnchorCCTP({
       signer: async () => 'C5_SIGNED',
       replayStore,
+      sponsorAccount: validSponsor,
       forwarderContractId: 'CA66Q2WFBND6V4UEB7RD4SAXSVIWMD6RA4X3U32ELVFGXV5PJK4T4VSZ',
       _test: {
         attestation: async () => ({
@@ -669,6 +677,7 @@ describe('receive() Orchestration Engine', () => {
     const amount = 5000000n;
     const sdk = createAnchorCCTP({
       signer: async () => 'O2_MATCH_SIGNED',
+      sponsorAccount: validSponsor,
       forwarderContractId: 'CA66Q2WFBND6V4UEB7RD4SAXSVIWMD6RA4X3U32ELVFGXV5PJK4T4VSZ',
       _test: {
         attestation: async () => ({
@@ -750,6 +759,36 @@ describe('receive() Orchestration Engine', () => {
     } catch (e) {
       expect(e).toBeInstanceOf(InvalidAddressError);
       expect((e as any).code).toBe('INVALID_ADDRESS');
+    }
+  });
+
+  it('O15/B2: receive fails loud when no sponsorAccount and no config.sponsorAccount', async () => {
+    const amount = 1000000n;
+    const sdk = createAnchorCCTP({
+      signer: async () => 'NO_SPONSOR_SIGNED',
+      forwarderContractId: 'CA66Q2WFBND6V4UEB7RD4SAXSVIWMD6RA4X3U32ELVFGXV5PJK4T4VSZ',
+      _test: {
+        attestation: async () => ({
+          status: 'complete',
+          message: wellFormedMsg(amount),
+          signature: goodSig,
+        }),
+        hasTrustline: async () => true,
+      },
+    } as any);
+
+    try {
+      await sdk.receive({
+        sourceDomain: 0,
+        burnTxHash: H('b2cafe01'),
+        destinationAddress: validDestination,
+        amount,
+      });
+      fail('should have thrown InvalidConfigError');
+    } catch (e) {
+      expect(e).toBeInstanceOf(InvalidConfigError);
+      expect((e as any).code).toBe('INVALID_CONFIG');
+      expect((e as Error).message).toContain('sponsorAccount');
     }
   });
 });

@@ -24,7 +24,7 @@ describeGated('Week2 testnet-gated', () => {
       typeof buildMintAndForwardXdr({
         message: '0x' + 'ab'.repeat(40),
         signature: '0x' + 'cd'.repeat(70),
-        destination: dest,
+        sourceAccount: dest,
       }),
     ).toBe('string');
     expect(typeof buildChangeTrustXdr(dest)).toBe('string');

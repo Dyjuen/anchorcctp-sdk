@@ -17,6 +17,7 @@ function wellFormedMsg(amount: bigint): string {
 
 describe('Security Checklist Invariant Tests (PRD §7 & §8)', () => {
   const sampleStellarAddress = StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 0x77));
+  const sampleSponsor = StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 0x66));
   const goodSig = '0x' + 'cd'.repeat(65);
   const H = (suffix: string) => '0x' + suffix.padStart(64, '0').slice(0, 64);
 
@@ -25,6 +26,7 @@ describe('Security Checklist Invariant Tests (PRD §7 & §8)', () => {
     const sdk = createAnchorCCTP({
       signer: async () => 'SIGNED_REPLAY_TX',
       dustCollectorAddress: sampleStellarAddress,
+      sponsorAccount: sampleSponsor,
       forwarderContractId: 'CA66Q2WFBND6V4UEB7RD4SAXSVIWMD6RA4X3U32ELVFGXV5PJK4T4VSZ',
       _test: {
         attestation: async () => ({

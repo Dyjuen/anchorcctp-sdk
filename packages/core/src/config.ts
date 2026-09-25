@@ -28,6 +28,8 @@ export interface AnchorCCTPConfig {
   replayStore?: ReplayStore;
   network?: 'testnet' | 'mainnet';
   forwarderContractId?: string;
+  /** O15/B2: Sponsor G... account used as the mint transaction source. */
+  sponsorAccount?: string;
   usdcIssuer?: string;
   _test?: Record<string, unknown>;
 }
@@ -90,6 +92,7 @@ export function createAnchorCCTP(config: AnchorCCTPConfig): AnchorCCTP {
     defaultDustCollector: config.dustCollectorAddress,
     defaultTrustline: trustline,
     defaultForwarderContractId,
+    defaultSponsorAccount: config.sponsorAccount,
     defaultUsdcIssuer: config.usdcIssuer,
     network: config.network,
     _test: config._test,
