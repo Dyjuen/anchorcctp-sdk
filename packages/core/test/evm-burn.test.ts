@@ -1,5 +1,6 @@
 import {
   planBurn,
+  resolveMaxFee,
   executeBurn,
   EVM_TESTNET_MESSENGER,
   BASE_SEPOLIA_USDC,
@@ -13,8 +14,9 @@ const FWD = 'CA66Q2WFBND6V4UEB7RD4SAXSVIWMD6RA4X3U32ELVFGXV5PJK4T4VSZ';
 const DEST = 'GCX2EQXSPCHMBSEGYZRVTZWOIDRXWRWYEFRTCNVOZPYXE4QEFPKNUF3V';
 
 describe('planBurn', () => {
-  test('pure args: domain 27, defaults, recipient===caller, hookData, finality 1000', () => {
-    const plan = planBurn({ amount: 1_000_000n, stellarDestination: DEST, forwarderContractId: FWD });
+  test('pure args: domain 27, explicit maxFee, recipient===caller, hookData, finality 1000', () => {
+    // maxFee is required (no silent default); transferMode defaults to 'fast' → 1000.
+    const plan = planBurn({ amount: 1_000_000n, stellarDestination: DEST, forwarderContractId: FWD, maxFee: 5000n });
     expect(plan.amount).toBe(1_000_000n);
     expect(plan.destinationDomain).toBe(STELLAR_DOMAIN);
     expect(plan.destinationDomain).toBe(27);
@@ -25,6 +27,56 @@ describe('planBurn', () => {
     expect(plan.maxFee).toBe(5000n);
     expect(plan.minFinalityThreshold).toBe(1000);
     expect(plan.hookData).toBe(buildCctpForwarderHookData(DEST));
+  });
+
+  const base = { amount: 1_000_000n, stellarDestination: DEST, forwarderContractId: FWD, maxFee: 5000n };
+
+  test('maps transferMode fast->1000, standard->2000', () => {
+    expect(planBurn({ ...base, transferMode: 'fast' }).minFinalityThreshold).toBe(1000);
+    expect(planBurn({ ...base, transferMode: 'standard' }).minFinalityThreshold).toBe(2000);
+  });
+
+  test('rejects an unknown transferMode with a typed BurnError', () => {
+    expect(() => planBurn({ ...base, transferMode: 'turbo' as never }))
+      .toThrow(expect.objectContaining({ code: 'INVALID_BURN_AMOUNT' }));
+  });
+
+  test('throws loudly when maxFee unset — names the fee endpoint, refuses to guess', () => {
+    const { maxFee, ...noFee } = base;
+    expect(() => planBurn(noFee as never)).toThrow(/maxFee.*required/i);
+    expect(() => planBurn(noFee as never)).toThrow(/\/v2\/burn\/USDC\/fees\/\{source\}\/\{dest\}/);
+    expect(() => planBurn(noFee as never)).toThrow(/resolveMaxFee\(amount, minimumFeeBps\)/);
+    expect(() => planBurn(noFee as never))
+      .toThrow(expect.objectContaining({ code: 'INVALID_BURN_AMOUNT' }));
+  });
+
+  test('maxFee > amount throws typed INVALID_BURN_AMOUNT', () => {
+    expect(() => planBurn({ ...base, amount: 100n, maxFee: 200n }))
+      .toThrow(expect.objectContaining({ code: 'INVALID_BURN_AMOUNT' }));
+  });
+
+  test('resolveMaxFee converts bps to subunits with ceiling', () => {
+    expect(resolveMaxFee(100000n, 1.3)).toBe(13n); // matches observed feeExecuted 13 on the real frame
+    expect(() => resolveMaxFee(10n, 20000)).toThrow(/exceeds amount/i);
+  });
+
+  test('resolveMaxFee ceilings sub-unit remainders', () => {
+    // 1000 * 1.3bp = 0.13 subunits → 1n, not 0n.
+    expect(resolveMaxFee(1000n, 1.3)).toBe(1n);
+    expect(resolveMaxFee(1_000_000n, 1.3)).toBe(130n);
+    expect(resolveMaxFee(1_000_000n, 0)).toBe(0n);
+  });
+
+  test('resolveMaxFee rejects non-finite / negative bps with typed BurnError', () => {
+    for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, -1]) {
+      expect(() => resolveMaxFee(1_000_000n, bad))
+        .toThrow(expect.objectContaining({ code: 'INVALID_BURN_AMOUNT' }));
+    }
+  });
+
+  test('resolveMaxFee result > amount throws typed INVALID_BURN_AMOUNT', () => {
+    expect(() => resolveMaxFee(10n, 20000))
+      .toThrow(expect.objectContaining({ code: 'INVALID_BURN_AMOUNT' }));
   });
 
   test('overrides honored', () => {
@@ -125,7 +177,7 @@ function fakes(overrides?: {
 
 describe('executeBurn', () => {
   const account = '0x0000000000000000000000000000000000000001' as `0x${string}`;
-  const plan = planBurn({ amount: 1_000_000n, stellarDestination: DEST, forwarderContractId: FWD });
+  const plan = planBurn({ amount: 1_000_000n, stellarDestination: DEST, forwarderContractId: FWD, maxFee: 5000n });
 
   test('approve-then-burn order', async () => {
     const { publicClient, walletClient, writes } = fakes();

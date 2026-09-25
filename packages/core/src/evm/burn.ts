@@ -31,13 +31,23 @@ export interface BurnPlan {
   hookData: `0x${string}`;
 }
 
+/** Circle CCTP finality tiers: Fast settles at threshold 1000, Standard at 2000. */
+export const FINALITY_THRESHOLD_FAST = 1000;
+export const FINALITY_THRESHOLD_STANDARD = 2000;
+
 export interface PlanBurnParams {
   amount: bigint;
   stellarDestination: string;
   forwarderContractId: string;
   burnToken?: `0x${string}`;
   messenger?: `0x${string}`;
+  /**
+   * REQUIRED — no default. Fee values must come from Circle's fee API
+   * (`GET /v2/burn/USDC/fees/{source}/{dest}`) via `resolveMaxFee`, never guessed.
+   */
   maxFee?: bigint;
+  /** Finality tier to request. Defaults to `'fast'` (threshold 1000). */
+  transferMode?: 'fast' | 'standard';
 }
 
 /** Pure: every EVM arg for a Stellar-bound burn. No network, no keys. */
@@ -50,10 +60,20 @@ export function planBurn(params: PlanBurnParams): BurnPlan {
   }
   const burnToken = params.burnToken ?? BASE_SEPOLIA_USDC;
   const messenger = params.messenger ?? EVM_TESTNET_MESSENGER;
-  const maxFee = params.maxFee ?? 5000n;
   if (!ADDRESS_RE.test(burnToken) || /^0x0+$/.test(burnToken)) throw new BurnError('INVALID_BURN_AMOUNT', `Invalid burnToken: ${burnToken}`);
   if (!ADDRESS_RE.test(messenger) || /^0x0+$/.test(messenger)) throw new BurnError('INVALID_BURN_AMOUNT', `Invalid messenger: ${messenger}`);
-  if (maxFee > params.amount) throw new Error(`maxFee exceeds amount: ${maxFee} > ${params.amount}`);
+  if (params.maxFee === undefined) {
+    throw new BurnError(
+      'INVALID_BURN_AMOUNT',
+      'maxFee is required — fetch it from GET /v2/burn/USDC/fees/{source}/{dest} and pass resolveMaxFee(amount, minimumFeeBps). Refusing to guess.'
+    );
+  }
+  const maxFee = params.maxFee;
+  if (maxFee > params.amount) throw new BurnError('INVALID_BURN_AMOUNT', `maxFee exceeds amount: ${maxFee} > ${params.amount}`);
+  const mode = params.transferMode ?? 'fast';
+  if (mode !== 'fast' && mode !== 'standard') {
+    throw new BurnError('INVALID_BURN_AMOUNT', `transferMode must be 'fast'|'standard', got ${mode}`);
+  }
   const fwd = contractStrkeyToBytes32(params.forwarderContractId);
   return {
     amount: params.amount,
@@ -63,9 +83,25 @@ export function planBurn(params: PlanBurnParams): BurnPlan {
     burnToken,
     messenger,
     maxFee,
-    minFinalityThreshold: 1000,
+    minFinalityThreshold: mode === 'fast' ? FINALITY_THRESHOLD_FAST : FINALITY_THRESHOLD_STANDARD,
     hookData: buildCctpForwarderHookData(params.stellarDestination),
   };
+}
+
+/**
+ * Converts a fee-API `minimumFee` in basis points (a **ratio**, e.g. `1.3`) to
+ * base-6 subunits with **ceiling**, using exact integer arithmetic only so no
+ * amount ever passes through a float. Throws when the fee eats the amount.
+ */
+export function resolveMaxFee(amount: bigint, minimumFeeBps: number): bigint {
+  if (!Number.isFinite(minimumFeeBps) || minimumFeeBps < 0) {
+    throw new BurnError('INVALID_BURN_AMOUNT', `minimumFeeBps must be a non-negative number, got ${minimumFeeBps}`);
+  }
+  // Exact integer path: tenths of a bp keeps `1.3` exact (amount * bps / 10000, ceiling).
+  const scaled = BigInt(Math.round(minimumFeeBps * 10));
+  const result = (amount * scaled + 100_000n - 1n) / 100_000n;
+  if (result > amount) throw new BurnError('INVALID_BURN_AMOUNT', `maxFee exceeds amount: ${result} > ${amount}`);
+  return result;
 }
 
 export interface BurnClients {

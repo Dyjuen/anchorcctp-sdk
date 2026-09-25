@@ -23,7 +23,8 @@ import { convert6to7 } from '../packages/core/src/decimals/index.js';
 import { createPublicClient, createWalletClient, http } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { baseSepolia } from 'viem/chains';
-import { BurnError, executeBurn, planBurn } from '../packages/core/src/evm/burn.js';
+import { BurnError, executeBurn, planBurn, resolveMaxFee, STELLAR_DOMAIN } from '../packages/core/src/evm/burn.js';
+import { fetchTransferFee } from '../packages/core/src/attestation/fees.js';
 import { isSupportedDomain } from '../packages/core/src/domains/index.js';
 import { createSorobanTransport } from './soroban-transport.js';
 
@@ -78,6 +79,26 @@ function restrictCwd(p: string): void {
 function parseMaxFee(raw: string): bigint {
   if (!/^\d+$/.test(raw)) fail('INVALID_CONFIG', `EVM_MAX_FEE=${raw} is not a positive integer.`, 'Set EVM_MAX_FEE to e.g. 5000 (6-dec units).');
   return BigInt(raw);
+}
+
+/**
+ * Task 7: `planBurn` no longer guesses a fee. EVM_MAX_FEE is an explicit operator
+ * override; otherwise quote Circle's fee API and convert bps → subunits with
+ * `resolveMaxFee`. Never invents a value — a failed quote fails the run.
+ */
+async function resolveExplicitMaxFee(amount: bigint, sourceDomain: number, mode: 'fast' | 'standard'): Promise<bigint> {
+  if (process.env.EVM_MAX_FEE) return parseMaxFee(process.env.EVM_MAX_FEE);
+  const feeBaseUrl = process.env.CIRCLE_ATTESTATION_BASE_URL || 'https://iris-api-sandbox.circle.com';
+  try {
+    const fee = await fetchTransferFee(sourceDomain, STELLAR_DOMAIN, { baseUrl: feeBaseUrl, mode });
+    const maxFee = resolveMaxFee(amount, fee.minimumFeeBps);
+    log(`[STEP] [burn] maxFee=${maxFee.toString()} quoted ${fee.minimumFeeBps}bps (threshold ${fee.finalityThreshold}) mode=${mode}`);
+    return maxFee;
+  } catch (err) {
+    // A quoted fee that eats the amount is a config problem, not a quote failure.
+    if (err instanceof BurnError) fail(err.code, err.message, 'Raise --amount or lower the quoted fee.');
+    fail('FEE_UNAVAILABLE', `Could not quote the CCTP fee: ${String((err as Error)?.message || err)}`, 'Set EVM_MAX_FEE explicitly, or check CIRCLE_ATTESTATION_BASE_URL + network.');
+  }
 }
 
 function atomicWriteJson(filePath: string, data: unknown): void {
@@ -194,7 +215,13 @@ async function main(): Promise<void> {
     }
     const expectedChainId = Number(process.env.EVM_CHAIN_ID ?? 84532);
     const account = privateKeyToAccount(evmKey as `0x${string}`);
-    log(`[STEP] [burn] evm=${account.address} chain=${expectedChainId} amount=${amount.toString()}`);
+    // Task 7: maxFee + transferMode are explicit — planBurn refuses to guess.
+    const transferMode = process.env.EVM_TRANSFER_MODE ?? 'fast';
+    if (transferMode !== 'fast' && transferMode !== 'standard') {
+      fail('INVALID_CONFIG', `EVM_TRANSFER_MODE=${transferMode} is not a transfer mode.`, "Set EVM_TRANSFER_MODE=fast or EVM_TRANSFER_MODE=standard.");
+    }
+    const maxFee = await resolveExplicitMaxFee(amount, sourceDomain, transferMode);
+    log(`[STEP] [burn] evm=${account.address} chain=${expectedChainId} amount=${amount.toString()} maxFee=${maxFee.toString()} mode=${transferMode}`);
     try {
       const chain = { ...baseSepolia, ...(process.env.EVM_RPC_URL ? { rpcUrls: { default: { http: [evmRpc] } } } : {}) };
       const publicClient = createPublicClient({ chain, transport: http(evmRpc) });
@@ -205,7 +232,8 @@ async function main(): Promise<void> {
         forwarderContractId: process.env.FORWARDER_CONTRACT_ID ?? 'CA66Q2WFBND6V4UEB7RD4SAXSVIWMD6RA4X3U32ELVFGXV5PJK4T4VSZ',
         ...(process.env.EVM_USDC_ADDRESS ? { burnToken: process.env.EVM_USDC_ADDRESS as `0x${string}` } : {}),
         ...(process.env.EVM_MESSENGER_ADDRESS ? { messenger: process.env.EVM_MESSENGER_ADDRESS as `0x${string}` } : {}),
-        ...(process.env.EVM_MAX_FEE ? { maxFee: parseMaxFee(process.env.EVM_MAX_FEE) } : {}),
+        maxFee,
+        transferMode,
       });
       const r = await executeBurn({ publicClient, walletClient, account, plan, expectedChainId });
       burnTxHash = r.burnTxHash;
@@ -219,6 +247,7 @@ async function main(): Promise<void> {
           INSUFFICIENT_USDC: 'Get Base Sepolia USDC at faucet.circle.com, re-run.',
           APPROVE_FAILED: 'Check USDC contract + balance, re-run (idempotent).',
           BURN_FAILED: 'Burn reverted — check messenger address + hook args, re-run.',
+          INVALID_BURN_AMOUNT: 'Check --amount, EVM_MAX_FEE, and EVM_TRANSFER_MODE; maxFee must not exceed the amount.',
         };
         fail(err.code, err.message, nexts[err.code]);
       }
