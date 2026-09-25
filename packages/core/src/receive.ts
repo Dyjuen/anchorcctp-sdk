@@ -7,7 +7,7 @@ import { AttestationClient, AttestationResult } from './attestation/index.js';
 import { parseTransferAmounts } from './cctp-message.js';
 import { AnchorCCTPEventEmitter } from './events/index.js';
 import { Logger } from './logger/index.js';
-import { StrKey } from '@stellar/stellar-sdk';
+import { Networks, StrKey } from '@stellar/stellar-sdk';
 import {
   ReplayTransferError,
   InvalidAmountError,
@@ -40,6 +40,13 @@ export interface ReceiveParams {
   sponsorAccount?: string;
   /** B3/B4: Soroban transport for this call. Falls back to `config.sorobanTransport`. */
   rpc?: SorobanTransport;
+  /**
+   * Network the XDRs are encoded for (mint + change-trust). Defaults to the
+   * client's `config.network`; when neither is set, the forwarder's historical
+   * `Networks.TESTNET` default applies. Mainnet must always resolve to PUBLIC —
+   * a testnet-encoded XDR is rejected by a mainnet RPC by passphrase mismatch.
+   */
+  networkPassphrase?: string;
 }
 
 export interface ReceiveResult {
@@ -125,6 +132,17 @@ export async function receive(
 
   // 2. Verify source domain is supported
   assertSupportedDomain(sourceDomain);
+
+  // Network the XDRs are encoded for: explicit param → client config → undefined
+  // (forwarder's historical TESTNET default). Undefined is passed through untouched
+  // so existing callers keep byte-identical XDRs.
+  const networkPassphrase =
+    params.networkPassphrase ??
+    (ctx.network === 'mainnet'
+      ? Networks.PUBLIC
+      : ctx.network === 'testnet'
+        ? Networks.TESTNET
+        : undefined);
 
   // 3. Replay Protection Guard
   const isAlreadyProcessed = await ctx.replayStore.isProcessed(burnTxHash);
@@ -251,6 +269,7 @@ export async function receive(
     hasTrustline,
     createTrustline,
     usdcIssuer: ctx.defaultUsdcIssuer ?? TESTNET_USDC_ISSUER,
+    ...(networkPassphrase === undefined ? {} : { networkPassphrase }),
   });
 
   // 9. Soroban Forwarder Mint Submission
@@ -294,6 +313,7 @@ export async function receive(
         forwarderContractId,
         sourceAccount: sponsor,
         ...(params.sourceSequence === undefined ? {} : { sourceSequence: params.sourceSequence }),
+        ...(networkPassphrase === undefined ? {} : { networkPassphrase }),
       },
       effectiveSigner,
       rpc

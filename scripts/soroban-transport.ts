@@ -1,8 +1,10 @@
 /**
- * Real `rpc.Server` → `SorobanTransport` adapter (B3/B4).
+ * Real `rpc.Server` → `SorobanTransport` adapter (B3/B4) — re-exported from core.
  *
- * The adapter lives at the call sites (scripts, server handlers) — never inside
- * core. Core stays transport-injected so its unit suite never touches a network.
+ * R9 moved the single implementation into `packages/core/src/env-rpc.ts` so the
+ * scripts, the env factory (`createAnchorCCTPFromEnv`) and the serverless settle
+ * path all share one passphrase-threaded adapter (no testnet default). This module
+ * stays as the scripts' entry point and keeps the sequence warning below.
  *
  * SEQUENCE WARNING (verified against @stellar/stellar-sdk 13.3.0):
  * `rpc.Server.prepareTransaction`/`assembleTransaction` do NOT take the source
@@ -16,33 +18,4 @@
  *   and pass it as `sourceSequence`. `'0'` yields account sequence 1 and the
  *   network rejects the transaction.
  */
-import { Networks, TransactionBuilder, rpc } from '@stellar/stellar-sdk';
-import type { SorobanTransport } from '../packages/core/src/forwarder/index.js';
-
-export function createSorobanTransport(
-  server: rpc.Server,
-  networkPassphrase: string = Networks.TESTNET
-): SorobanTransport {
-  return {
-    simulateTransaction: async (xdr) =>
-      server.simulateTransaction(TransactionBuilder.fromXDR(xdr, networkPassphrase)),
-    assembleTransaction: (xdr, sim) =>
-      rpc
-        .assembleTransaction(
-          TransactionBuilder.fromXDR(xdr, networkPassphrase),
-          sim as rpc.Api.SimulateTransactionResponse
-        )
-        .build()
-        .toXDR(),
-    sendTransaction: async (signedXdr) => {
-      const sent = await server.sendTransaction(
-        TransactionBuilder.fromXDR(signedXdr, networkPassphrase)
-      );
-      return { status: sent.status, hash: sent.hash };
-    },
-    getTransaction: async (hash) => {
-      const got = await server.getTransaction(hash);
-      return { status: got.status };
-    },
-  };
-}
+export { createSorobanTransport } from '../packages/core/src/env-rpc.js';

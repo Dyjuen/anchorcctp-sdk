@@ -340,6 +340,83 @@ describe('sorobanRpcUrl in EnvConfigResult', () => {
   });
 });
 
+describe('R9: env factory wires trustline provider, Soroban transport and sponsor', () => {
+  const kp = Keypair.random();
+
+  it('wires both adapters when HORIZON_URL + SOROBAN_RPC_URL + secret are present', () => {
+    const r = createAnchorCCTPFromEnv({
+      STELLAR_DESTINATION: kp.publicKey(),
+      STELLAR_SECRET: kp.secret(),
+      HORIZON_URL: 'https://horizon-testnet.stellar.org',
+      SOROBAN_RPC_URL: 'https://soroban-testnet.stellar.org',
+    } as any);
+
+    expect(typeof r.sorobanTransport?.simulateTransaction).toBe('function');
+    expect(typeof r.trustlineProvider?.hasTrustline).toBe('function');
+    expect(typeof r.trustlineProvider?.createTrustline).toBe('function');
+  });
+
+  it('builds the Soroban transport without HORIZON_URL (transport needs RPC only)', () => {
+    const r = createAnchorCCTPFromEnv({
+      STELLAR_DESTINATION: dest,
+      SOROBAN_RPC_URL: 'https://soroban-testnet.stellar.org',
+    } as any);
+    expect(r.sorobanTransport).toBeDefined();
+    // No keypair → no trustline provider (nothing could sign the change-trust).
+    expect(r.trustlineProvider).toBeUndefined();
+  });
+
+  it('leaves both undefined for a minimal env (existing callers unchanged)', () => {
+    const r = createAnchorCCTPFromEnv({ STELLAR_DESTINATION: dest } as any);
+    expect(r.sorobanTransport).toBeUndefined();
+    expect(r.trustlineProvider).toBeUndefined();
+  });
+
+  it('rejects a malformed USDC_ISSUER', () => {
+    expect(() =>
+      createAnchorCCTPFromEnv({ STELLAR_DESTINATION: dest, USDC_ISSUER: 'GBAD' } as any)
+    ).toThrow(expect.objectContaining({ code: 'INVALID_CONFIG' }));
+  });
+
+  it('accepts STELLAR_USDC_ISSUER as an alias for USDC_ISSUER', () => {
+    const r = createAnchorCCTPFromEnv({
+      STELLAR_DESTINATION: kp.publicKey(),
+      STELLAR_SECRET: kp.secret(),
+      HORIZON_URL: 'https://horizon-testnet.stellar.org',
+      STELLAR_USDC_ISSUER: 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5',
+    } as any);
+    expect(r.trustlineProvider).toBeDefined();
+  });
+
+  it('caps the attestation poll budget via overrides (serverless settle)', () => {
+    const r = createAnchorCCTPFromEnv({ STELLAR_DESTINATION: dest } as any, { maxRetries: 10 });
+    expect(r.maxRetries).toBe(10);
+    expect(createAnchorCCTPFromEnv({ STELLAR_DESTINATION: dest } as any).maxRetries).toBeUndefined();
+  });
+
+  it('rejects a non-positive-integer maxRetries override', () => {
+    expect(() =>
+      createAnchorCCTPFromEnv({ STELLAR_DESTINATION: dest } as any, { maxRetries: 0 })
+    ).toThrow(InvalidConfigError);
+    expect(() =>
+      createAnchorCCTPFromEnv({ STELLAR_DESTINATION: dest } as any, { maxRetries: 1.5 })
+    ).toThrow(InvalidConfigError);
+  });
+
+  it('mainnet: no USDC_ISSUER → no trustline provider (testnet issuer never crosses over)', () => {
+    const r = createAnchorCCTPFromEnv({
+      STELLAR_NETWORK: 'mainnet',
+      STELLAR_DESTINATION: kp.publicKey(),
+      STELLAR_SECRET: kp.secret(),
+      HORIZON_URL: 'https://horizon.stellar.org',
+      SOROBAN_RPC_URL: 'https://soroban-mainnet.stellar.org',
+      FORWARDER_CONTRACT_ID: 'CBZL2IH7F6BIDAA3WBNXYKIXSATJGMSW7K5P5MJ6STX5RXN47TZJDF5T',
+    } as any);
+    expect(r.trustlineProvider).toBeUndefined();
+    expect(r.sorobanTransport).toBeDefined();
+  });
+});
+
 describe('N9: single-process lock file guard', () => {
   it('concurrent second run fails with LOCKED', () => {
     const dir = mkdtempSync(join(tmpdir(), 'cctp-lock-'));

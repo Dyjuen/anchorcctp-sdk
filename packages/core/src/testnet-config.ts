@@ -1,6 +1,9 @@
-import { Keypair, Networks, StrKey, TransactionBuilder } from '@stellar/stellar-sdk';
+import { Horizon, Keypair, Networks, StrKey, TransactionBuilder, rpc } from '@stellar/stellar-sdk';
 import { InvalidConfigError } from './errors/index.js';
 import { AnchorCCTP, createAnchorCCTP } from './config.js';
+import { createHorizonTrustlineProvider, createSorobanTransport } from './env-rpc.js';
+import { TESTNET_USDC_ISSUER, TrustlineProvider } from './trustline/index.js';
+import { SorobanTransport } from './forwarder/index.js';
 
 /** Public-only testnet config. Never add secret fields here. */
 export interface TestnetPublicConfig {
@@ -115,6 +118,12 @@ export interface EnvConfigResult {
   keypair?: Keypair;
   /** Validated Soroban RPC URL when SOROBAN_RPC_URL env var is present and https. */
   sorobanRpcUrl?: string;
+  /** R9/B3+B4: `rpc.Server`-backed transport already wired into `client`. */
+  sorobanTransport?: SorobanTransport;
+  /** R9/B5: Horizon-backed trustline provider already wired into `client`. */
+  trustlineProvider?: TrustlineProvider;
+  /** Attestation poll budget the client was built with (see `overrides.maxRetries`). */
+  maxRetries?: number;
 }
 
 /**
@@ -128,10 +137,20 @@ export interface EnvConfigResult {
  * DUST_COLLECTOR_ADDRESS, FORWARDER_CONTRACT_ID, HORIZON_URL,
  * SOROBAN_RPC_URL, CIRCLE_ATTESTATION_BASE_URL,
  * TRUSTLINE_ALLOW_CREATION (true/false), SPEND_CAP_XLM.
+ *
+ * `overrides.maxRetries` bounds the attestation poll for callers whose runtime
+ * has a hard time budget (e.g. a serverless settle with a 300s function cap).
  */
 export function createAnchorCCTPFromEnv(
-  env: Record<string, string | undefined> = ((globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env ?? {}) as Record<string, string | undefined>
+  env: Record<string, string | undefined> = ((globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env ?? {}) as Record<string, string | undefined>,
+  overrides: { maxRetries?: number } = {}
 ): EnvConfigResult {
+  if (
+    overrides.maxRetries !== undefined &&
+    (!Number.isInteger(overrides.maxRetries) || overrides.maxRetries < 1)
+  ) {
+    throw new InvalidConfigError('maxRetries override must be a positive integer');
+  }
   const network = env.STELLAR_NETWORK ?? 'testnet';
   if (network !== 'testnet' && network !== 'mainnet') {
     throw new InvalidConfigError('STELLAR_NETWORK must be "testnet" or "mainnet"');
@@ -234,12 +253,53 @@ export function createAnchorCCTPFromEnv(
     }
   }
 
+  // R9/B5: USDC issuer. Testnet has a canonical default; mainnet has none — receive()
+  // fails closed without it, so never carry a testnet issuer across networks.
+  const usdcIssuerEnv = env.USDC_ISSUER ?? env.STELLAR_USDC_ISSUER;
+  if (usdcIssuerEnv !== undefined && usdcIssuerEnv !== '' && !isGAddress(usdcIssuerEnv)) {
+    throw new InvalidConfigError('USDC_ISSUER must be a G... address');
+  }
+  const usdcIssuer =
+    usdcIssuerEnv !== undefined && usdcIssuerEnv !== ''
+      ? usdcIssuerEnv
+      : network === 'testnet'
+        ? TESTNET_USDC_ISSUER
+        : undefined;
+
+  // R9/B5: production trustline provider (Horizon). Needs the signing keypair — without
+  // it a change-trust could not be submitted, and receive() could not sign anyway.
+  const trustlineProvider =
+    horizonUrl !== undefined &&
+    horizonUrl !== '' &&
+    keypair !== undefined &&
+    usdcIssuer !== undefined
+      ? createHorizonTrustlineProvider({
+          horizon: new Horizon.Server(horizonUrl),
+          issuer: usdcIssuer,
+          networkPassphrase: passphrase,
+          keypair,
+        })
+      : undefined;
+
+  // R9/B3+B4: Soroban transport. Passphrase-threaded so a mainnet client never encodes
+  // a testnet XDR. Callers must still pass the sponsor's real `sourceSequence`.
+  const sorobanTransport =
+    sorobanRpcUrl !== undefined && sorobanRpcUrl !== ''
+      ? createSorobanTransport(new rpc.Server(sorobanRpcUrl), passphrase)
+      : undefined;
+
   const client = createAnchorCCTP({
     network,
+    ...(overrides.maxRetries === undefined ? {} : { maxRetries: overrides.maxRetries }),
     attestationBaseUrl: attestationUrl,
     dustCollectorAddress: dust,
     forwarderContractId: forwarder,
     signer,
+    // R9/B2: the destination account is the mint transaction source.
+    sponsorAccount: destination,
+    ...(usdcIssuer === undefined ? {} : { usdcIssuer }),
+    ...(sorobanTransport === undefined ? {} : { sorobanTransport }),
+    ...(trustlineProvider === undefined ? {} : { trustlineProvider }),
     trustline: {
       // C3: default OFF (opt-in required)
       allowCreation:
@@ -255,5 +315,8 @@ export function createAnchorCCTPFromEnv(
     hasSigner: keypair !== undefined,
     keypair,
     ...(sorobanRpcUrl !== undefined && sorobanRpcUrl !== '' ? { sorobanRpcUrl } : {}),
+    ...(sorobanTransport === undefined ? {} : { sorobanTransport }),
+    ...(trustlineProvider === undefined ? {} : { trustlineProvider }),
+    ...(overrides.maxRetries === undefined ? {} : { maxRetries: overrides.maxRetries }),
   };
 }

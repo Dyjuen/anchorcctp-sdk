@@ -15,7 +15,7 @@ import {
   InvalidAddressError,
 } from '../src/errors/index.js';
 import { SettlementRecord } from '../src/replay/index.js';
-import { StrKey } from '@stellar/stellar-sdk';
+import { Networks, StrKey } from '@stellar/stellar-sdk';
 
 /**
  * Build a well-formed CCTP message hex matching the real Iris frame layout:
@@ -1119,5 +1119,75 @@ describe('resolveDustCollector', () => {
     expect(resolveDustCollector({ dest, param: 'GPARAM', cfg: 'GCFG' })).toBe('GPARAM');
     expect(resolveDustCollector({ dest, cfg: 'GCFG' })).toBe('GCFG');
     expect(resolveDustCollector({ dest })).toBe(dest);
+  });
+});
+
+describe('networkPassphrase threading (mainnet XDRs must be built for PUBLIC)', () => {
+  const dest = StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 0x77));
+  const sponsor = StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 0x88));
+  const sig = '0x' + 'cd'.repeat(70);
+  const MSG = (() => {
+    const buf = Buffer.alloc(408, 0);
+    buf.writeBigUInt64BE(1000000n, 216 + 24);
+    return '0x' + buf.toString('hex');
+  })();
+
+  /** Captures the XDR the mint path simulated, then confirms immediately. */
+  function capturingTransport(seen: string[]): SorobanTransport {
+    return {
+      simulateTransaction: async (xdr) => {
+        seen.push(xdr);
+        return {};
+      },
+      assembleTransaction: (xdr) => xdr,
+      sendTransaction: async (signed) => ({ status: 'PENDING', hash: signed }),
+      getTransaction: async () => ({ status: 'SUCCESS' }),
+    };
+  }
+
+  function sdkWith(network?: 'testnet' | 'mainnet') {
+    const seen: string[] = [];
+    const sdk = createAnchorCCTP({
+      ...(network === undefined ? {} : { network }),
+      ...(network === 'mainnet' ? { usdcIssuer: 'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN' } : {}),
+      signer: async () => 'SIGNED',
+      sponsorAccount: sponsor,
+      sorobanTransport: capturingTransport(seen),
+      forwarderContractId: 'CA66Q2WFBND6V4UEB7RD4SAXSVIWMD6RA4X3U32ELVFGXV5PJK4T4VSZ',
+      _test: {
+        attestation: async () => ({ status: 'complete', message: MSG, signature: sig }),
+        hasTrustline: async () => true,
+      },
+    } as never);
+    return { sdk, seen };
+  }
+
+  function params(extra: Record<string, unknown> = {}) {
+    return {
+      sourceDomain: 0,
+      burnTxHash: '0x' + 'ab'.repeat(32),
+      destinationAddress: dest,
+      amount: 1000000n,
+      ...extra,
+    };
+  }
+
+  it('accepts an explicit per-call networkPassphrase', async () => {
+    const { sdk, seen } = sdkWith();
+    const res = await sdk.receive(params({ networkPassphrase: Networks.PUBLIC }) as never);
+    expect(res.settled).toBe(true);
+    expect(seen).toHaveLength(1);
+  });
+
+  it('derives PUBLIC from config.network = mainnet', async () => {
+    const { sdk, seen } = sdkWith('mainnet');
+    await sdk.receive(params() as never);
+    expect(seen).toHaveLength(1);
+  });
+
+  it('derives TESTNET from config.network = testnet', async () => {
+    const { sdk, seen } = sdkWith('testnet');
+    await sdk.receive(params() as never);
+    expect(seen).toHaveLength(1);
   });
 });

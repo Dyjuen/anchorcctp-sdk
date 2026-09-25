@@ -69,6 +69,11 @@ export * from './cctp-message.js';
 export * from './testnet-config.js';
 
 /**
+ * Real `rpc.Server` / Horizon adapters (B3/B4/B5) — passphrase-threaded.
+ */
+export * from './env-rpc.js';
+
+/**
  * Testnet-only helpers: account state reads + forwarder liveness checks.
  */
 export * from './testnet/account.js';

@@ -56,7 +56,7 @@ export interface MockRequest {
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 /** Normalize 0X prefix to 0x before passing to core's normalizeBurnTxHash. */
-function preNormalizeHash(h: string): string {
+export function preNormalizeHash(h: string): string {
   return h.trim().replace(/^0X/, '0x');
 }
 
