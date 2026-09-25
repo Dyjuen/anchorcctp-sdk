@@ -45,6 +45,13 @@ class InMemoryReplayStore implements IReplayStoreAdapter {
  */
 export { FileReplayStore } from './file-store.js';
 
+export {
+  encodeSettlementRecord,
+  decodeSettlementRecord,
+  settlementRecordReplacer,
+  settlementRecordReviver,
+} from './settlement-json.js';
+
 export class ReplayStore {
   private readonly adapter: IReplayStoreAdapter;
 

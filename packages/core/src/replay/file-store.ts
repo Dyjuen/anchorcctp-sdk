@@ -1,4 +1,5 @@
 import type { IReplayStoreAdapter, SettlementRecord } from './index.js';
+import { settlementRecordReplacer, settlementRecordReviver } from './settlement-json.js';
 
 function normalizeKey(h: string): string {
   return '0x' + h.trim().slice(2).toLowerCase();
@@ -19,7 +20,8 @@ export class FileReplayStore implements IReplayStoreAdapter {
         | undefined;
       const fs = proc?.getBuiltinModule?.('node:fs');
       if (!fs) return {};
-      return JSON.parse(fs.readFileSync(this.path, 'utf8'));
+      // Bigint-safe read (F1): `amount`/`dust` come back as bigints, not strings.
+      return JSON.parse(fs.readFileSync(this.path, 'utf8'), settlementRecordReviver);
     } catch {
       return {};
     }
@@ -32,7 +34,10 @@ export class FileReplayStore implements IReplayStoreAdapter {
     const fs = proc?.getBuiltinModule?.('node:fs');
     if (!fs) throw new Error('FileReplayStore requires Node.js (no fs in browser)');
     const tmp = this.path + '.tmp';
-    fs.writeFileSync(tmp, JSON.stringify(all), { mode: 0o600 });
+    // Bigint-safe write (F1): settlement records carry bigint `amount`/`dust`, and a
+    // bare JSON.stringify throws on those — which would strand a confirmed mint with
+    // no durable `settled` record, so a retry could re-enter receive().
+    fs.writeFileSync(tmp, JSON.stringify(all, settlementRecordReplacer), { mode: 0o600 });
     fs.renameSync(tmp, this.path);
   }
 

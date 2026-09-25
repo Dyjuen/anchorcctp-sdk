@@ -1,4 +1,9 @@
-import { ReplayStore, SettlementRecord } from '../src/replay/index.js';
+import {
+  ReplayStore,
+  SettlementRecord,
+  encodeSettlementRecord,
+  decodeSettlementRecord,
+} from '../src/replay/index.js';
 import { FileReplayStore } from '../src/replay/file-store.js';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -121,5 +126,102 @@ describe('FileReplayStore', () => {
     await s.markProcessed('0x' + 'ff'.repeat(32), { burnTxHash: '0x' + 'ff'.repeat(32), txHash: 'T4' });
     const raw = fs.readFileSync(storePath, 'utf8');
     expect(() => JSON.parse(raw)).not.toThrow();
+  });
+
+  // F1: a confirmed mint's receipt carries bigint amount/dust. A bare JSON.stringify
+  // throws on those, so the durable record would never be written and a retry would
+  // re-enter receive(). The round-trip must return bigints.
+  it('round-trips bigint amount/dust through a real file (no TypeError)', async () => {
+    const hash = '0x' + 'ab'.repeat(32);
+    const adapter = new FileReplayStore(storePath);
+    expect(() =>
+      adapter.markProcessed(hash, {
+        burnTxHash: hash,
+        txHash: 'MINT1',
+        amount: 10000000n,
+        dust: 0n,
+        sourceDomain: 6,
+        destinationAddress: 'GDEST',
+        timestamp: '2026-09-25T00:00:00.000Z',
+        status: 'settled',
+      }),
+    ).not.toThrow();
+
+    // Fresh adapter = fresh read from disk, no shared in-memory state.
+    const reread = new FileReplayStore(storePath).getRecord(hash)!;
+    expect(reread.amount).toBe(10000000n);
+    expect(typeof reread.amount).toBe('bigint');
+    expect(reread.dust).toBe(0n);
+    expect(typeof reread.dust).toBe('bigint');
+    expect(reread.status).toBe('settled');
+    expect(reread.sourceDomain).toBe(6);
+    expect(reread.txHash).toBe('MINT1');
+
+    // The file stays valid JSON and stores the bigints as "…n" strings.
+    const raw = fs.readFileSync(storePath, 'utf8');
+    expect(() => JSON.parse(raw)).not.toThrow();
+    expect(raw).toContain('"10000000n"');
+  });
+
+  it('round-trips a record without amount/dust (submitted, pre-conversion)', async () => {
+    const hash = '0x' + 'ac'.repeat(32);
+    const adapter = new FileReplayStore(storePath);
+    adapter.markProcessed(hash, {
+      burnTxHash: hash,
+      txHash: 'MINT2',
+      status: 'submitted',
+      timestamp: '2026-09-25T00:00:00.000Z',
+    });
+    const reread = new FileReplayStore(storePath).getRecord(hash)!;
+    expect(reread.status).toBe('submitted');
+    expect(reread.amount).toBeUndefined();
+    expect(reread.dust).toBeUndefined();
+  });
+});
+
+describe('settlement record JSON (bigint-safe)', () => {
+  it('encodes bigints as "…n" strings and decodes them back to bigints', () => {
+    const encoded = encodeSettlementRecord({
+      burnTxHash: '0xabc',
+      txHash: 'M1',
+      amount: 123n,
+      dust: 0n,
+      sourceDomain: 6,
+      destinationAddress: 'GDEST',
+      timestamp: 't',
+      status: 'settled',
+    });
+    expect(encoded).toContain('"123n"');
+    expect(encoded).toContain('"0n"');
+    const decoded = decodeSettlementRecord(encoded);
+    expect(decoded.amount).toBe(123n);
+    expect(decoded.dust).toBe(0n);
+    expect(decoded.status).toBe('settled');
+    expect(decoded.sourceDomain).toBe(6);
+  });
+
+  it('tolerates records written without bigint fields or with legacy numeric values', () => {
+    const bare = decodeSettlementRecord('{"burnTxHash":"0xabc","txHash":"M1","status":"submitted"}');
+    expect(bare.amount).toBeUndefined();
+    expect(bare.dust).toBeUndefined();
+    expect(bare.status).toBe('submitted');
+
+    // Legacy value (written before the bigint encoding existed) must not crash.
+    const legacy = decodeSettlementRecord('{"burnTxHash":"0xabc","txHash":"M1","amount":5}');
+    expect(legacy.txHash).toBe('M1');
+  });
+
+  it('handles negative and zero bigints, and leaves look-alike strings alone', () => {
+    const encoded = encodeSettlementRecord({
+      burnTxHash: '0xabc',
+      txHash: 'M1',
+      amount: 0n,
+      dust: -7n,
+      destinationAddress: 'Gn0tAbigint',
+    });
+    const decoded = decodeSettlementRecord(encoded);
+    expect(decoded.amount).toBe(0n);
+    expect(decoded.dust).toBe(-7n);
+    expect(decoded.destinationAddress).toBe('Gn0tAbigint');
   });
 });

@@ -220,7 +220,19 @@ const ALLOWED_ORIGINS = [
 /**
  * Validates and normalizes incoming query params. Throws on invalid.
  */
-export function validateEventParams(q: Record<string, unknown>): ValidatedParams {
+export interface ValidateEventParamsOptions {
+  /**
+   * Spec §4: the `/api/receive/*` contract accepts a contract (`C…`) recipient as
+   * well as a `G…` account. Off by default so the SSE and legacy initiate paths keep
+   * their existing `G…`-only contract.
+   */
+  allowContractAddress?: boolean;
+}
+
+export function validateEventParams(
+  q: Record<string, unknown>,
+  opts: ValidateEventParamsOptions = {},
+): ValidatedParams {
   // reject array values (query string ambiguity)
   if (Array.isArray(q.address) || Array.isArray(q.burnTxHash) || Array.isArray(q.sourceDomain) || Array.isArray(q.amount)) {
     throw new Error('400 address, burnTxHash, sourceDomain must not be arrays');
@@ -237,8 +249,15 @@ export function validateEventParams(q: Record<string, unknown>): ValidatedParams
   if (!sourceDomainRaw) throw new Error('400 sourceDomain is required');
   if (!amountRaw) throw new Error('400 amount is required');
 
-  if (!StrKey.isValidEd25519PublicKey(address)) {
-    throw new Error('400 address must be a valid G... StrKey');
+  const addressOk =
+    StrKey.isValidEd25519PublicKey(address) ||
+    (opts.allowContractAddress === true && StrKey.isValidContract(address));
+  if (!addressOk) {
+    throw new Error(
+      opts.allowContractAddress === true
+        ? '400 address must be a valid G... account or C... contract StrKey'
+        : '400 address must be a valid G... StrKey',
+    );
   }
 
   const sourceDomain = Number(sourceDomainRaw);

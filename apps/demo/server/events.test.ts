@@ -21,6 +21,18 @@ describe('validateEventParams', () => {
     expect(() => validateEventParams({ address: 'NOPE', burnTxHash: '0x' + 'ab'.repeat(32), sourceDomain: '0', amount: '1.00' }))
       .toThrow(/address/i);
   });
+
+  // F3 / spec §4: the receive contract opts in to `C…` recipients; the SSE and legacy
+  // initiate paths (no option) keep their G-only contract, unchanged.
+  it('accepts a C... contract only when the caller opts in', () => {
+    const contract = 'CADQOBYHA4DQOBYHA4DQOBYHA4DQOBYHA4DQOBYHA4DQOBYHA4DQP5KR';
+    const q = { address: contract, burnTxHash: '0x' + 'ab'.repeat(32), sourceDomain: '0', amount: '1.00' };
+    expect(() => validateEventParams(q)).toThrow(/valid G\.\.\./);
+    expect(validateEventParams(q, { allowContractAddress: true }).address).toBe(contract);
+    // A fabricated hex EVM address is still refused in both modes.
+    const hex = { ...q, address: '0x' + '11'.repeat(20) };
+    expect(() => validateEventParams(hex, { allowContractAddress: true })).toThrow(/address/i);
+  });
 });
 
 describe('publicConfigBundle', () => {

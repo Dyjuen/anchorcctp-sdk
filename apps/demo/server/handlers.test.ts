@@ -2,6 +2,8 @@
 // Framework-free handler + KV store tests. Fake in-memory KV mirrors kv.ts.
 import { describe, it, expect } from 'vitest';
 import {
+  buildCsp,
+  CSP,
   handleFees,
   handleInitiate,
   handleSettle,
@@ -28,13 +30,38 @@ import {
   SETTLE_MAX_RETRIES,
 } from './kv.js';
 import type { BucketStore, StoredIntent } from './kv.js';
-import { AttestationTimeoutError, MintFailedError, MintUnconfirmedError } from '@anchor-cctp/core-sdk';
+import {
+  AttestationTimeoutError,
+  FileReplayStore,
+  MintFailedError,
+  MintUnconfirmedError,
+} from '@anchor-cctp/core-sdk';
 import type { ReceiveResult, SettlementRecord } from '@anchor-cctp/core-sdk';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+
+/** Unique temp path for a real FileReplayStore (F1 tests). */
+function tempReplayPath(): string {
+  return path.join(os.tmpdir(), `demo-replay-${process.pid}-${Date.now()}-${Math.floor(process.hrtime()[1])}.json`);
+}
+
+function cleanupTempReplay(file: string): void {
+  for (const p of [file, file + '.tmp']) {
+    try {
+      fs.unlinkSync(p);
+    } catch {
+      /* ok */
+    }
+  }
+}
 
 const HASH = '0x' + 'ab'.repeat(32);
 const OTHER_HASH = '0x' + 'cd'.repeat(32);
 const G = 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5';
 const G2 = 'GCX2EQXSPCHMBSEGYZRVTZWOIDRXWRWYEFRTCNVOZPYXE4QEFPKNUF3V';
+/** Valid `C…` contract strkey: `StrKey.encodeContract(Buffer.alloc(32, 7))`. */
+const CONTRACT = 'CADQOBYHA4DQOBYHA4DQOBYHA4DQOBYHA4DQOBYHA4DQOBYHA4DQP5KR';
 const AMOUNT = '0.10'; // → 100000 base-6
 const AMOUNT_BASE6 = '100000';
 const BASE = 1_800_000_000_000; // fixed server clock origin (ms epoch)
@@ -107,6 +134,7 @@ function fakeBuckets(state: FakeState, now: () => number, limits = DEFAULT_LIMIT
 function seedIntent(
   state: FakeState,
   over: Partial<StoredIntent> = {},
+  opts: { bind?: boolean } = {},
 ): StoredIntent {
   const intent: StoredIntent = {
     intentId: 'int_seed',
@@ -119,7 +147,9 @@ function seedIntent(
     ...over,
   };
   state.intents.set(intent.intentId, intent);
-  state.bind.set(`${intent.burnTxHash}|${intent.address}|${intent.amount}`, intent.intentId);
+  if (opts.bind !== false) {
+    state.bind.set(`${intent.burnTxHash}|${intent.address}|${intent.amount}`, intent.intentId);
+  }
   return intent;
 }
 
@@ -130,7 +160,11 @@ type FakeDeps = HandlerDeps & { state: FakeState; advanceClock(ms: number): void
  * interfaces. An intent for HASH/G/0.10 is pre-seeded so status has something
  * to read.
  */
-function fakeDeps(overrides: Partial<HandlerDeps> = {}, nowMs = BASE): FakeDeps {
+function fakeDeps(
+  overrides: Partial<HandlerDeps> = {},
+  nowMs = BASE,
+  seedOpts: { bind?: boolean } = {},
+): FakeDeps {
   const state: FakeState = {
     intents: new Map(),
     bind: new Map(),
@@ -145,12 +179,20 @@ function fakeDeps(overrides: Partial<HandlerDeps> = {}, nowMs = BASE): FakeDeps 
     clock += ms;
   };
 
-  seedIntent(state);
+  seedIntent(state, {}, seedOpts);
 
   const intents = {
+    // Mirrors both real stores: the `(hash|address|amount)` binding is first-claimer
+    // wins, so a second initiate returns the winner instead of re-pointing the key.
     async put(intent: StoredIntent) {
+      const key = `${intent.burnTxHash}|${intent.address}|${intent.amount}`;
+      const claimedId = state.bind.get(key);
+      if (claimedId) {
+        const winner = state.intents.get(claimedId);
+        if (winner) return winner;
+      }
       state.intents.set(intent.intentId, intent);
-      state.bind.set(`${intent.burnTxHash}|${intent.address}|${intent.amount}`, intent.intentId);
+      state.bind.set(key, intent.intentId);
       return intent;
     },
     async get(intentId: string, burnTxHash: string) {
@@ -427,6 +469,25 @@ describe('handleStatus', () => {
     expect((await handleStatus({ burnTxHash: HASH, address: G, amount: '0' }, deps)).status).toBe(400);
   });
 
+  // F3 / spec §4: `address` may be a `G…` account or a `C…` contract; anything else
+  // (including a fabricated hex EVM address) is still refused at the edge.
+  it('accepts a C... contract recipient and still rejects fabricated hex', async () => {
+    const deps = fakeDeps();
+    seedIntent(deps.state, {
+      intentId: 'int_contract',
+      burnTxHash: OTHER_HASH,
+      address: CONTRACT,
+    });
+    expect(
+      (await handleStatus({ burnTxHash: OTHER_HASH, address: CONTRACT, amount: AMOUNT, ip: '9.9.9.9' }, deps))
+        .status,
+    ).toBe(200);
+    expect(
+      (await handleStatus({ burnTxHash: OTHER_HASH, address: '0x' + '11'.repeat(20), amount: AMOUNT }, deps))
+        .status,
+    ).toBe(400);
+  });
+
   it('429s once the shared per-IP status bucket is drained', async () => {
     const deps = fakeDeps({ buckets: undefined as never });
     const buckets = fakeBuckets(deps.state, deps.now!, { status: 2, initiate: 20, settle: 5 });
@@ -453,7 +514,8 @@ describe('handleInitiate', () => {
   });
 
   it('records an intent and returns an intentId', async () => {
-    const deps = fakeDeps({ newIntentId: () => 'int_fixed' });
+    // No pre-claimed binding: this is the first initiate for the tuple.
+    const deps = fakeDeps({ newIntentId: () => 'int_fixed' }, BASE, { bind: false });
     const r = await handleInitiate(initiateBody(), deps);
     expect(r.status).toBe(200);
     expect(r.body).toEqual({ ok: true, intentId: 'int_fixed' });
@@ -490,7 +552,7 @@ describe('handleInitiate', () => {
   });
 
   it('rejects a missing transferMode and a bad maxFee', async () => {
-    const deps = fakeDeps();
+    const deps = fakeDeps({}, BASE, { bind: false });
     expect((await handleInitiate(initiateBody({ transferMode: undefined }), deps)).status).toBe(400);
     expect((await handleInitiate(initiateBody({ transferMode: 'turbo' }), deps)).status).toBe(400);
     // maxFee > amount
@@ -514,6 +576,56 @@ describe('handleInitiate', () => {
     expect((await handleInitiate(initiateBody(), deps)).status).toBe(403);
     expect((await handleInitiate(initiateBody({ origin: 'https://evil.example' }), deps)).status).toBe(403);
     expect((await handleInitiate(initiateBody({ origin: 'http://localhost:5173' }), deps)).status).toBe(200);
+  });
+
+  // F2 / spec §9 (first-claimer wins): a second initiate for the same tuple must not
+  // re-point the binding. Otherwise a third party who knows the public burn hash +
+  // address + amount can flip `transferMode` or reset `createdAt`, and so suppress or
+  // fake the status frame's `elapsedMs`/`degraded`.
+  it('does not rebind on a second initiate, and status keeps the first intent', async () => {
+    let n = 0;
+    const deps = fakeDeps({ newIntentId: () => `int_${++n}` });
+    const first = await handleInitiate(
+      initiateBody({ burnTxHash: OTHER_HASH, address: G2, transferMode: 'standard' }),
+      deps,
+    );
+    expect(first.status).toBe(200);
+    const firstId = bodyOf(first).intentId;
+
+    // 120s later — past the 90s fast window — the second caller asks for `fast`.
+    deps.advanceClock(120_000);
+    const second = await handleInitiate(
+      initiateBody({ burnTxHash: OTHER_HASH, address: G2, transferMode: 'fast' }),
+      deps,
+    );
+    expect(second.status).toBe(200);
+    expect(bodyOf(second).intentId).toBe(firstId);
+
+    const found = await deps.intents.find(OTHER_HASH, G2, AMOUNT_BASE6);
+    expect(found).toMatchObject({ intentId: firstId, transferMode: 'standard', createdAt: BASE });
+
+    // Status still reports the FIRST intent's clock and mode: elapsedMs is measured
+    // from the original createdAt, and `standard` is never degraded by the fast window.
+    const st = await handleStatus(
+      { burnTxHash: OTHER_HASH, address: G2, amount: AMOUNT, ip: '9.9.9.9' },
+      deps,
+    );
+    expect(st.status).toBe(200);
+    expect(bodyOf(st).elapsedMs).toBe(120_000);
+    expect(bodyOf(st).degraded).toBe(false);
+  });
+
+  // F3 / spec §4: a contract (`C…`) recipient is a real Stellar strkey and must be
+  // accepted by the receive contract (never routed through translateToStellar).
+  it('accepts a contract (C...) recipient, and still rejects a fabricated hex address', async () => {
+    const deps = fakeDeps({ newIntentId: () => 'int_c' });
+    const ok = await handleInitiate(initiateBody({ address: CONTRACT }), deps);
+    expect(ok.status).toBe(200);
+    expect(await deps.intents.find(HASH, CONTRACT, AMOUNT_BASE6)).toMatchObject({
+      address: CONTRACT,
+    });
+    expect((await handleInitiate(initiateBody({ address: '0x' + '11'.repeat(20) }), deps)).status).toBe(400);
+    expect((await handleInitiate(initiateBody({ address: 'GNOTASTRKEY' }), deps)).status).toBe(400);
   });
 });
 
@@ -653,6 +765,67 @@ describe('handleSettle', () => {
     const second = await handleSettle(settleBody(), deps);
     expect(second.status).toBe(502);
     expect(bodyOf(second).error).toMatchObject({ code: 'MINT_UNCONFIRMED' });
+  });
+
+  // F1: the local server wires `replay: FileReplayStore` (serve.ts). A bare
+  // JSON.stringify throws on the bigint amount/dust, so a CONFIRMED mint would 500 and
+  // leave no durable receipt → the next attempt would re-enter receive(). Exercises the
+  // real store against a real file, not the Memory*/Redis doubles.
+  it('persists the confirmed receipt through a real FileReplayStore', async () => {
+    const file = tempReplayPath();
+    try {
+      const deps = fakeDeps();
+      deps.replay = new FileReplayStore(file);
+      const mint = mintingReceive(deps.state, { amount: 99_987n });
+      deps.cctp = { receive: mint.receive } as never;
+
+      const first = await handleSettle(settleBody(), deps);
+      expect(first.status).toBe(200);
+      expect(bodyOf(first).receipt).toEqual({ stellarAmount: '99987', mintTxHash: 'MINT_TX_1' });
+
+      // On disk, with the bigints encoded — no TypeError, valid JSON.
+      const raw = fs.readFileSync(file, 'utf8');
+      expect(raw).toContain('"99987n"');
+      expect(JSON.parse(raw)).toBeTruthy();
+
+      // A fresh store (next serverless invocation) reads the bigints back.
+      const reread = new FileReplayStore(file).getRecord(HASH)!;
+      expect(reread.status).toBe('settled');
+      expect(reread.amount).toBe(99_987n);
+      expect(typeof reread.amount).toBe('bigint');
+      expect(reread.dust).toBe(0n);
+
+      // Double-submit against the durable record returns the receipt, never re-mints.
+      const second = await handleSettle(settleBody(), { ...deps, replay: new FileReplayStore(file) });
+      expect(mint.calls()).toBe(1);
+      expect(bodyOf(second).code).toBe('ALREADY_PROCESSED');
+      expect(bodyOf(second).receipt).toEqual(bodyOf(first).receipt);
+    } finally {
+      cleanupTempReplay(file);
+    }
+  });
+
+  it('records a broadcast-but-unconfirmed mint through a real FileReplayStore', async () => {
+    const file = tempReplayPath();
+    try {
+      const deps = fakeDeps();
+      deps.replay = new FileReplayStore(file);
+      deps.cctp = {
+        receive: async () => {
+          throw new MintUnconfirmedError(HASH, 'BROADCAST_TX');
+        },
+      } as never;
+
+      const r = await handleSettle(settleBody(), deps);
+      expect(r.status).toBe(502);
+      expect(bodyOf(r).error).toMatchObject({ code: 'MINT_UNCONFIRMED' });
+      expect(new FileReplayStore(file).getRecord(HASH)).toMatchObject({
+        status: 'submitted',
+        txHash: 'BROADCAST_TX',
+      });
+    } finally {
+      cleanupTempReplay(file);
+    }
   });
 
   it('re-runs the MAX_MINT_AMOUNT_USDC cap server-side', async () => {
@@ -890,6 +1063,30 @@ describe('response hygiene', () => {
     expect(SECURITY_HEADERS['Content-Security-Policy']).toContain("default-src 'self'");
   });
 
+  // F4 / spec §6: one CSP definition, connect-src extended to the deployed API origin
+  // + Iris + Horizon/RPC — not two drifting copies.
+  it('builds the single CSP with the deployment connection sources', () => {
+    const csp = buildCsp({
+      apiOrigin: 'https://demo.example',
+      irisBaseUrl: 'https://iris-api-sandbox.circle.com/v2/',
+      horizonUrl: 'https://horizon-testnet.stellar.org',
+      sorobanRpcUrl: 'https://soroban-testnet.stellar.org',
+    });
+    expect(csp).toContain("default-src 'self'");
+    expect(csp).toContain("connect-src 'self' https://*.stellar.org");
+    expect(csp).toContain('https://demo.example');
+    expect(csp).toContain('https://iris-api-sandbox.circle.com');
+    expect(csp).toContain('https://horizon-testnet.stellar.org');
+    expect(csp).toContain('https://soroban-testnet.stellar.org');
+    // path-stripped origin, added once
+    expect(csp.match(/iris-api-sandbox\.circle\.com/g)).toHaveLength(1);
+
+    // The default constant (no env) stays local-only — no cross-network leakage.
+    expect(CSP).toBe("default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://*.stellar.org");
+    // An unparseable URL is dropped instead of breaking the header.
+    expect(buildCsp({ irisBaseUrl: 'not a url' })).toBe(CSP);
+  });
+
   it('never leaks a secret seed in a handler body', async () => {
     const deps = fakeDeps();
     deps.cctp = {
@@ -940,6 +1137,42 @@ describe('MemoryIntentStore', () => {
     expect(await store.find(HASH, G, AMOUNT_BASE6)).toBeNull();
     expect(await store.get('int_1', HASH)).toBeNull();
     expect(await store.has(HASH, G, AMOUNT_BASE6)).toBe(false);
+    store[Symbol.dispose]();
+  });
+
+  // F2 / spec §9: first-claimer wins. A later initiate for the same tuple must not
+  // re-point the binding — otherwise anyone who knows the public burn hash + address
+  // + amount could flip the mode or reset `createdAt`.
+  it('first-claimer wins: a second put for the same tuple does not rebind', async () => {
+    let t = BASE;
+    const store = new MemoryIntentStore({ now: () => t });
+    const first = await store.put(draft());
+    expect(first.intentId).toBe('int_1');
+
+    t = BASE + 60_000;
+    const second = await store.put(
+      draft({ intentId: 'int_2', transferMode: 'standard', createdAt: t, maxFee: '1' }),
+    );
+
+    // Loser gets the winner back, and the binding still resolves to the winner.
+    expect(second.intentId).toBe('int_1');
+    expect(await store.find(HASH, G, AMOUNT_BASE6)).toMatchObject({
+      intentId: 'int_1',
+      transferMode: 'fast',
+      createdAt: BASE,
+    });
+    expect((await store.find(HASH, G, AMOUNT_BASE6))?.maxFee).toBeUndefined();
+    store[Symbol.dispose]();
+  });
+
+  it('re-claims a tuple once the first intent has expired', async () => {
+    let t = BASE;
+    const store = new MemoryIntentStore({ now: () => t });
+    await store.put(draft());
+    t = BASE + INTENT_TTL_MS;
+    const reclaimed = await store.put(draft({ intentId: 'int_2', createdAt: t, transferMode: 'standard' }));
+    expect(reclaimed.intentId).toBe('int_2');
+    expect(await store.find(HASH, G, AMOUNT_BASE6)).toMatchObject({ intentId: 'int_2' });
     store[Symbol.dispose]();
   });
 });
@@ -1004,6 +1237,50 @@ describe('replay records are permanent', () => {
     const lastWrite = calls[calls.length - 1];
     expect(lastWrite.args).toHaveLength(2); // no TTL option → permanent
     expect(await replay.getRecord(HASH)).toBeNull();
+  });
+
+  // F2 / spec §9: the Redis binding write must be SET … NX, so two concurrent
+  // initiates cannot both claim the same tuple.
+  it('KvIntentStore claims the binding with SET NX and returns the first intent on a loss', async () => {
+    const store = new Map<string, string>();
+    const writes: Array<{ key: string; opts?: { ex?: number; nx?: boolean } }> = [];
+    // Upstash `SET … NX` returns null when the key already exists.
+    const redis = {
+      get: async (k: string) => store.get(k) ?? null,
+      set: async (k: string, v: string, opts?: { ex?: number; nx?: boolean }) => {
+        writes.push({ key: k, ...(opts === undefined ? {} : { opts }) });
+        if (opts?.nx && store.has(k)) return null;
+        store.set(k, v);
+        return 'OK';
+      },
+    };
+    const intents = new KvIntentStore(redis as never, { now: () => BASE });
+    const first = await intents.put({
+      intentId: 'int_kv_1',
+      burnTxHash: HASH,
+      address: G,
+      amount: AMOUNT_BASE6,
+      sourceDomain: 6,
+      transferMode: 'fast',
+      createdAt: BASE,
+    });
+    expect(first.intentId).toBe('int_kv_1');
+    expect(writes[0].opts).toMatchObject({ nx: true, ex: 86_400 });
+
+    const second = await intents.put({
+      intentId: 'int_kv_2',
+      burnTxHash: HASH,
+      address: G,
+      amount: AMOUNT_BASE6,
+      sourceDomain: 6,
+      transferMode: 'standard',
+      createdAt: BASE + 60_000,
+    });
+    expect(second.intentId).toBe('int_kv_1');
+    expect(second.transferMode).toBe('fast');
+    expect(second.createdAt).toBe(BASE);
+    // The loser never overwrote the binding.
+    expect(await intents.find(HASH, G, AMOUNT_BASE6)).toMatchObject({ intentId: 'int_kv_1' });
   });
 });
 

@@ -43,9 +43,47 @@ import { DEFAULT_FAST_WINDOW_MS, FEE_CACHE_TTL_MS, SETTLE_LOCK_TTL_MS } from './
 /** One Iris fetch per status call, hard-capped — a status poll must never hang a function. */
 export const IRIS_TIMEOUT_MS = 10_000;
 
-/** Security-headers parity with serve.ts, applied to every handler response. */
-export const CSP =
-  "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://*.stellar.org";
+/** Host origins the deployment-specific CSP allows connections to (spec §6/§9). */
+export interface CspOptions {
+  /** Deployed API origin (Vercel) — the browser posts initiate/settle straight to it. */
+  apiOrigin?: string;
+  /** Circle Iris base URL (attestation + fee quotes). */
+  irisBaseUrl?: string;
+  horizonUrl?: string;
+  sorobanRpcUrl?: string;
+}
+
+function originOf(url: string | undefined): string | null {
+  if (!url) return null;
+  try {
+    return new URL(url).origin;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The single CSP definition, consumed by the handlers and by `serve.ts` — one place to
+ * drift, not two. `connect-src` is extended to exactly the origins this deployment
+ * talks to (deployed API origin + Iris + Horizon/RPC); `https://*.stellar.org` stays
+ * for the wallet kit. Callers pass their own env-derived URLs; the no-argument form is
+ * the local/dev default.
+ */
+export function buildCsp(opts: CspOptions = {}): string {
+  const connect = new Set(["'self'", 'https://*.stellar.org']);
+  for (const url of [opts.apiOrigin, opts.irisBaseUrl, opts.horizonUrl, opts.sorobanRpcUrl]) {
+    const origin = originOf(url);
+    if (origin) connect.add(origin);
+  }
+  return [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline'",
+    "style-src 'self' 'unsafe-inline'",
+    `connect-src ${[...connect].join(' ')}`,
+  ].join('; ');
+}
+
+export const CSP = buildCsp();
 export const NO_STORE = 'no-store, no-cache, must-revalidate';
 
 export const SECURITY_HEADERS: Record<string, string> = {
@@ -112,7 +150,11 @@ export interface HandlerDeps {
 }
 
 interface AttestationProbe {
-  /** Number of Iris requests actually issued (0 = skipped). */
+  /**
+   * Iris requests actually issued by this invocation (0 = skipped). Not a poll
+   * counter — the status frame's `attempt` mirrors this, and the UI's "attempt N"
+   * count belongs to the client (spec §7/Task 10).
+   */
   attempt: number;
   attestationReady: boolean;
   finalityThresholdExecuted?: number;
@@ -200,8 +242,9 @@ function validateStatusParams(input: ApiInput): StatusParams {
   if (!address) throw new Error('400 address is required');
   if (!hashRaw) throw new Error('400 burnTxHash is required');
   if (!amountRaw) throw new Error('400 amount is required');
-  if (!StrKey.isValidEd25519PublicKey(address)) {
-    throw new Error('400 address must be a valid G... StrKey');
+  // Spec §4: the receive contract takes a `G…` account or a `C…` contract recipient.
+  if (!StrKey.isValidEd25519PublicKey(address) && !StrKey.isValidContract(address)) {
+    throw new Error('400 address must be a valid G... account or C... contract StrKey');
   }
 
   return {
@@ -287,7 +330,7 @@ export async function handleInitiate(input: ApiInput, deps: HandlerDeps): Promis
 
   let params;
   try {
-    params = validateEventParams(input);
+    params = validateEventParams(input, { allowContractAddress: true });
   } catch (e) {
     return invalidParams(e);
   }
@@ -325,9 +368,12 @@ export async function handleInitiate(input: ApiInput, deps: HandlerDeps): Promis
     ...(maxFee === undefined ? {} : { maxFee }),
     createdAt: nowMs(deps),
   };
-  await deps.intents.put(intent);
+  // First-claimer wins (spec §9): `put` returns the already-bound intent when this
+  // `(hash|address|amount)` tuple was claimed before, so a second initiate cannot
+  // re-point the binding or reset `createdAt`.
+  const stored = await deps.intents.put(intent);
 
-  return ok(200, { ok: true, intentId: intent.intentId });
+  return ok(200, { ok: true, intentId: stored.intentId });
 }
 
 // ─── GET /api/receive/status ─────────────────────────────────────────────────
@@ -380,6 +426,10 @@ export async function handleStatus(input: ApiInput, deps: HandlerDeps): Promise<
 
   return ok(200, {
     status: probe.attestationReady ? 'ready' : 'attesting',
+    // NOT a cumulative poll counter: this is the number of Iris fetches *this
+    // invocation* made (0 or 1). Status is read-only — §4 forbids a KV poll counter,
+    // and the client already counts its own polls, so §7's "attempt N" is the
+    // client's number (Task 10 renders it). Kept in the frame for shape stability.
     attempt: probe.attempt,
     elapsedMs,
     degraded,
@@ -402,7 +452,7 @@ export async function handleSettle(input: ApiInput, deps: HandlerDeps): Promise<
 
   let params;
   try {
-    params = validateEventParams(input);
+    params = validateEventParams(input, { allowContractAddress: true });
   } catch (e) {
     return invalidParams(e);
   }

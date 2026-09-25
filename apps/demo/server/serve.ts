@@ -6,7 +6,15 @@ import { createServer, IncomingMessage, ServerResponse } from 'node:http';
 import { normalizeBurnTxHash, assertSupportedDomain, FileReplayStore, createAnchorCCTPFromEnv } from '@anchor-cctp/core-sdk';
 import type { AnchorCCTP, ReceiveParams, ReceiveResult } from '@anchor-cctp/core-sdk';
 import { validateEventParams, publicConfigBundle, SimTimeline, postInitiate, gateRealStream, createIntentStore, createRealGate, RateLimitBuckets, collectSseReal, readBodyCapped } from './events.js';
-import { handleFees, handleInitiate, handleSettle, handleStatus, trustedClientIp } from './handlers.js';
+import {
+  buildCsp,
+  handleFees,
+  handleInitiate,
+  handleSettle,
+  handleStatus,
+  trustedClientIp,
+  NO_STORE,
+} from './handlers.js';
 import type { HandlerDeps, HandlerResult } from './handlers.js';
 import { MemoryBuckets, MemoryFeeCache, MemoryIntentStore, MemoryLock, SETTLE_MAX_RETRIES } from './kv.js';
 import { Horizon, Networks, StrKey } from '@stellar/stellar-sdk';
@@ -119,8 +127,14 @@ function withLiveSequence(client: AnchorCCTP): AnchorCCTP {
 
 // ─── Headers ─────────────────────────────────────────────────────────────────
 
-const CSP = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://*.stellar.org";
-const NO_STORE = 'no-store, no-cache, must-revalidate';
+// One CSP definition (handlers.ts `buildCsp`) — this deployment's connection sources
+// only: its own API origin + Iris + Horizon/RPC (spec §6/§9).
+const CSP = buildCsp({
+  apiOrigin: env.API_ORIGIN ?? (env.VERCEL_URL ? `https://${env.VERCEL_URL}` : undefined),
+  irisBaseUrl: env.CIRCLE_ATTESTATION_BASE_URL,
+  horizonUrl: env.HORIZON_URL,
+  sorobanRpcUrl: env.SOROBAN_RPC_URL,
+});
 
 function setApiHeaders(res: ServerResponse): void {
   res.setHeader('Content-Security-Policy', CSP);
@@ -159,14 +173,21 @@ function getIp(req: IncomingMessage): string {
   return trustedClientIp(req.headers, req.socket.remoteAddress ?? 'unknown');
 }
 
-/** Writes a framework-free handler result through the Node response. */
+/**
+ * Writes a framework-free handler result through the Node response. The handler
+ * carries the default CSP; this deployment's env-derived CSP wins (same definition,
+ * built in handlers.ts).
+ */
 function sendHandlerResult(res: ServerResponse, result: HandlerResult): void {
   for (const [k, v] of Object.entries(result.headers)) res.setHeader(k, v);
+  res.setHeader('Content-Security-Policy', CSP);
   jsonRes(res, result.status, result.body);
 }
 
 /** Reads a capped JSON body; returns `undefined` when the cap was hit (already answered). */
 async function readJsonBody(req: IncomingMessage, res: ServerResponse): Promise<unknown | undefined> {
+  // Headers first: a 413 from the cap is a response too (F5).
+  setApiHeaders(res);
   const bodyResult = await readBodyCapped(req, res);
   if ('error' in bodyResult) return undefined;
   try {
@@ -307,6 +328,8 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
   }
 
   // ─── Fallback: 404 ──────────────────────────────────────────────
+  // Security headers on every response, including this one (F5).
+  setApiHeaders(res);
   jsonRes(res, 404, {
     error: {
       code: 'NOT_FOUND',

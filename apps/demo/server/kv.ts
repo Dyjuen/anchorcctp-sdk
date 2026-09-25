@@ -13,7 +13,11 @@ import type {
   SorobanTransport,
   TransferFee,
 } from '@anchor-cctp/core-sdk';
-import { createAnchorCCTPFromEnv } from '@anchor-cctp/core-sdk';
+import {
+  createAnchorCCTPFromEnv,
+  encodeSettlementRecord,
+  decodeSettlementRecord,
+} from '@anchor-cctp/core-sdk';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -116,43 +120,11 @@ function legacyBindKey(burnTxHash: string, address: string, amount: string): str
 }
 
 /**
- * Bigint-safe JSON for settlement records. `amount`/`dust` are the only bigint
- * fields; everything else round-trips as-is (including absent optionals).
+ * Bigint-safe settlement JSON — the **same** encoder `FileReplayStore` uses in core,
+ * re-exported so the Redis and file stores cannot drift apart on how a `settled`
+ * receipt is written.
  */
-export function encodeSettlementRecord(record: SettlementRecord): string {
-  const out: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(record)) {
-    if (v === undefined) continue;
-    out[k] = typeof v === 'bigint' ? `${v.toString()}n` : v;
-  }
-  return JSON.stringify(out);
-}
-
-export function decodeSettlementRecord(raw: string): SettlementRecord {
-  const obj = JSON.parse(raw) as Record<string, unknown>;
-  const tail = (v: unknown): bigint | undefined => {
-    if (typeof v !== 'string' || !v.endsWith('n')) return undefined;
-    try {
-      return BigInt(v.slice(0, -1));
-    } catch {
-      return undefined;
-    }
-  };
-  const amount = tail(obj.amount);
-  const dust = tail(obj.dust);
-  return {
-    burnTxHash: String(obj.burnTxHash ?? ''),
-    txHash: String(obj.txHash ?? ''),
-    ...(amount === undefined ? {} : { amount }),
-    ...(dust === undefined ? {} : { dust }),
-    ...(obj.sourceDomain === undefined ? {} : { sourceDomain: Number(obj.sourceDomain) }),
-    ...(obj.destinationAddress === undefined
-      ? {}
-      : { destinationAddress: String(obj.destinationAddress) }),
-    ...(obj.timestamp === undefined ? {} : { timestamp: String(obj.timestamp) }),
-    ...(obj.status === undefined ? {} : { status: obj.status as SettlementRecord['status'] }),
-  };
-}
+export { encodeSettlementRecord, decodeSettlementRecord };
 
 // ─── In-memory stores (tests + local serve.ts) ───────────────────────────────
 
@@ -170,13 +142,23 @@ export class MemoryIntentStore implements IntentStore {
     return entry;
   }
 
+  /**
+   * First-claimer wins (spec §9): the `(hash|address|amount)` binding is claimed once.
+   * A later initiate for the same tuple must not re-point the binding — otherwise a
+   * third party knowing the public burn hash + address + amount could flip
+   * `transferMode` or reset `createdAt` and so suppress or fake the status frame's
+   * `elapsedMs`/`degraded`.
+   */
   async put(intent: StoredIntent): Promise<StoredIntent> {
+    const key = bindKey(intent.burnTxHash, intent.address, intent.amount);
+    const claimed = this.live(this.bindings.get(key));
+    if (claimed) {
+      const winner = this.live(this.intents.get(claimed.intentId));
+      if (winner) return winner.intent;
+    }
     const expiresAt = this.clock() + INTENT_TTL_MS;
     this.intents.set(intent.intentId, { intent, expiresAt });
-    this.bindings.set(bindKey(intent.burnTxHash, intent.address, intent.amount), {
-      intentId: intent.intentId,
-      expiresAt,
-    });
+    this.bindings.set(key, { intentId: intent.intentId, expiresAt });
     return intent;
   }
 
@@ -348,14 +330,25 @@ export class KvIntentStore implements IntentStore {
     }
   }
 
+  /**
+   * First-claimer wins (spec §9). The binding is written with `SET … NX` so two
+   * concurrent initiates for the same `(hash|address|amount)` cannot both claim it;
+   * the loser returns the winner's intent instead of re-pointing the key. Without NX
+   * a second initiate could flip `transferMode` / reset `createdAt` and thereby
+   * suppress or fake the status frame's `elapsedMs`/`degraded`.
+   */
   async put(intent: StoredIntent): Promise<StoredIntent> {
     const ex = this.ttlSeconds();
-    await this.redis.set(intentKey(intent.intentId), JSON.stringify(intent), { ex });
-    await this.redis.set(
+    const bound = await this.redis.set(
       legacyBindKey(intent.burnTxHash, intent.address, intent.amount),
       intent.intentId,
-      { ex },
+      { ex, nx: true },
     );
+    if (bound === null) {
+      const winner = await this.find(intent.burnTxHash, intent.address, intent.amount);
+      if (winner) return winner;
+    }
+    await this.redis.set(intentKey(intent.intentId), JSON.stringify(intent), { ex });
     return intent;
   }
 
