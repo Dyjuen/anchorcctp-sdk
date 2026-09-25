@@ -5,7 +5,7 @@
 // validation and every rate bucket lives in handlers.ts/kv.ts (spec §6).
 // ponytail: server-only module — never bundled for browser.
 
-import { buildCsp, NO_STORE, trustedClientIp } from './handlers.js';
+import { buildCsp, NO_STORE, redact, trustedClientIp } from './handlers.js';
 import type { HandlerDeps, HandlerResult } from './handlers.js';
 import { depsFromEnv } from './kv.js';
 import type { EnvDeps } from './kv.js';
@@ -61,6 +61,43 @@ export function jsonResponse(
   headers: SecurityHeaders,
 ): Response {
   return Response.json(result.body, { status: result.status, headers });
+}
+
+/** A handler throw becomes this: a structured, retryable code — never a bare 500. */
+export const HANDLER_FAILED: { status: number; body: unknown } = {
+  status: 500,
+  body: {
+    error: {
+      code: 'RECEIVE_FAILED',
+      remediation: 'The API hit an unexpected error. Retry shortly.',
+    },
+  },
+};
+
+/**
+ * Runs one handler call and turns any throw into {@link HANDLER_FAILED} — so an
+ * Upstash/RPC/Iris outage on a money-moving route still answers with a code the
+ * client can act on *and* this deployment's security headers, instead of Vercel's
+ * header-less `FUNCTION_INVOCATION_FAILED` 500 (spec §6/§8). A handler's own
+ * `{ status, body }` — success or structured failure — passes through untouched.
+ *
+ * Only the cold-start env build (`serverlessDeps`) stays outside this guard: a
+ * misconfigured instance must fail loudly, not answer a tidy error (spec §6).
+ */
+export async function respondWith(
+  run: () => Promise<Pick<HandlerResult, 'status' | 'body'>>,
+  headers: SecurityHeaders,
+): Promise<Response> {
+  try {
+    return jsonResponse(await run(), headers);
+  } catch (error) {
+    // Server-side only, and redacted: no secret may reach a log line either.
+    console.error(
+      '[api] handler threw:',
+      redact(error instanceof Error ? error.message : String(error)),
+    );
+    return jsonResponse(HANDLER_FAILED, headers);
+  }
 }
 
 export function methodNotAllowed(allow: string): Response {

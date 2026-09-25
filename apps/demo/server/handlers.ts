@@ -165,8 +165,8 @@ interface AttestationProbe {
 
 const SECRET_RE = /S[A-Z2-7]{55}/g;
 
-/** No secret ever reaches a client body or a log line. */
-function redact(raw: string): string {
+/** No secret ever reaches a client body or a log line. Shared with serverless.ts. */
+export function redact(raw: string): string {
   return raw.replace(SECRET_RE, '[redacted]').slice(0, 300);
 }
 

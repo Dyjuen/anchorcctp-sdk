@@ -6,10 +6,10 @@
 import { handleSettle } from '../../apps/demo/server/handlers.js';
 import type { HandlerDeps } from '../../apps/demo/server/handlers.js';
 import {
-  jsonResponse,
   methodNotAllowed,
   readJsonObject,
   requestIp,
+  respondWith,
   serverlessDeps,
   serverlessHeaders,
 } from '../../apps/demo/server/serverless.js';
@@ -18,9 +18,10 @@ import type { SecurityHeaders } from '../../apps/demo/server/serverless.js';
 /** Injection seam: the deployed `fetch` below is this with env-built deps + headers. */
 export function createHandler(deps: HandlerDeps, headers: SecurityHeaders) {
   return async function fetchSettle(request: Request): Promise<Response> {
-    const body = await readJsonObject(request);
-    const result = await handleSettle({ ...body, ip: requestIp(request) }, deps);
-    return jsonResponse(result, headers);
+    return respondWith(async () => {
+      const body = await readJsonObject(request);
+      return handleSettle({ ...body, ip: requestIp(request) }, deps);
+    }, headers);
   };
 }
 

@@ -1574,6 +1574,80 @@ describe('vercel entrypoints', () => {
     expect(JSON.stringify(await leaked.json())).not.toContain(secret);
   });
 
+  it('a throwing handler still answers with headers + a structured code, not a bare 500', async () => {
+    // A KV/RPC outage throws out of the handler (e.g. `deps.buckets.consumeIp`).
+    // The wrapper must not let that become a header-less platform error.
+    const secret = 'S' + 'A'.repeat(55);
+    const boom = () => {
+      throw new Error(`upstash unreachable: ${secret}`);
+    };
+    const throwingDeps = (over: Partial<HandlerDeps> = {}) =>
+      fakeDeps({
+        buckets: { consumeIp: boom, consumeSubject: boom } as never,
+        feeCache: { get: boom, set: boom } as never,
+        ...over,
+      });
+
+    const cases: Array<[string, Promise<Response>]> = [
+      [
+        'status',
+        createStatusRoute(throwingDeps(), HEADERS)(
+          get(`/api/receive/status?burnTxHash=${HASH}&address=${G}&amount=${AMOUNT}`),
+        ),
+      ],
+      [
+        'fees',
+        // attestationBaseUrl set, so the call reaches the throwing fee cache
+        createFeesRoute(
+          throwingDeps({ attestationBaseUrl: DEPLOY_ENV.CIRCLE_ATTESTATION_BASE_URL }),
+          HEADERS,
+        )(get('/api/fees?sourceDomain=6&destDomain=27&mode=fast')),
+      ],
+      ['initiate', createInitiateRoute(throwingDeps(), HEADERS)(post('/api/receive/initiate', {}))],
+      [
+        'settle',
+        createSettleRoute(throwingDeps(), HEADERS)(
+          post('/api/receive/settle', {
+            burnTxHash: HASH,
+            address: G,
+            amount: AMOUNT,
+            sourceDomain: '6',
+            transferMode: 'fast',
+            intentId: 'int_seed',
+          }),
+        ),
+      ],
+    ];
+
+    for (const [route, pending] of cases) {
+      const res = await pending;
+      expect(res.status, route).toBe(500);
+      const body = JSON.stringify(await res.json());
+      expect(body, route).toBe(
+        JSON.stringify({
+          error: {
+            code: 'RECEIVE_FAILED',
+            remediation: 'The API hit an unexpected error. Retry shortly.',
+          },
+        }),
+      );
+      expect(body, route).not.toContain(secret); // redacted upstream, never echoed
+      expect(res.headers.get('content-security-policy'), route).toBe(
+        HEADERS['Content-Security-Policy'],
+      );
+      expect(res.headers.get('cache-control'), route).toBe(NO_STORE);
+      expect(res.headers.get('x-content-type-options'), route).toBe('nosniff');
+    }
+  });
+
+  it('does not swallow a structured failure the handler already produced', async () => {
+    // Same wrapper, no throw: the handler's 400 passes through byte-for-byte.
+    const res = await createSettleRoute(fakeDeps(), HEADERS)(post('/api/receive/settle', {}));
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: { code: 'INVALID_PARAMS' } });
+    expect(res.headers.get('cache-control')).toBe(NO_STORE);
+  });
+
   it('CSP connect-src carries the deployment origins, never the local-only default', () => {
     const csp = serverlessHeaders(DEPLOY_ENV)['Content-Security-Policy'];
     for (const origin of [

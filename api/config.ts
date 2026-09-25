@@ -4,8 +4,8 @@
 
 import { publicConfigBundle } from '../apps/demo/server/events.js';
 import {
-  jsonResponse,
   methodNotAllowed,
+  respondWith,
   serverlessDeps,
   serverlessHeaders,
 } from '../apps/demo/server/serverless.js';
@@ -14,7 +14,7 @@ import type { SecurityHeaders } from '../apps/demo/server/serverless.js';
 /** Injection seam: the deployed `fetch` below is this with the real env + headers. */
 export function createHandler(env: Record<string, string | undefined>, headers: SecurityHeaders) {
   return async function fetchConfig(_request: Request): Promise<Response> {
-    return jsonResponse({ status: 200, body: publicConfigBundle(env) }, headers);
+    return respondWith(async () => ({ status: 200, body: publicConfigBundle(env) }), headers);
   };
 }
 
