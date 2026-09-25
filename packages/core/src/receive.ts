@@ -4,6 +4,7 @@ import { convert6to7 } from './decimals/index.js';
 import { ensureTrustline, TESTNET_USDC_ISSUER } from './trustline/index.js';
 import { ReplayStore, SettlementRecord } from './replay/index.js';
 import { AttestationClient, AttestationResult } from './attestation/index.js';
+import { parseTransferAmounts } from './cctp-message.js';
 import { AnchorCCTPEventEmitter } from './events/index.js';
 import { Logger } from './logger/index.js';
 import { StrKey } from '@stellar/stellar-sdk';
@@ -23,9 +24,10 @@ export interface ReceiveParams {
   burnTxHash: string;
   destinationAddress: string;
   /**
-   * **WARNING (O2):** Amount is caller-supplied and NOT yet bound to the attestation message.
-   * Caller MUST pass the attested value from the source-chain burn. Mismatch check against the
-   * on-chain message parser is deferred to a future slice — no silent behavior change today.
+   * Gross burn amount from the source-chain burn. Caller MUST pass the attested value.
+   * `receive()` cross-checks it against the parsed message amount (uint256 at absolute
+   * offset 216) and throws `InvalidAmountError` on mismatch. Note this is the **gross**
+   * amount: on a Fast transfer the receipt reports `amount - feeExecuted`.
    */
   amount: bigint;
   dustCollectorAddress?: string;
@@ -183,27 +185,17 @@ export async function receive(
     throw error;
   }
 
-  // O2: Parse amount from CCTP message and cross-check against caller-supplied amount.
-  // CCTP message layout (assumption from Circle source-chain message format):
-  //   offset 0..3:   version/padding (4 bytes)
-  //   offset 4..11:  amount as uint64 LE (8 bytes)
-  //   offset 12+:    source/denom/mintRecipient/destinationDomain/etc.
-  // If message is too short to contain the amount field, fail closed.
-  const msgHex = attResult.message.startsWith('0x') ? attResult.message.slice(2) : attResult.message;
-  const AMOUNT_OFFSET_BYTES = 4;
-  const AMOUNT_LENGTH_BYTES = 8;
-  const MIN_MSG_BYTES = AMOUNT_OFFSET_BYTES + AMOUNT_LENGTH_BYTES; // 12 bytes = 24 hex chars
-  if (msgHex.length < MIN_MSG_BYTES * 2) {
-    const error = new AttestationVerificationError(
-      burnTxHash,
-      `message too short to contain amount field (need >= ${MIN_MSG_BYTES} bytes, got ${Math.floor(msgHex.length / 2)})`
-    );
-    ctx.emitter.emit('onError', { error, burnTxHash });
-    throw error;
+  // O2/B6: Parse amount and executed fee from CCTP message (uint256 BE at absolute
+  // offsets 216 and 312 — see cctp-message.ts) and cross-check the amount against
+  // the caller-supplied value. Too short → fail closed.
+  let parsedAmount: bigint;
+  let feeExecuted: bigint;
+  try {
+    ({ amount: parsedAmount, feeExecuted } = parseTransferAmounts(attResult.message));
+  } catch (parseErr) {
+    ctx.emitter.emit('onError', { error: parseErr, burnTxHash });
+    throw parseErr;
   }
-  const msgBytes = Buffer.from(msgHex, 'hex');
-  // uint64 LE decode
-  const parsedAmount = msgBytes.readBigUInt64LE(AMOUNT_OFFSET_BYTES);
   if (parsedAmount !== amount) {
     const error = new InvalidAmountError(
       `amount mismatch: caller supplied ${amount} but attestation message contains ${parsedAmount}`
@@ -306,7 +298,10 @@ export async function receive(
   });
 
   // 10. Decimal Conversion (6 -> 7 decimals) & Dust Routing
-  const { stellarAmount, dust } = convert6to7(amount);
+  // B7: on a Fast transfer the forwarder mints `amount - feeExecuted` (the source-side
+  // fee was already taken), so the receipt must report the net credited amount — not
+  // the gross burn amount. `dust` stays structurally zero for the exact EVM→Stellar ×10.
+  const { stellarAmount, dust } = convert6to7(parsedAmount - feeExecuted);
 
   const effectiveDustCollector = resolveDustCollector({
     dest: stellarDestination,

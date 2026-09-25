@@ -21,10 +21,13 @@ const fakeTransport = (): SorobanTransport => ({
   getTransaction: async () => ({ status: 'SUCCESS' }),
 });
 
-/** Build a well-formed CCTP message hex with the given amount encoded as uint64 LE at offset 4. */
+/**
+ * Build a well-formed CCTP message hex matching the real Iris frame layout:
+ * `amount` as uint256 BE at absolute offset 216, `feeExecuted` (0 here) at 312.
+ */
 function wellFormedMsg(amount: bigint): string {
-  const buf = Buffer.alloc(46, 0);
-  buf.writeBigUInt64LE(amount, 4);
+  const buf = Buffer.alloc(408, 0);
+  buf.writeBigUInt64BE(amount, 216 + 24);
   return '0x' + buf.toString('hex');
 }
 

@@ -54,6 +54,11 @@ export * from './config.js';
 export * from './receive.js';
 
 /**
+ * Raw CCTP message parser: uint256 amount / feeExecuted at absolute offsets 216 / 312.
+ */
+export * from './cctp-message.js';
+
+/**
  * Public-only testnet JSON config loader (no secrets — env vars only).
  */
 export * from './testnet-config.js';

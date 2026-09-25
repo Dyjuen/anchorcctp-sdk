@@ -17,10 +17,20 @@ import {
 import { SettlementRecord } from '../src/replay/index.js';
 import { StrKey } from '@stellar/stellar-sdk';
 
-/** Build a well-formed CCTP message hex with the given amount encoded as uint64 LE at offset 4. */
-function wellFormedMsg(amount: bigint): string {
-  const buf = Buffer.alloc(46, 0); // 46 bytes = 92 hex chars, well above minimum
-  buf.writeBigUInt64LE(amount, 4);
+/**
+ * Build a well-formed CCTP message hex matching the real Iris frame layout:
+ * `amount` as uint256 BE at absolute offset 216 and `feeExecuted` as uint256 BE
+ * at absolute offset 312. Buffer is 408 bytes (the real frame's length), so it
+ * comfortably covers both fields.
+ *
+ * `feeExecuted` defaults to 0 so tests that assert the receipt equals the gross
+ * amount ×10 keep their original expectations; pass a non-zero fee to exercise
+ * the Fast-transfer netting (B7).
+ */
+function wellFormedMsg(amount: bigint, feeExecuted = 0n): string {
+  const buf = Buffer.alloc(408, 0);
+  buf.writeBigUInt64BE(amount, 216 + 24);
+  buf.writeBigUInt64BE(feeExecuted, 312 + 24);
   return '0x' + buf.toString('hex');
 }
 
@@ -731,6 +741,102 @@ describe('receive() Orchestration Engine', () => {
 
     expect(r.settled).toBe(true);
     expect(r.amount).toBe(50000000n); // 5 * 10
+  });
+
+  it('B6: message passing the byte-shape check but too short for the amount fields fails closed', async () => {
+    const amount = 1000000n;
+    // 64 bytes: long enough for isWellFormedAttestation (>= 32 bytes), far short of 344.
+    const shapeOkButShort = '0x' + 'ab'.repeat(64);
+    const sdk = createAnchorCCTP({
+      sorobanTransport: fakeTransport(),
+      signer: async () => 'SHOULD_NOT_SIGN',
+      sponsorAccount: validSponsor,
+      forwarderContractId: 'CA66Q2WFBND6V4UEB7RD4SAXSVIWMD6RA4X3U32ELVFGXV5PJK4T4VSZ',
+      _test: {
+        attestation: async () => ({
+          status: 'complete',
+          message: shapeOkButShort,
+          signature: goodSig,
+        }),
+        hasTrustline: async () => true,
+      },
+    } as any);
+
+    await expect(
+      sdk.receive({
+        sourceDomain: 0,
+        burnTxHash: H('02b60001'),
+        destinationAddress: validDestination,
+        amount,
+      })
+    ).rejects.toThrow(/too short/i);
+  });
+
+  // --- B7: Fast-transfer fee netting ---
+
+  it('B7: receipt reports the net amount (amount - feeExecuted) * 10 on a Fast transfer', async () => {
+    const amount = 5000000n;
+    const feeExecuted = 1300n;
+    const sdk = createAnchorCCTP({
+      sorobanTransport: fakeTransport(),
+      signer: async () => 'B7_SIGNED',
+      sponsorAccount: validSponsor,
+      forwarderContractId: 'CA66Q2WFBND6V4UEB7RD4SAXSVIWMD6RA4X3U32ELVFGXV5PJK4T4VSZ',
+      _test: {
+        attestation: async () => ({
+          status: 'complete',
+          message: wellFormedMsg(amount, feeExecuted),
+          signature: goodSig,
+        }),
+        hasTrustline: async () => true,
+      },
+    } as any);
+
+    const settled: any[] = [];
+    sdk.on('onSettled', (p) => settled.push(p));
+
+    const r = await sdk.receive({
+      sourceDomain: 0,
+      burnTxHash: H('02b70001'),
+      destinationAddress: validDestination,
+      amount, // caller still passes the GROSS attested amount
+    });
+
+    // (5000000 - 1300) * 10 — the fee is netted out, not multiplied.
+    expect(r.settled).toBe(true);
+    expect(r.amount).toBe(49987000n);
+    expect(r.dust).toBe(0n);
+    expect(settled.length).toBe(1);
+    expect(settled[0].amount).toBe(49987000n);
+  });
+
+  it('B7: caller-supplied amount is still cross-checked against the GROSS parsed amount', async () => {
+    const amount = 5000000n;
+    const feeExecuted = 1300n;
+    const sdk = createAnchorCCTP({
+      sorobanTransport: fakeTransport(),
+      signer: async () => 'SHOULD_NOT_SIGN',
+      sponsorAccount: validSponsor,
+      forwarderContractId: 'CA66Q2WFBND6V4UEB7RD4SAXSVIWMD6RA4X3U32ELVFGXV5PJK4T4VSZ',
+      _test: {
+        attestation: async () => ({
+          status: 'complete',
+          message: wellFormedMsg(amount, feeExecuted),
+          signature: goodSig,
+        }),
+        hasTrustline: async () => true,
+      },
+    } as any);
+
+    // Supplying the *net* amount must fail: the check is against the gross.
+    await expect(
+      sdk.receive({
+        sourceDomain: 0,
+        burnTxHash: H('02b70002'),
+        destinationAddress: validDestination,
+        amount: amount - feeExecuted,
+      })
+    ).rejects.toThrow(InvalidAmountError);
   });
 
   // --- O15: Sponsor param tests ---
