@@ -16,7 +16,7 @@ export default defineConfig({
       { text: 'CLI', link: '/cli/overview' },
       { text: 'Core', link: '/core/overview' },
       { text: 'SEP-CCTP', link: '/sep/overview' },
-      { text: 'Demo', link: process.env.VITE_DEMO_URL ?? 'http://localhost:5173' },
+      { text: 'Demo', link: process.env.VITE_DEMO_URL ?? '/' },
     ],
     sidebar: [
       {
