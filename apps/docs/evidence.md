@@ -13,4 +13,4 @@ A milestone closes when its artifacts exist, not when code merges. PRD section 1
 
 When you open a PR, link the evidence file or log excerpt that matches the claim. If an artifact is missing, the milestone stays open.
 
-Next: start a new integration at [What is AnchorCCTP](../overview/what) or [Quick setup](../start/quick-setup).
+Next: start a new integration at [What is AnchorCCTP](/overview/what) or [Quick setup](/start/quick-setup).
