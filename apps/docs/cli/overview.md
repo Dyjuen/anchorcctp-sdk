@@ -2,7 +2,7 @@
 
 For ops staff and anchor engineers: run CCTP checks from a terminal without writing code.
 
-The `anchor-cctp` binary calls the same core SDK the demo uses. A domain check, a verification, or a streamed transfer returns the same result in all three.
+The `anchor-cctp` binary ([`@anchor-cctp/cli`](https://www.npmjs.com/package/@anchor-cctp/cli)) calls the same core SDK the demo uses. A domain check, a verification, or a streamed transfer returns the same result in all three.
 
 ```bash
 npx @anchor-cctp/cli <subcommand> [options]

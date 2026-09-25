@@ -2,7 +2,7 @@
 
 For anchor engineers: the one engine the CLI and demo share.
 
-`@anchor-cctp/core-sdk` holds the full settlement pipeline. The CLI and the demo portal pass params into it and render results. They add no separate settlement logic, so all three agree on the same transfer.
+[`@anchor-cctp/core-sdk`](https://www.npmjs.com/package/@anchor-cctp/core-sdk) holds the full settlement pipeline. The CLI and the demo portal pass params into it and render results. They add no separate settlement logic, so all three agree on the same transfer.
 
 ```ts
 import { createAnchorCCTP } from '@anchor-cctp/core-sdk';

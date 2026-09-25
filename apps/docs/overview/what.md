@@ -33,8 +33,8 @@ Result: `settlement.amount` holds stroops credited on Stellar, `settlement.dust`
 
 | Piece | Package | Use it when you |
 |---|---|---|
-| Core SDK | `@anchor-cctp/core-sdk` | Settle deposits inside a Node or TypeScript backend with `receive()` |
-| CLI | `@anchor-cctp/cli` | Check domains, verify a burn, stream transfers, or generate `stellar.toml` from a terminal |
+| Core SDK | [`@anchor-cctp/core-sdk`](https://www.npmjs.com/package/@anchor-cctp/core-sdk) | Settle deposits inside a Node or TypeScript backend with `receive()` |
+| CLI | [`@anchor-cctp/cli`](https://www.npmjs.com/package/@anchor-cctp/cli) | Check domains, verify a burn, stream transfers, or generate `stellar.toml` from a terminal |
 | Demo and spec | `apps/demo`, `SEP-CCTP.md` | Copy the Freighter flow or publish CCTP metadata for wallets |
 
 The CLI and demo call the same core code, so a transfer checked in one tool matches the result in the others.
