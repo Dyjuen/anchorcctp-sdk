@@ -230,11 +230,20 @@ describe('fast-wait / degraded / cancel (§7)', () => {
     expect(s.attempts).toBe(2);
   });
 
-  it('settle-ready moves a waiting transfer to settling', () => {
+  it('settle-ready moves a fast-wait transfer to settling', () => {
     expect(reduceDeposit(fastWait(), { type: 'settle-ready' }).step).toBe('settling');
-    const degraded = reduceDeposit(standardWait(), { type: 'fast-window-expired' });
+  });
+
+  it('settle-ready moves a degraded-standard transfer to settling', () => {
+    // Really reach `degraded-standard` first: the Iris signal degrades without waiting
+    // out the window, so this exercises the degraded edge, not a standard wait.
+    const degraded = reduceDeposit(fastWait(), {
+      type: 'status',
+      frame: frame({ finalityThresholdExecuted: 2000 }),
+    });
+    expect(degraded.step).toBe('degraded-standard');
+    expect(degraded.burnTxHash).toBe(HASH);
     expect(reduceDeposit(degraded, { type: 'settle-ready' }).step).toBe('settling');
-    expect(reduceDeposit(fastWait(), { type: 'settle-ready' }).step).toBe('settling');
   });
 
   it('a settled status frame lands in settled with the receipt', () => {
