@@ -9,7 +9,10 @@
   ],
   "scripts": {
     "dev:demo": "npm run dev --workspace=@anchor-cctp/demo",
+    "dev:docs": "npm run dev --workspace=@anchor-cctp/docs",
     "build:demo": "npm run build --workspace=@anchor-cctp/demo",
+    "build:docs": "npm run build --workspace=@anchor-cctp/docs",
+    "build:site": "npm run build --workspace=@anchor-cctp/core-sdk && npm run build --workspace=@anchor-cctp/demo && npm run build --workspace=@anchor-cctp/docs && node scripts/merge-docs-dist.mjs",
     "build:core": "npm run build --workspace=@anchor-cctp/core-sdk",
     "build:cli": "npm run build --workspace=@anchor-cctp/cli",
     "build": "npm run build --workspaces",

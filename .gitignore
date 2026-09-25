@@ -17,3 +17,5 @@ docs/evidence/testnet-auto.processed.json
 scripts/dist/
 .claude
 apps/demo/dist-server/
+apps/docs/.vitepress/cache/
+apps/docs/.vitepress/dist/

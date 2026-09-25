@@ -141,6 +141,7 @@ Flow: chain-pin (testnet allowlist only) → gas/USDC checks → approve-if-need
 
 ## Documentation & Standards
 
+- 📚 [**Documentation site**](apps/docs/) — VitePress guides (overview, quickstart, CLI/Core references, SEP-CCTP, security). Run locally: `npm run dev:docs` → http://localhost:5174/docs/overview/what (docs `base` is `/docs/`, same subpath as production). Tombol **Docs** di navbar demo portal link ke sana (prod: `/docs/overview/what` satu domain).
 - 📄 [**API Reference**](docs/api-reference.md): Complete technical specifications for classes, methods, and configurations.
 - 🚀 [**Migration Guide**](docs/migration-guide.md): Guide for anchors migrating to AnchorCCTP.
 - 📜 [**SEP-CCTP Specification Draft**](docs/SEP-CCTP.md): Stellar Ecosystem Proposal draft for CCTP deposit standard.
