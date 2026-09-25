@@ -25,10 +25,11 @@ const navItems = [
 
 const EXPAND_SCROLL_THRESHOLD = 80;
 
-// Docs site (VitePress). Override per environment with VITE_DOCS_URL.
-const DOCS_URL: string =
+// Docs site (VitePress, same domain in prod at /docs).
+// Override locally with VITE_DOCS_URL=http://localhost:5174/docs/overview/what
+export const DOCS_URL: string =
   (import.meta as unknown as { env?: Record<string, string | undefined> }).env?.VITE_DOCS_URL ??
-  'http://localhost:5174/docs/overview/what';
+  '/docs/overview/what';
 
 const containerVariants = {
   expanded: {

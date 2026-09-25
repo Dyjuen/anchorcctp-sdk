@@ -40,8 +40,10 @@ export function App() {
   };
 
   const scrollToDocs = () => {
-    setActiveSection('playground');
-    document.getElementById('playground')?.scrollIntoView({ behavior: 'smooth' });
+    const url =
+      (import.meta as unknown as { env?: Record<string, string | undefined> }).env?.VITE_DOCS_URL ??
+      '/docs/overview/what';
+    window.open(url, '_blank', 'noreferrer');
   };
 
   const pageVariants = {
