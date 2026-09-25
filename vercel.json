@@ -4,6 +4,7 @@
   "buildCommand": "npm run build:site",
   "outputDirectory": "apps/demo/dist",
   "framework": "vite",
+  "cleanUrls": true,
   "functions": {
     "api/receive/status.ts": { "maxDuration": 30 },
     "api/receive/settle.ts": { "maxDuration": 300 }
