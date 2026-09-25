@@ -6,7 +6,20 @@ import {
   AnchorCCTPError,
 } from '../src/errors/index.js';
 import { createLogger } from '../src/logger/index.js';
+import type { SorobanTransport } from '../src/forwarder/index.js';
 import { StrKey } from '@stellar/stellar-sdk';
+
+/**
+ * Fake Soroban transport (B3/B4): confirms immediately and reports the signed
+ * XDR as the network hash, so this invariant test exercises the real receive()
+ * path without touching a network.
+ */
+const fakeTransport = (): SorobanTransport => ({
+  simulateTransaction: async () => ({}),
+  assembleTransaction: (xdr: string) => xdr,
+  sendTransaction: async (signedXdr: string) => ({ status: 'PENDING', hash: signedXdr }),
+  getTransaction: async () => ({ status: 'SUCCESS' }),
+});
 
 /** Build a well-formed CCTP message hex with the given amount encoded as uint64 LE at offset 4. */
 function wellFormedMsg(amount: bigint): string {
@@ -27,6 +40,7 @@ describe('Security Checklist Invariant Tests (PRD §7 & §8)', () => {
       signer: async () => 'SIGNED_REPLAY_TX',
       dustCollectorAddress: sampleStellarAddress,
       sponsorAccount: sampleSponsor,
+      sorobanTransport: fakeTransport(),
       forwarderContractId: 'CA66Q2WFBND6V4UEB7RD4SAXSVIWMD6RA4X3U32ELVFGXV5PJK4T4VSZ',
       _test: {
         attestation: async () => ({

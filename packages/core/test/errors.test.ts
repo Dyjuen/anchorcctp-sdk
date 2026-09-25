@@ -4,11 +4,13 @@ import {
   AttestationTimeoutError,
   TrustlineMissingError,
   MintFailedError,
+  MintUnconfirmedError,
   TrustlineCreationError,
   ReplayTransferError,
   AttestationVerificationError,
   ForwarderContractError,
 } from '../src/index';
+import type { SorobanTransport } from '../src/index';
 
 describe('Typed Error Classes', () => {
   it('InvalidDomainError stores domainId and code', () => {
@@ -67,6 +69,29 @@ describe('Typed Error Classes', () => {
     expect(rpErr.code).toBe('REPLAY_TRANSFER');
     expect(rpErr.burnTxHash).toBe('0xabc');
     expect(rpErr.remediation).toBeDefined();
+  });
+
+  it('MintUnconfirmedError carries both hashes and a distinct code (B3)', () => {
+    const e = new MintUnconfirmedError('0xabc', 'deadbeef');
+    expect(e.code).toBe('MINT_UNCONFIRMED');
+    expect(e.burnTxHash).toBe('0xabc');
+    expect(e.mintTxHash).toBe('deadbeef');
+    expect(e.message).toContain('deadbeef');
+    expect(e.message).toMatch(/unconfirmed/i);
+    expect(e.remediation).toContain('explorer');
+  });
+
+  it('SorobanTransport is importable from the package entrypoint (B3/B4 seam)', () => {
+    const transport: SorobanTransport = {
+      simulateTransaction: async () => ({}),
+      assembleTransaction: (xdr: string) => xdr,
+      sendTransaction: async (signed: string) => ({ status: 'PENDING', hash: signed }),
+      getTransaction: async () => ({ status: 'SUCCESS' }),
+    };
+    expect(typeof transport.simulateTransaction).toBe('function');
+    expect(typeof transport.assembleTransaction).toBe('function');
+    expect(typeof transport.sendTransaction).toBe('function');
+    expect(typeof transport.getTransaction).toBe('function');
   });
 
   it('AttestationVerificationError + ForwarderContractError have codes', () => {

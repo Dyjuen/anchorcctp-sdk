@@ -1,9 +1,26 @@
 import { translateToStellar, submitMint, buildMintAndForwardXdr, resolveForwarder, TESTNET_FORWARDER, MAINNET_FORWARDER } from '../src/forwarder/index.js';
+import type { SorobanTransport } from '../src/forwarder/index.js';
 import { MintFailedError, ForwarderContractError, InvalidConfigError, InvalidAddressError } from '../src/errors/index.js';
 import { StrKey, TransactionBuilder, Networks } from '@stellar/stellar-sdk';
 
 /** Valid G... sponsor used as the mint transaction source (B2: it is the only source). */
 const SOURCE = StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 0x99));
+
+/**
+ * Fake Soroban transport for unit tests. By default it reports the *signed XDR*
+ * as the network hash and confirms immediately, which keeps the pre-existing
+ * `txHash === '<signed output>'` assertions meaningful under the new
+ * "txHash is the network hash" contract (B3) without ever touching a network.
+ */
+function makeRpc(over: Partial<SorobanTransport> = {}): SorobanTransport {
+  return {
+    simulateTransaction: async () => ({}),
+    assembleTransaction: (xdr: string) => xdr,
+    sendTransaction: async (signedXdr: string) => ({ status: 'PENDING', hash: signedXdr }),
+    getTransaction: async () => ({ status: 'SUCCESS' }),
+    ...over,
+  };
+}
 
 describe('Forwarder & Address Translation', () => {
   it('translateToStellar returns a G... address for a 32-byte EVM address', () => {
@@ -35,6 +52,7 @@ describe('Forwarder & Address Translation', () => {
 
   it('submitMint delegates signing to caller callback with custom contract ID', async () => {
     let captured = '';
+    let sentSigned = '';
     const signer = async (xdr: string) => {
       captured = xdr;
       return 'TX_CUSTOM';
@@ -46,9 +64,17 @@ describe('Forwarder & Address Translation', () => {
         sourceAccount: SOURCE,
         forwarderContractId: 'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC',
       },
-      signer
+      signer,
+      makeRpc({
+        sendTransaction: async (signedXdr) => {
+          sentSigned = signedXdr;
+          return { status: 'PENDING', hash: 'TX_CUSTOM' };
+        },
+      })
     );
+    // B3: txHash is the network hash reported by sendTransaction, never the XDR.
     expect(r.txHash).toBe('TX_CUSTOM');
+    expect(sentSigned).toBe('TX_CUSTOM');
     expect(() => (TransactionBuilder as any).fromXDR(captured, 'TESTNET')).not.toThrow();
   });
 
@@ -60,7 +86,8 @@ describe('Forwarder & Address Translation', () => {
     };
     const r = await submitMint(
       { message: '0x' + 'ab'.repeat(40), signature: '0x' + 'cd'.repeat(70), sourceAccount: SOURCE },
-      signer
+      signer,
+      makeRpc()
     );
     expect(r.txHash).toMatch(/^SIGNED_/);
   });
@@ -72,7 +99,8 @@ describe('Forwarder & Address Translation', () => {
     await expect(
       submitMint(
         { message: '0x' + 'ab'.repeat(40), signature: '0x' + 'cd'.repeat(70), sourceAccount: SOURCE },
-        failingSigner
+        failingSigner,
+        makeRpc()
       )
     ).rejects.toThrow(MintFailedError);
   });
@@ -100,7 +128,8 @@ describe('Forwarder & Address Translation', () => {
       async (x) => {
         captured = x;
         return 'TX_REAL';
-      }
+      },
+      makeRpc()
     );
     expect(r.txHash).toBe('TX_REAL');
     expect(() => (TransactionBuilder as any).fromXDR(captured, 'TESTNET')).not.toThrow();
@@ -162,6 +191,7 @@ describe('Forwarder branch coverage', () => {
           forwarderContractId: 'INVALID_CONTRACT',
         },
         async () => 'x',
+        makeRpc(),
       )
     ).rejects.toThrow(ForwarderContractError);
   });
@@ -174,6 +204,7 @@ describe('Forwarder branch coverage', () => {
       submitMint(
         { message: '0x' + 'ab'.repeat(40), signature: '0x' + 'cd'.repeat(70), sourceAccount: SOURCE },
         failingSigner,
+        makeRpc(),
       )
     ).rejects.toMatchObject({ code: 'MINT_FAILED' });
   });
@@ -259,6 +290,112 @@ describe('O15: sourceAccount / sponsor param', () => {
         sourceAccount: 'INVALID_SPONSOR',
       })
     ).toThrow(InvalidAddressError);
+  });
+});
+
+describe('B3+B4: submitMint broadcasts, assembles and confirms', () => {
+  const mintParams = {
+    message: '0x' + 'ab'.repeat(64),
+    signature: '0x' + 'cd'.repeat(65),
+    sourceAccount: SOURCE,
+    sourceSequence: '1',
+  };
+
+  it('broadcasts and confirms: returns network hash only after SUCCESS', async () => {
+    let simmedXdr = '';
+    const signerSaw: string[] = [];
+    const sentSigned: string[] = [];
+    const rpc = makeRpc({
+      simulateTransaction: async (xdr) => {
+        simmedXdr = xdr;
+        return { sim: true };
+      },
+      assembleTransaction: (xdr) => xdr + '-assembled',
+      sendTransaction: async (signedXdr) => {
+        sentSigned.push(signedXdr);
+        return { status: 'PENDING', hash: 'deadbeef' };
+      },
+    });
+
+    const r = await submitMint(
+      mintParams,
+      async (x) => {
+        signerSaw.push(x);
+        return x + '-signed';
+      },
+      rpc
+    );
+
+    // B4: the transaction really was simulated and the *assembled* envelope went to the signer.
+    expect(() => (TransactionBuilder as any).fromXDR(simmedXdr, 'TESTNET')).not.toThrow();
+    expect(signerSaw).toEqual([simmedXdr + '-assembled']);
+    expect(sentSigned).toEqual([simmedXdr + '-assembled-signed']);
+    // B3: txHash is the network hash — never the XDR we built, assembled or signed.
+    expect(r.txHash).toBe('deadbeef');
+    expect(r.txHash).not.toBe(simmedXdr);
+    expect(r.txHash).not.toBe(signerSaw[0]);
+  });
+
+  it('throws MintUnconfirmedError when confirmation never arrives', async () => {
+    const rpc = makeRpc({ getTransaction: async () => ({ status: 'NOT_FOUND' }) });
+    await expect(
+      submitMint(mintParams, async (x) => x, rpc, { maxAttempts: 2, pollIntervalMs: 0 })
+    ).rejects.toThrow(/unconfirmed/i);
+    await expect(
+      submitMint(mintParams, async (x) => x, rpc, { maxAttempts: 2, pollIntervalMs: 0 })
+    ).rejects.toMatchObject({ code: 'MINT_UNCONFIRMED' });
+  });
+
+  it('polls until SUCCESS instead of returning on the first NOT_FOUND', async () => {
+    let polls = 0;
+    const rpc = makeRpc({
+      sendTransaction: async () => ({ status: 'PENDING', hash: 'hash-2nd' }),
+      getTransaction: async () => {
+        polls += 1;
+        return polls === 1 ? { status: 'NOT_FOUND' } : { status: 'SUCCESS' };
+      },
+    });
+    const r = await submitMint(mintParams, async (x) => x, rpc, { maxAttempts: 5, pollIntervalMs: 1 });
+    expect(r.txHash).toBe('hash-2nd');
+    expect(polls).toBe(2);
+  });
+
+  it('throws MintFailedError when send status is not PENDING', async () => {
+    const rpc = makeRpc({ sendTransaction: async () => ({ status: 'ERROR' }) });
+    await expect(submitMint(mintParams, async (x) => x, rpc)).rejects.toMatchObject({
+      code: 'MINT_FAILED',
+    });
+    await expect(submitMint(mintParams, async (x) => x, rpc)).rejects.toThrow(/send status=ERROR/);
+  });
+
+  it('throws MintFailedError when PENDING arrives without a hash', async () => {
+    const rpc = makeRpc({ sendTransaction: async () => ({ status: 'PENDING' }) });
+    await expect(submitMint(mintParams, async (x) => x, rpc)).rejects.toMatchObject({
+      code: 'MINT_FAILED',
+    });
+  });
+
+  it('throws MintFailedError when the network reports FAILED', async () => {
+    const rpc = makeRpc({
+      sendTransaction: async () => ({ status: 'PENDING', hash: 'deadbeef' }),
+      getTransaction: async () => ({ status: 'FAILED' }),
+    });
+    await expect(submitMint(mintParams, async (x) => x, rpc)).rejects.toMatchObject({
+      code: 'MINT_FAILED',
+    });
+    await expect(submitMint(mintParams, async (x) => x, rpc)).rejects.toThrow(/FAILED on network/);
+  });
+
+  it('throws MintFailedError when simulation fails (B4 fail-closed)', async () => {
+    const rpc = makeRpc({
+      simulateTransaction: async () => {
+        throw new Error('rpc down');
+      },
+    });
+    await expect(submitMint(mintParams, async (x) => x, rpc)).rejects.toMatchObject({
+      code: 'MINT_FAILED',
+    });
+    await expect(submitMint(mintParams, async (x) => x, rpc)).rejects.toThrow(/simulate: rpc down/);
   });
 });
 

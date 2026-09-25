@@ -9,7 +9,9 @@
  *
  * Identity/secrets: uses createAnchorCCTPFromEnv when STELLAR_DESTINATION /
  * STELLAR_SECRET are set (real Keypair signer); otherwise falls back to an
- * offline stub signer that only proves XDR build (no settlement).
+ * offline stub signer that only proves XDR build + simulation (B4) and is
+ * expected to fail at broadcast — use --verify-only for an offline attestation
+ * proof that never touches the network.
  *
  * stdout: result JSON only. stderr: human context. Secret never printed.
  *
@@ -17,9 +19,11 @@
  *   npm run testnet:receive -- <burnTxHash> [G...] [--source-domain 6] [--amount 1000000] [--verify-only] [--log docs/evidence/core-testnet-receive.log]
  */
 import { appendFileSync } from 'node:fs';
+import { Networks, rpc } from '@stellar/stellar-sdk';
 import { AttestationClient } from '../packages/core/src/attestation/index.js';
 import { createAnchorCCTPFromEnv } from '../packages/core/src/testnet-config.js';
 import { createAnchorCCTP } from '../packages/core/src/config.js';
+import { createSorobanTransport } from './soroban-transport.js';
 
 function arg(name: string): string | undefined {
   const i = process.argv.indexOf(name);
@@ -129,14 +133,24 @@ try {
   }
 }
 
+const rpcUrl = process.env.SOROBAN_RPC_URL ?? 'https://soroban-testnet.stellar.org';
+const sorobanServer = new rpc.Server(rpcUrl);
+const transport = createSorobanTransport(sorobanServer, Networks.TESTNET);
+
 const before = Date.now();
 log(`[STEP] [receive] sourceDomain=${sourceDomain} dest=${destinationAddress} amount=${amount.toString()}`);
 try {
+  // B3/B4: receive() simulates, assembles, broadcasts and confirms. The sponsor's
+  // real sequence must be read from chain — simulation never supplies it.
+  const sponsorAccount = await sorobanServer.getAccount(destinationAddress);
   const res = await (sdk as ReturnType<typeof createAnchorCCTP>).receive({
     sourceDomain,
     burnTxHash,
     destinationAddress,
     amount,
+    sponsorAccount: destinationAddress,
+    sourceSequence: sponsorAccount.sequenceNumber(),
+    rpc: transport,
   });
   log(`[EVENT] [onSettled] amount=${res.amount.toString()} dust=${res.dust.toString()} txHash=${res.txHash.slice(0, 32)}...`);
   process.stdout.write(

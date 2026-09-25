@@ -1,5 +1,5 @@
 import { assertSupportedDomain } from './domains/index.js';
-import { translateToStellar, submitMint, SignerCallback } from './forwarder/index.js';
+import { translateToStellar, submitMint, SignerCallback, SorobanTransport } from './forwarder/index.js';
 import { convert6to7 } from './decimals/index.js';
 import { ensureTrustline, TESTNET_USDC_ISSUER } from './trustline/index.js';
 import { ReplayStore, SettlementRecord } from './replay/index.js';
@@ -36,6 +36,8 @@ export interface ReceiveParams {
   sourceSequence?: string;
   /** O15: Sponsor account used as transaction source for the mint XDR. */
   sponsorAccount?: string;
+  /** B3/B4: Soroban transport for this call. Falls back to `config.sorobanTransport`. */
+  rpc?: SorobanTransport;
 }
 
 export interface ReceiveResult {
@@ -59,6 +61,8 @@ export interface ReceiveContext {
   defaultForwarderContractId?: string;
   /** O15/B2: Sponsor G... account used as the mint transaction source. */
   defaultSponsorAccount?: string;
+  /** B3/B4: Default Soroban transport (from `config.sorobanTransport`). No implicit default. */
+  defaultRpc?: SorobanTransport;
   defaultUsdcIssuer?: string;
   network?: 'testnet' | 'mainnet';
   _test?: {
@@ -262,6 +266,16 @@ export async function receive(
     );
   }
 
+  // B3/B4: the Soroban transport is injected — no silent testnet default. Without it
+  // the mint could not be simulated, broadcast or confirmed.
+  const rpc = params.rpc ?? ctx.defaultRpc;
+  if (!rpc) {
+    throw new MintFailedError(
+      burnTxHash,
+      'No Soroban transport configured. Pass params.rpc or config.sorobanTransport.'
+    );
+  }
+
   let mintResult: Awaited<ReturnType<typeof submitMint>>;
   try {
     mintResult = await submitMint(
@@ -272,7 +286,8 @@ export async function receive(
         sourceAccount: sponsor,
         ...(params.sourceSequence === undefined ? {} : { sourceSequence: params.sourceSequence }),
       },
-      effectiveSigner
+      effectiveSigner,
+      rpc
     );
   } catch (submitErr) {
     ctx.emitter.emit('onError', { error: submitErr, burnTxHash });

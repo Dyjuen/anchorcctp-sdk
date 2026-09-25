@@ -8,7 +8,7 @@ import {
 } from './events/index.js';
 import { createLogger, Logger } from './logger/index.js';
 import { receive, ReceiveParams, ReceiveResult, ReceiveContext } from './receive.js';
-import { SignerCallback, resolveForwarder } from './forwarder/index.js';
+import { SignerCallback, SorobanTransport, resolveForwarder } from './forwarder/index.js';
 import { InvalidConfigError } from './errors/index.js';
 
 export interface TrustlineConfig {
@@ -30,6 +30,11 @@ export interface AnchorCCTPConfig {
   forwarderContractId?: string;
   /** O15/B2: Sponsor G... account used as the mint transaction source. */
   sponsorAccount?: string;
+  /**
+   * B3/B4: Soroban transport used to simulate, assemble, send and confirm the mint.
+   * Real `rpc.Server` is adapted at the call site; there is no silent default.
+   */
+  sorobanTransport?: SorobanTransport;
   usdcIssuer?: string;
   _test?: Record<string, unknown>;
 }
@@ -93,6 +98,7 @@ export function createAnchorCCTP(config: AnchorCCTPConfig): AnchorCCTP {
     defaultTrustline: trustline,
     defaultForwarderContractId,
     defaultSponsorAccount: config.sponsorAccount,
+    defaultRpc: config.sorobanTransport,
     defaultUsdcIssuer: config.usdcIssuer,
     network: config.network,
     _test: config._test,

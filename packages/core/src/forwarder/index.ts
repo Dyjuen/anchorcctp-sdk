@@ -1,5 +1,5 @@
 import { StrKey, Contract, TransactionBuilder, Networks, Account, nativeToScVal } from '@stellar/stellar-sdk';
-import { MintFailedError, ForwarderContractError, InvalidConfigError, InvalidAddressError } from '../errors/index.js';
+import { AnchorCCTPError, MintFailedError, MintUnconfirmedError, ForwarderContractError, InvalidConfigError, InvalidAddressError } from '../errors/index.js';
 
 export interface MintParams {
   message: string;
@@ -17,6 +17,34 @@ export interface MintParams {
 }
 
 export type SignerCallback = (xdr: string) => Promise<string>;
+
+/**
+ * Minimal Soroban RPC surface `submitMint` needs (B3/B4). Core stays
+ * transport-injected so unit tests never touch a network; the real
+ * `rpc.Server` is adapted at the call sites (scripts, server handlers).
+ *
+ * `assembleTransaction` must return the assembled **envelope XDR string** —
+ * `rpc.Server` users get this from `assembleTransaction(tx, sim).build().toXDR()`.
+ */
+export interface SorobanTransport {
+  simulateTransaction(xdr: string): Promise<unknown>;
+  assembleTransaction(xdr: string, sim: unknown): string;
+  sendTransaction(signedXdr: string): Promise<{ status: string; hash?: string }>;
+  getTransaction(hash: string): Promise<{ status: string }>;
+}
+
+/** Confirmation polling knobs — injectable so tests never sleep for real. */
+export interface MintConfirmOptions {
+  /** Maximum `getTransaction` polls before `MintUnconfirmedError`. Default 20. */
+  maxAttempts?: number;
+  /** Delay between polls in ms. Default 3000. Set 0 in tests. */
+  pollIntervalMs?: number;
+}
+
+const DEFAULT_CONFIRM_ATTEMPTS = 20;
+const DEFAULT_CONFIRM_POLL_MS = 3000;
+
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 export const TESTNET_FORWARDER = 'CA66Q2WFBND6V4UEB7RD4SAXSVIWMD6RA4X3U32ELVFGXV5PJK4T4VSZ';
 export const MAINNET_FORWARDER = 'CBZL2IH7F6BIDAA3WBNXYKIXSATJGMSW7K5P5MJ6STX5RXN47TZJDF5T';
@@ -116,19 +144,59 @@ export function translateToStellar(evmAddress: string): string {
 }
 
 /**
- * Submits the CCTP mint transaction to the Stellar network by delegating signing to the caller.
+ * Builds, simulates, assembles, signs, broadcasts and confirms the CCTP mint (B3/B4).
+ * Delegates signing to the caller; returns the **network tx hash** only once the
+ * network reports SUCCESS, so callers can never persist a receipt for a mint
+ * that did not land.
+ *
+ * Throws:
+ * - `ForwarderContractError` / `InvalidAddressError` for local build problems.
+ * - `MintFailedError` when simulate, assemble, sign or send fails, or on FAILED.
+ * - `MintUnconfirmedError` when no SUCCESS is observed within the polling window.
  */
 export async function submitMint(
   params: MintParams,
-  signer: SignerCallback
+  signer: SignerCallback,
+  rpc: SorobanTransport,
+  confirm: MintConfirmOptions = {}
 ): Promise<{ txHash: string }> {
+  const maxAttempts = confirm.maxAttempts ?? DEFAULT_CONFIRM_ATTEMPTS;
+  const pollIntervalMs = confirm.pollIntervalMs ?? DEFAULT_CONFIRM_POLL_MS;
+  const reason = (e: unknown): string => (e instanceof Error ? e.message : String(e));
+
   try {
     const xdr = buildMintAndForwardXdr(params);
-    const signedOutput = await signer(xdr);
-    return { txHash: signedOutput };
+
+    // B4: never send an un-simulated Soroban tx — footprint + fee come from simulation.
+    let sim: unknown;
+    try {
+      sim = await rpc.simulateTransaction(xdr);
+    } catch (e) {
+      throw new MintFailedError(params.message, `simulate: ${reason(e)}`);
+    }
+    const assembled = rpc.assembleTransaction(xdr, sim);
+
+    const signed = await signer(assembled);
+
+    const sent = await rpc.sendTransaction(signed);
+    if (sent.status !== 'PENDING' || !sent.hash) {
+      throw new MintFailedError(params.message, `send status=${sent.status}`);
+    }
+    const hash = sent.hash;
+
+    // B3: do not report success until the network confirms SUCCESS.
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const got = await rpc.getTransaction(hash);
+      if (got.status === 'SUCCESS') return { txHash: hash };
+      if (got.status === 'FAILED') {
+        throw new MintFailedError(params.message, 'transaction FAILED on network');
+      }
+      const isLastAttempt = attempt === maxAttempts - 1;
+      if (!isLastAttempt && pollIntervalMs > 0) await sleep(pollIntervalMs);
+    }
+    throw new MintUnconfirmedError(params.message, hash);
   } catch (error) {
-    if (error instanceof ForwarderContractError || error instanceof InvalidAddressError) throw error;
-    const reason = error instanceof Error ? error.message : String(error);
-    throw new MintFailedError(params.message, reason);
+    if (error instanceof AnchorCCTPError) throw error;
+    throw new MintFailedError(params.message, reason(error));
   }
 }

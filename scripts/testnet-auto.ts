@@ -2,8 +2,8 @@
  * testnet:auto Phase 1 — fresh testnet account to settled USDC in one command.
  *
  * Flow: env identity → fund check (friendbot) → forwarder liveness →
- * trustline ensure (opt-in, capped) → receive() → Soroban prepare/send →
- * balance-delta assert → receipt JSON on stdout.
+ * trustline ensure (opt-in, capped) → receive() (simulate/assemble/broadcast/
+ * confirm inside core, B3+B4) → balance-delta assert → receipt JSON on stdout.
  *
  * Burn hash supplied externally via --skip-burn (EVM burn automation = Full phase).
  * No --skip-burn: burns on Base Sepolia itself (needs EVM_PRIVATE_KEY + EVM_RPC_URL).
@@ -25,6 +25,7 @@ import { privateKeyToAccount } from 'viem/accounts';
 import { baseSepolia } from 'viem/chains';
 import { BurnError, executeBurn, planBurn } from '../packages/core/src/evm/burn.js';
 import { isSupportedDomain } from '../packages/core/src/domains/index.js';
+import { createSorobanTransport } from './soroban-transport.js';
 
 // Auto-load .env.testnet if present so command works cross-platform seamlessly
 const envTestnetPath = resolve(process.cwd(), '.env.testnet');
@@ -268,25 +269,19 @@ async function main(): Promise<void> {
   const stellarAccount = await horizon.loadAccount(dest);
   const before = state.usdcBalance;
   log(`[STEP] [receive] domain=${sourceDomain} amount=${amount.toString()}`);
+  // B3/B4: receive() now simulates, assembles, broadcasts and confirms the mint
+  // itself. `res.txHash` is the confirmed network hash — no manual prepare/sign/send.
   const res = await env.client.receive({
     sourceDomain,
     burnTxHash,
     destinationAddress: dest,
     amount,
+    // Sponsor = this run's keypair; its real sequence must come from chain (B4).
     sourceSequence: stellarAccount.sequence,
+    sponsorAccount: keypair.publicKey(),
+    rpc: createSorobanTransport(new rpc.Server(rpcUrl), Networks.TESTNET),
   });
-
-  const rpcServer = new rpc.Server(rpcUrl);
-  const unsigned = TransactionBuilder.fromXDR(res.txHash, Networks.TESTNET) as unknown as Parameters<rpc.Server['prepareTransaction']>[0];
-  const simBuilt = await rpcServer.prepareTransaction(unsigned);
-  const preparedXdr = (simBuilt as unknown as { toXDR(): string }).toXDR();
-  const toSign = TransactionBuilder.fromXDR(preparedXdr, Networks.TESTNET);
-  (toSign as unknown as { sign(kp: Keypair): void }).sign(keypair);
-  const send = await rpcServer.sendTransaction(toSign as unknown as Parameters<rpc.Server['sendTransaction']>[0]);
-  if (send.status !== 'PENDING') {
-    fail('SUBMIT_FAILED', `sendTransaction status=${send.status}`, 'Check forwarder logs + account sequence, re-run (replay store guards double-credit).');
-  }
-  const txHash = (send as { hash: string }).hash;
+  const txHash = res.txHash;
   log(`[EVENT] [onSettled] txHash=${txHash}`);
 
   const after = (await readAccountState({ horizonUrl, address: dest })).usdcBalance;

@@ -72,6 +72,19 @@ export class MintFailedError extends AnchorCCTPError {
 }
 
 /**
+ * Thrown when a broadcast mint transaction was accepted by the network but never
+ * reached SUCCESS within the confirmation polling window (B3).
+ */
+export class MintUnconfirmedError extends AnchorCCTPError {
+  readonly code = 'MINT_UNCONFIRMED';
+  readonly remediation = 'The mint may still land — check the mint txHash on a Stellar explorer before retrying; the replay store prevents double-crediting.';
+
+  constructor(public readonly burnTxHash: string, public readonly mintTxHash: string) {
+    super(`Mint transaction ${mintTxHash} for burn transaction ${burnTxHash} is unconfirmed: no SUCCESS observed within the confirmation window.`);
+  }
+}
+
+/**
  * Thrown when trustline creation transaction fails.
  */
 export class TrustlineCreationError extends AnchorCCTPError {

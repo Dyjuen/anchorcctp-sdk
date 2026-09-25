@@ -1,5 +1,6 @@
 import { createAnchorCCTP } from '../src/config.js';
 import * as forwarderMod from '../src/forwarder/index.js';
+import type { SorobanTransport } from '../src/forwarder/index.js';
 import { resolveDustCollector, normalizeBurnTxHash } from '../src/receive.js';
 import {
   ReplayTransferError,
@@ -29,11 +30,27 @@ describe('receive() Orchestration Engine', () => {
   const goodSig = '0x' + 'cd'.repeat(70);
   const H = (suffix: string) => '0x' + suffix.padStart(64, '0').slice(0, 64);
 
+  /**
+   * Fake Soroban transport (B3/B4). It reports the *signed XDR* as the network
+   * hash and confirms immediately, so every pre-existing `txHash === '<signer
+   * output>'` assertion still describes real behaviour — receive() must return
+   * the hash the transport reported, which here is the signed envelope.
+   */
+  function fakeTransport(): SorobanTransport {
+    return {
+      simulateTransaction: async () => ({}),
+      assembleTransaction: (xdr: string) => xdr,
+      sendTransaction: async (signedXdr: string) => ({ status: 'PENDING', hash: signedXdr }),
+      getTransaction: async () => ({ status: 'SUCCESS' }),
+    };
+  }
+
   function makeSdk(over: any = {}) {
     return createAnchorCCTP({
       signer: async (x) => 'SIGNED_TX_123',
       dustCollectorAddress: validDestination,
       sponsorAccount: validSponsor,
+      sorobanTransport: fakeTransport(),
       forwarderContractId: 'CA66Q2WFBND6V4UEB7RD4SAXSVIWMD6RA4X3U32ELVFGXV5PJK4T4VSZ',
       _test: {
         attestation: async () => ({
@@ -164,6 +181,7 @@ describe('receive() Orchestration Engine', () => {
 
   it('rejects invalid attestation shape with AttestationVerificationError', async () => {
     const sdk = createAnchorCCTP({
+      sorobanTransport: fakeTransport(),
       signer: async () => 'SIGNED_X',
       _test: {
         attestation: async () => ({
@@ -197,6 +215,7 @@ describe('receive() Orchestration Engine', () => {
       } as unknown as Response);
 
     const sdk = createAnchorCCTP({
+      sorobanTransport: fakeTransport(),
       attestationBaseUrl: 'https://iris-api-sandbox.circle.com',
       fetchImpl: okFetch as any,
       pollIntervalMs: 1,
@@ -225,6 +244,7 @@ describe('receive() Orchestration Engine', () => {
     let trustlineCreated = false;
     const amount = 1000000n;
     const sdk = createAnchorCCTP({
+      sorobanTransport: fakeTransport(),
       signer: async () => 'DEFAULT_SIGNER',
       sponsorAccount: validSponsor,
       forwarderContractId: 'CA66Q2WFBND6V4UEB7RD4SAXSVIWMD6RA4X3U32ELVFGXV5PJK4T4VSZ',
@@ -288,6 +308,7 @@ describe('receive() Orchestration Engine', () => {
     const amount = 1000000n;
 
     const sdk = createAnchorCCTP({
+      sorobanTransport: fakeTransport(),
       signer: async () => 'SIGNED_POLL_HOOK',
       sponsorAccount: validSponsor,
       forwarderContractId: 'CA66Q2WFBND6V4UEB7RD4SAXSVIWMD6RA4X3U32ELVFGXV5PJK4T4VSZ',
@@ -328,6 +349,7 @@ describe('receive() Orchestration Engine', () => {
   it('C1: receive without signer or defaultSigner throws MintFailedError', async () => {
     const amount = 1000000n;
     const sdk = createAnchorCCTP({
+      sorobanTransport: fakeTransport(),
       _test: {
         attestation: async () => ({
           status: 'complete',
@@ -363,6 +385,7 @@ describe('receive() Orchestration Engine', () => {
     const amount = 1000000n;
     const spy = jest.spyOn(forwarderMod, 'submitMint');
     const sdk = createAnchorCCTP({
+      sorobanTransport: fakeTransport(),
       signer: async (x) => 'SIGNED_SEQ_TX',
       sponsorAccount: validSponsor,
       forwarderContractId: 'CA66Q2WFBND6V4UEB7RD4SAXSVIWMD6RA4X3U32ELVFGXV5PJK4T4VSZ',
@@ -393,6 +416,7 @@ describe('receive() Orchestration Engine', () => {
   it('C2: receive without hasTrustline provider throws TrustlineCreationError', async () => {
     const amount = 1000000n;
     const sdk = createAnchorCCTP({
+      sorobanTransport: fakeTransport(),
       signer: async (x) => 'SIGNED_TX',
       _test: {
         attestation: async () => ({
@@ -416,6 +440,7 @@ describe('receive() Orchestration Engine', () => {
   it('O5/M1: normalizes replay key case (0xABC same as 0xabc)', async () => {
     const amount = 1000000n;
     const sdk = createAnchorCCTP({
+      sorobanTransport: fakeTransport(),
       signer: async (x) => 'SIGNED_NORM',
       sponsorAccount: validSponsor,
       forwarderContractId: 'CA66Q2WFBND6V4UEB7RD4SAXSVIWMD6RA4X3U32ELVFGXV5PJK4T4VSZ',
@@ -455,6 +480,7 @@ describe('receive() Orchestration Engine', () => {
   it('O15: sourceSequence must be numeric string', async () => {
     const amount = 1000000n;
     const sdk = createAnchorCCTP({
+      sorobanTransport: fakeTransport(),
       signer: async (x) => 'SIGNED_SEQ',
       _test: {
         attestation: async () => ({
@@ -480,6 +506,7 @@ describe('receive() Orchestration Engine', () => {
   it('M4: invalid dust collector StrKey in resolved path throws', async () => {
     const amount = 1000000n;
     const sdk = createAnchorCCTP({
+      sorobanTransport: fakeTransport(),
       signer: async () => 'SIGNED_DUST',
       dustCollectorAddress: 'INVALID_DUST',
       forwarderContractId: 'CA66Q2WFBND6V4UEB7RD4SAXSVIWMD6RA4X3U32ELVFGXV5PJK4T4VSZ',
@@ -509,6 +536,7 @@ describe('receive() Orchestration Engine', () => {
     const amount = 1000000n;
     const settled: unknown[] = [];
     const sdk = createAnchorCCTP({
+      sorobanTransport: fakeTransport(),
       signer: async () => { throw new Error('sign boom'); },
       replayStore,
       _test: {
@@ -555,6 +583,7 @@ describe('receive() Orchestration Engine', () => {
 
     const spy = jest.spyOn(forwarderMod, 'submitMint');
     const sdk = createAnchorCCTP({
+      sorobanTransport: fakeTransport(),
       signer: async () => 'SHOULD_NOT_SIGN',
       replayStore,
       forwarderContractId: 'CA66Q2WFBND6V4UEB7RD4SAXSVIWMD6RA4X3U32ELVFGXV5PJK4T4VSZ',
@@ -594,6 +623,7 @@ describe('receive() Orchestration Engine', () => {
     };
 
     const sdk = createAnchorCCTP({
+      sorobanTransport: fakeTransport(),
       signer: async () => 'C5_SIGNED',
       replayStore,
       sponsorAccount: validSponsor,
@@ -624,6 +654,7 @@ describe('receive() Orchestration Engine', () => {
     const amount = 1000000n;
     const wrongAmount = 9999999n;
     const sdk = createAnchorCCTP({
+      sorobanTransport: fakeTransport(),
       signer: async () => 'SHOULD_NOT_SIGN',
       forwarderContractId: 'CA66Q2WFBND6V4UEB7RD4SAXSVIWMD6RA4X3U32ELVFGXV5PJK4T4VSZ',
       _test: {
@@ -651,6 +682,7 @@ describe('receive() Orchestration Engine', () => {
     // Short message: only 4 bytes (8 hex chars) — below minimum 12 bytes
     const shortMsg = '0x' + 'ab'.repeat(4);
     const sdk = createAnchorCCTP({
+      sorobanTransport: fakeTransport(),
       signer: async () => 'SHOULD_NOT_SIGN',
       forwarderContractId: 'CA66Q2WFBND6V4UEB7RD4SAXSVIWMD6RA4X3U32ELVFGXV5PJK4T4VSZ',
       _test: {
@@ -676,6 +708,7 @@ describe('receive() Orchestration Engine', () => {
   it('O2: matching amount passes validation', async () => {
     const amount = 5000000n;
     const sdk = createAnchorCCTP({
+      sorobanTransport: fakeTransport(),
       signer: async () => 'O2_MATCH_SIGNED',
       sponsorAccount: validSponsor,
       forwarderContractId: 'CA66Q2WFBND6V4UEB7RD4SAXSVIWMD6RA4X3U32ELVFGXV5PJK4T4VSZ',
@@ -707,6 +740,7 @@ describe('receive() Orchestration Engine', () => {
     const sponsor = StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 0x77));
     const spy = jest.spyOn(forwarderMod, 'submitMint');
     const sdk = createAnchorCCTP({
+      sorobanTransport: fakeTransport(),
       signer: async () => 'O15_SIGNED',
       forwarderContractId: 'CA66Q2WFBND6V4UEB7RD4SAXSVIWMD6RA4X3U32ELVFGXV5PJK4T4VSZ',
       _test: {
@@ -735,6 +769,7 @@ describe('receive() Orchestration Engine', () => {
   it('O15: invalid sponsorAccount throws InvalidAddressError', async () => {
     const amount = 1000000n;
     const sdk = createAnchorCCTP({
+      sorobanTransport: fakeTransport(),
       signer: async () => 'O15_SIGNED',
       forwarderContractId: 'CA66Q2WFBND6V4UEB7RD4SAXSVIWMD6RA4X3U32ELVFGXV5PJK4T4VSZ',
       _test: {
@@ -765,6 +800,7 @@ describe('receive() Orchestration Engine', () => {
   it('O15/B2: receive fails loud when no sponsorAccount and no config.sponsorAccount', async () => {
     const amount = 1000000n;
     const sdk = createAnchorCCTP({
+      sorobanTransport: fakeTransport(),
       signer: async () => 'NO_SPONSOR_SIGNED',
       forwarderContractId: 'CA66Q2WFBND6V4UEB7RD4SAXSVIWMD6RA4X3U32ELVFGXV5PJK4T4VSZ',
       _test: {
@@ -790,6 +826,88 @@ describe('receive() Orchestration Engine', () => {
       expect((e as any).code).toBe('INVALID_CONFIG');
       expect((e as Error).message).toContain('sponsorAccount');
     }
+  });
+
+  // --- B3/B4: Soroban transport seam ---
+
+  it('B3/B4: receive fails loud when no transport and no config.sorobanTransport', async () => {
+    const amount = 1000000n;
+    const sdk = createAnchorCCTP({
+      signer: async () => 'NO_TRANSPORT_SIGNED',
+      sponsorAccount: validSponsor,
+      forwarderContractId: 'CA66Q2WFBND6V4UEB7RD4SAXSVIWMD6RA4X3U32ELVFGXV5PJK4T4VSZ',
+      _test: {
+        attestation: async () => ({
+          status: 'complete',
+          message: wellFormedMsg(amount),
+          signature: goodSig,
+        }),
+        hasTrustline: async () => true,
+      },
+    } as any);
+
+    try {
+      await sdk.receive({
+        sourceDomain: 0,
+        burnTxHash: H('b3cafe01'),
+        destinationAddress: validDestination,
+        amount,
+      });
+      fail('should have thrown MintFailedError');
+    } catch (e) {
+      expect(e).toBeInstanceOf(MintFailedError);
+      expect((e as any).code).toBe('MINT_FAILED');
+      // names both the param and the config key — no silent testnet default
+      expect((e as Error).message).toContain('params.rpc');
+      expect((e as Error).message).toContain('config.sorobanTransport');
+    }
+  });
+
+  it('B3/B4: params.rpc wins over config.sorobanTransport', async () => {
+    const amount = 1000000n;
+    const used: string[] = [];
+    const paramRpc: SorobanTransport = {
+      simulateTransaction: async () => {
+        used.push('param');
+        return {};
+      },
+      assembleTransaction: (xdr: string) => xdr,
+      sendTransaction: async (signedXdr: string) => ({ status: 'PENDING', hash: signedXdr }),
+      getTransaction: async () => ({ status: 'SUCCESS' }),
+    };
+    const configRpc: SorobanTransport = {
+      simulateTransaction: async () => {
+        used.push('config');
+        return {};
+      },
+      assembleTransaction: (xdr: string) => xdr,
+      sendTransaction: async (signedXdr: string) => ({ status: 'PENDING', hash: signedXdr }),
+      getTransaction: async () => ({ status: 'SUCCESS' }),
+    };
+    const sdk = createAnchorCCTP({
+      signer: async () => 'PRECEDENCE_TX',
+      sponsorAccount: validSponsor,
+      sorobanTransport: configRpc,
+      forwarderContractId: 'CA66Q2WFBND6V4UEB7RD4SAXSVIWMD6RA4X3U32ELVFGXV5PJK4T4VSZ',
+      _test: {
+        attestation: async () => ({
+          status: 'complete',
+          message: wellFormedMsg(amount),
+          signature: goodSig,
+        }),
+        hasTrustline: async () => true,
+      },
+    } as any);
+
+    await sdk.receive({
+      sourceDomain: 0,
+      burnTxHash: H('b3cafe02'),
+      destinationAddress: validDestination,
+      amount,
+      rpc: paramRpc,
+    });
+
+    expect(used).toEqual(['param']);
   });
 });
 
