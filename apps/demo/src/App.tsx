@@ -27,7 +27,7 @@ export function App() {
   };
 
   useEffect(() => {
-    connectFreighter().then((res) => {
+    connectFreighter({ silent: true }).then((res) => {
       if (res.connected) {
         setWallet(res);
       }

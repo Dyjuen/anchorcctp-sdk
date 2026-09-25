@@ -23,7 +23,9 @@ export async function checkFreighterInstalled(): Promise<boolean> {
   }
 }
 
-export async function connectFreighter(opts?: { allowSimulated?: boolean }): Promise<WalletState> {
+export async function connectFreighter(
+  opts?: { allowSimulated?: boolean; silent?: boolean },
+): Promise<WalletState> {
   try {
     const { isConnected: connected, error } = await freighter.isConnected();
 
@@ -47,22 +49,51 @@ export async function connectFreighter(opts?: { allowSimulated?: boolean }): Pro
       };
     }
 
-    const { isAllowed } = await import('@stellar/freighter-api');
-    const allowed = await isAllowed();
-    if (!allowed) {
-      const { setAllowed } = await import('@stellar/freighter-api');
-      await setAllowed();
+    let address: string;
+    if (opts?.silent) {
+      // Mount path: never prompt. Read only when the origin is already approved.
+      const { isAllowed } = await import('@stellar/freighter-api');
+      const { isAllowed: allowed } = await isAllowed();
+      if (!allowed) return { connected: false, address: null };
+      const { getAddress } = await import('@stellar/freighter-api');
+      const { address: addr, error: addrError } = await getAddress();
+      if (addrError || !addr) return { connected: false, address: null };
+      address = addr;
+    } else {
+      // Click path: requestAccess prompts + returns the address in one call.
+      // setAllowed-first re-prompt is unreliable after access removal, so it is
+      // no longer used here.
+      const { requestAccess } = await import('@stellar/freighter-api');
+      const ra = (await requestAccess()) as { address?: string; error?: unknown };
+      const addr = ra.address ?? '';
+      if (ra.error || !addr) {
+        return { connected: false, address: null, error: describeAccessFailure(ra.error) };
+      }
+      address = addr;
     }
 
-    const { getAddress } = await import('@stellar/freighter-api');
-    const { address, error: addrError } = await getAddress();
-    if (addrError || !address) {
-      return {
-        connected: false,
-        address: null,
-        error: addrError || 'User denied access or wallet is locked',
-      };
-    }
+    return await finishConnect(address);
+  } catch (err: unknown) {
+    return {
+      connected: false,
+      address: null,
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
+/** Distinct errors for denial vs empty-account (locked wallet / no account). */
+function describeAccessFailure(err: unknown): string {
+  const msg = typeof err === 'string' ? err : (err as { message?: unknown } | null)?.message;
+  const text = typeof msg === 'string' ? msg : '';
+  if (/denied|declined|reject|dismiss|cancel/i.test(text)) {
+    return `Connection denied in Freighter — approve the prompt and retry${text ? ` (${text})` : ''}`;
+  }
+  return 'Freighter returned no account — unlock the wallet, make sure an account exists, then approve the connect prompt';
+}
+
+/** Network check + balances shared by click and silent paths. */
+async function finishConnect(address: string): Promise<WalletState> {
 
     // Verify network passphrase (must match STELLAR_NETWORK_PASSPHRASE)
     const { getNetwork } = await import('@stellar/freighter-api');
@@ -103,13 +134,6 @@ export async function connectFreighter(opts?: { allowSimulated?: boolean }): Pro
       balances: balanceInfo,
       balancesError,
     };
-  } catch (err: unknown) {
-    return {
-      connected: false,
-      address: null,
-      error: err instanceof Error ? err.message : String(err),
-    };
-  }
 }
 
 /**

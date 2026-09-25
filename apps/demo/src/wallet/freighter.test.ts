@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 vi.mock('@stellar/freighter-api', () => ({
   isConnected: vi.fn(),
   getAddress: vi.fn(),
+  requestAccess: vi.fn(),
   signTransaction: vi.fn(),
   getNetwork: vi.fn(),
   getNetworkDetails: vi.fn(),
@@ -26,6 +27,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   // Restore defaults stripped by clearAllMocks
   vi.mocked(freighterApi.isAllowed).mockResolvedValue(true as any);
+  vi.mocked(freighterApi.requestAccess).mockResolvedValue({ address: G } as any);
   vi.mocked(freighterApi.getNetwork).mockResolvedValue({ network: 'TESTNET', networkPassphrase: TESTNET_PASS } as any);
 });
 afterEach(() => { vi.unstubAllGlobals?.(); vi.unstubAllEnvs?.(); });
@@ -47,12 +49,50 @@ describe('connectFreighter', () => {
     expect(res.isSimulated).toBe(true);
   });
 
+  it('connects via requestAccess (prompt+address) without setAllowed/getAddress on click path', async () => {
+    vi.mocked(freighterApi.isConnected).mockResolvedValue({ isConnected: true } as any);
+    const res = await connectFreighter();
+    expect(res.connected).toBe(true);
+    expect(res.address).toBe(G);
+    expect(freighterApi.requestAccess).toHaveBeenCalledTimes(1);
+    expect(freighterApi.setAllowed).not.toHaveBeenCalled();
+    expect(freighterApi.getAddress).not.toHaveBeenCalled();
+  });
+
   it('surfaces user-decline as disconnected with reason', async () => {
     vi.mocked(freighterApi.isConnected).mockResolvedValue({ isConnected: true } as any);
-    vi.mocked(freighterApi.getAddress).mockResolvedValue({ address: '', error: 'declined' } as any);
+    vi.mocked(freighterApi.requestAccess).mockResolvedValue({ address: '', error: 'declined' } as any);
     const res = await connectFreighter();
     expect(res.connected).toBe(false);
     expect(res.error).toMatch(/denied|declined/i);
+  });
+
+  it('names empty-account case distinctly from denial', async () => {
+    vi.mocked(freighterApi.isConnected).mockResolvedValue({ isConnected: true } as any);
+    vi.mocked(freighterApi.requestAccess).mockResolvedValue({ address: '' } as any);
+    const res = await connectFreighter();
+    expect(res.connected).toBe(false);
+    expect(res.error).toMatch(/no account/i);
+  });
+
+  it('silent mode never prompts: disconnected without error when not allowed', async () => {
+    vi.mocked(freighterApi.isConnected).mockResolvedValue({ isConnected: true } as any);
+    vi.mocked(freighterApi.isAllowed).mockResolvedValue({ isAllowed: false } as any);
+    const res = await connectFreighter({ silent: true });
+    expect(res.connected).toBe(false);
+    expect(res.error).toBeUndefined();
+    expect(freighterApi.setAllowed).not.toHaveBeenCalled();
+    expect(freighterApi.requestAccess).not.toHaveBeenCalled();
+  });
+
+  it('silent mode reads address without prompting when already allowed', async () => {
+    vi.mocked(freighterApi.isConnected).mockResolvedValue({ isConnected: true } as any);
+    vi.mocked(freighterApi.isAllowed).mockResolvedValue({ isAllowed: true } as any);
+    vi.mocked(freighterApi.getAddress).mockResolvedValue({ address: G } as any);
+    const res = await connectFreighter({ silent: true });
+    expect(res.connected).toBe(true);
+    expect(res.address).toBe(G);
+    expect(freighterApi.requestAccess).not.toHaveBeenCalled();
   });
 
   it('throws when isConnected resolves with error string', async () => {

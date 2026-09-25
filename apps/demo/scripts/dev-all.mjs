@@ -19,6 +19,8 @@ if ((serverEnv.SIM_MODE ?? 'false').toLowerCase() !== 'true' && !serverEnv.STELL
     serverEnv.STELLAR_SECRET ??= serverEnv.STELLAR_TESTNET_SECRET;
     serverEnv.STELLAR_DESTINATION ??= serverEnv.STELLAR_TESTNET_DESTINATION;
     serverEnv.STELLAR_NETWORK ??= 'testnet';
+    serverEnv.SOROBAN_RPC_URL ??= 'https://soroban-testnet.stellar.org';
+    serverEnv.HORIZON_URL ??= 'https://horizon-testnet.stellar.org';
     console.log('[dev-all] real mode: mapped STELLAR_TESTNET_* from root .env.testnet');
   }
 }
