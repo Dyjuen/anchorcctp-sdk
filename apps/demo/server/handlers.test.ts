@@ -11,6 +11,7 @@ import {
   trustedClientIp,
   SECURITY_HEADERS,
   IRIS_TIMEOUT_MS,
+  NO_STORE,
 } from './handlers.js';
 import type { HandlerDeps, HandlerResult } from './handlers.js';
 import {
@@ -30,6 +31,7 @@ import {
   SETTLE_MAX_RETRIES,
 } from './kv.js';
 import type { BucketStore, StoredIntent } from './kv.js';
+import { publicConfigBundle } from './events.js';
 import {
   AttestationTimeoutError,
   FileReplayStore,
@@ -40,6 +42,13 @@ import type { ReceiveResult, SettlementRecord } from '@anchor-cctp/core-sdk';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+// Vercel entrypoints (repo-root `api/*`) — thin wrappers over the handlers above.
+import configEntry, { createHandler as createConfigRoute } from '../../../api/config.js';
+import feesEntry, { createHandler as createFeesRoute } from '../../../api/fees.js';
+import initiateEntry, { createHandler as createInitiateRoute } from '../../../api/receive/initiate.js';
+import settleEntry, { createHandler as createSettleRoute } from '../../../api/receive/settle.js';
+import statusEntry, { createHandler as createStatusRoute } from '../../../api/receive/status.js';
+import { serverlessDeps, serverlessHeaders } from './serverless.js';
 
 /** Unique temp path for a real FileReplayStore (F1 tests). */
 function tempReplayPath(): string {
@@ -1377,5 +1386,225 @@ describe('assertColdStartEnv', () => {
 
   it('pins the settle attestation budget well inside the Hobby 300s invocation', () => {
     expect(SETTLE_MAX_RETRIES).toBe(10);
+  });
+});
+
+// ─── Vercel entrypoints (repo-root api/*) ────────────────────────────────────
+// The deployed surface is a thin wrapper per route: method guard → handler →
+// `{ status, body }` through as JSON. Each wrapper exposes `createHandler(deps,
+// headers)` (the injection seam the tests use) plus the Web-standard `fetch`
+// default export Vercel invokes, which builds deps + headers from the env.
+
+describe('vercel entrypoints', () => {
+  const DEPLOY_ENV = {
+    API_ORIGIN: 'https://demo.anchorcctp.com',
+    CIRCLE_ATTESTATION_BASE_URL: 'https://iris-api-sandbox.circle.com',
+    HORIZON_URL: 'https://horizon-testnet.stellar.org',
+    SOROBAN_RPC_URL: 'https://soroban-testnet.stellar.org',
+  };
+  const HEADERS = serverlessHeaders(DEPLOY_ENV);
+  const get = (path: string) =>
+    new Request(`https://demo.anchorcctp.com${path}`, { headers: { 'x-real-ip': '9.9.9.9' } });
+  const post = (path: string, body: unknown) =>
+    new Request(`https://demo.anchorcctp.com${path}`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-real-ip': '9.9.9.9',
+        origin: 'http://localhost:5173',
+      },
+      body: JSON.stringify(body),
+    });
+
+  it('exposes a Web-standard fetch handler for every route', () => {
+    for (const entry of [statusEntry, initiateEntry, settleEntry, feesEntry, configEntry]) {
+      expect(typeof entry.fetch).toBe('function');
+    }
+  });
+
+  it('405s a wrong method before touching the env, with the METHOD_NOT_ALLOWED shape', async () => {
+    const wrong = async (entry: typeof statusEntry, method: string, allow: string) => {
+      const res = await entry.fetch(
+        new Request('https://demo.anchorcctp.com/api/receive/status', { method }),
+      );
+      expect(res.status).toBe(405);
+      expect(await res.json()).toEqual({
+        error: { code: 'METHOD_NOT_ALLOWED', remediation: `Use ${allow}.` },
+      });
+      // security headers on the error path too, and the allowed method is advertised
+      expect(res.headers.get('content-security-policy')).toContain("connect-src 'self'");
+      expect(res.headers.get('cache-control')).toBe(NO_STORE);
+      expect(res.headers.get('x-content-type-options')).toBe('nosniff');
+      expect(res.headers.get('allow')).toBe(allow);
+    };
+
+    await wrong(statusEntry, 'POST', 'GET');
+    await wrong(feesEntry, 'POST', 'GET');
+    await wrong(configEntry, 'POST', 'GET');
+    await wrong(initiateEntry, 'GET', 'POST');
+    await wrong(settleEntry, 'GET', 'POST');
+  });
+
+  it('status: passes { status, body } through unchanged, headers added', async () => {
+    const make = () =>
+      fakeDeps({
+        attestationBaseUrl: DEPLOY_ENV.CIRCLE_ATTESTATION_BASE_URL,
+        fetch: (async () => jsonResponse(irisFrame())) as never,
+      });
+    const direct = await handleStatus({ burnTxHash: HASH, address: G, amount: AMOUNT, ip: '9.9.9.9' }, make());
+    const res = await createStatusRoute(make(), HEADERS)(
+      get(`/api/receive/status?burnTxHash=${HASH}&address=${G}&amount=${AMOUNT}`),
+    );
+    expect(res.status).toBe(direct.status);
+    expect(await res.json()).toEqual(direct.body);
+    expect(res.headers.get('cache-control')).toBe(HEADERS['Cache-Control']);
+    expect(res.headers.get('content-security-policy')).toBe(HEADERS['Content-Security-Policy']);
+    expect(res.headers.get('x-content-type-options')).toBe('nosniff');
+  });
+
+  it('status: error bodies keep the handler shape and the headers', async () => {
+    const res = await createStatusRoute(fakeDeps(), HEADERS)(get('/api/receive/status'));
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: { code: 'INVALID_PARAMS' } });
+    expect(res.headers.get('content-security-policy')).toBe(HEADERS['Content-Security-Policy']);
+  });
+
+  it('initiate: POST body + Origin reach the handler unchanged', async () => {
+    const body = {
+      burnTxHash: HASH,
+      address: G,
+      amount: AMOUNT,
+      sourceDomain: '6',
+      transferMode: 'fast',
+    };
+    const make = () =>
+      fakeDeps(
+        { newIntentId: () => 'int_route', allowedOrigins: ['http://localhost:5173'] },
+        BASE,
+        { bind: false },
+      );
+    const direct = await handleInitiate(
+      { ...body, origin: 'http://localhost:5173', ip: '9.9.9.9' },
+      make(),
+    );
+    const res = await createInitiateRoute(make(), HEADERS)(post('/api/receive/initiate', body));
+    expect(res.status).toBe(direct.status);
+    expect(await res.json()).toEqual(direct.body);
+    expect(direct.body).toEqual({ ok: true, intentId: 'int_route' });
+    // a disallowed Origin is refused by the handler, not the wrapper
+    const forbidden = await createInitiateRoute(make(), HEADERS)(
+      new Request('https://demo.anchorcctp.com/api/receive/initiate', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', origin: 'https://evil.example' },
+        body: JSON.stringify(body),
+      }),
+    );
+    expect(forbidden.status).toBe(403);
+  });
+
+  it('initiate: a body that is not an object is refused by the handler, not the wrapper', async () => {
+    const res = await createInitiateRoute(fakeDeps(), HEADERS)(
+      new Request('https://demo.anchorcctp.com/api/receive/initiate', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '"not-an-object"',
+      }),
+    );
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: { code: 'INVALID_PARAMS' } });
+  });
+
+  it('settle: POST body reaches the handler and the receipt passes through', async () => {
+    const settleInput = (extra: Record<string, unknown> = {}) => ({
+      burnTxHash: HASH,
+      address: G,
+      amount: AMOUNT,
+      sourceDomain: '6',
+      transferMode: 'fast',
+      intentId: 'int_seed',
+      ...extra,
+    });
+    const settleDeps = () => {
+      const d = fakeDeps();
+      d.cctp = { receive: mintingReceive(d.state).receive } as never;
+      return d;
+    };
+    const direct = await handleSettle(settleInput({ ip: '9.9.9.9' }), settleDeps());
+    const res = await createSettleRoute(settleDeps(), HEADERS)(post('/api/receive/settle', settleInput()));
+    expect(res.status).toBe(direct.status);
+    expect(await res.json()).toEqual({ receipt: { stellarAmount: '99987', mintTxHash: 'MINT_TX_1' } });
+    expect(direct.body).toEqual({ receipt: { stellarAmount: '99987', mintTxHash: 'MINT_TX_1' } });
+  });
+
+  it('fees: query params reach the handler and the quote passes through', async () => {
+    const make = () => {
+      const d = fakeDeps({ attestationBaseUrl: DEPLOY_ENV.CIRCLE_ATTESTATION_BASE_URL });
+      d.fetch = (async () =>
+        jsonResponse([
+          { finalityThreshold: 1000, minimumFee: 1.3 },
+          { finalityThreshold: 2000, minimumFee: 0 },
+        ])) as never;
+      return d;
+    };
+    const direct = await handleFees(
+      { sourceDomain: '6', destDomain: '27', mode: 'fast', ip: '9.9.9.9' },
+      make(),
+    );
+    const res = await createFeesRoute(make(), HEADERS)(
+      get('/api/fees?sourceDomain=6&destDomain=27&mode=fast'),
+    );
+    expect(res.status).toBe(direct.status);
+    expect(await res.json()).toEqual(direct.body);
+  });
+
+  it('config: serves publicConfigBundle with transferModes + fastWindowMs (R11)', async () => {
+    const env = { ...DEPLOY_ENV, STELLAR_NETWORK: 'testnet', FAST_WINDOW_MS: '45000' };
+    const res = await createConfigRoute(env, HEADERS)(get('/api/config'));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.transferModes).toEqual(['fast', 'standard']);
+    expect(body.fastWindowMs).toBe(45_000);
+    // the deployed surface and the local server serve the same bundle
+    expect(body).toEqual(publicConfigBundle(env));
+    expect(res.headers.get('content-security-policy')).toBe(HEADERS['Content-Security-Policy']);
+
+    // no secret in the env can reach the client
+    const secret = 'S' + 'A'.repeat(55);
+    const leaked = await createConfigRoute({ ...env, STELLAR_SECRET: secret }, HEADERS)(get('/api/config'));
+    expect(JSON.stringify(await leaked.json())).not.toContain(secret);
+  });
+
+  it('CSP connect-src carries the deployment origins, never the local-only default', () => {
+    const csp = serverlessHeaders(DEPLOY_ENV)['Content-Security-Policy'];
+    for (const origin of [
+      'https://demo.anchorcctp.com',
+      'https://iris-api-sandbox.circle.com',
+      'https://horizon-testnet.stellar.org',
+      'https://soroban-testnet.stellar.org',
+    ]) {
+      expect(csp).toContain(origin);
+    }
+    expect(csp).toContain('https://*.stellar.org');
+    // …and the no-env default stays the local-only one, so a misconfigured deploy
+    // is visibly restrictive rather than silently permissive.
+    expect(serverlessHeaders({})['Content-Security-Policy']).not.toContain('https://demo.anchorcctp.com');
+  });
+
+  it('serverless deps fail fast on missing secrets in real mode — never a silent fallback', () => {
+    const base = {
+      STELLAR_NETWORK: 'testnet',
+      STELLAR_DESTINATION: G,
+      HORIZON_URL: 'https://horizon-testnet.stellar.org',
+      SOROBAN_RPC_URL: 'https://soroban-testnet.stellar.org',
+      CIRCLE_ATTESTATION_BASE_URL: 'https://iris-api-sandbox.circle.com',
+    };
+    expect(() => serverlessDeps({ ...base, SIM_MODE: 'true' })).toThrow(/SIM_MODE/);
+    expect(() => serverlessDeps({ ...base, CIRCLE_ATTESTATION_BASE_URL: undefined })).toThrow(
+      /CIRCLE_ATTESTATION_BASE_URL/,
+    );
+    expect(() => serverlessDeps(base)).toThrow(/KV_REST_API_URL/);
+    expect(() =>
+      serverlessDeps({ ...base, KV_REST_API_URL: 'https://kv.example', KV_REST_API_TOKEN: 'tok' }),
+    ).toThrow(/STELLAR_SECRET/);
   });
 });

@@ -6,6 +6,8 @@ import { normalizeBurnTxHash, assertSupportedDomain, FileReplayStore } from '@an
 import type { IReplayStoreAdapter } from '@anchor-cctp/core-sdk';
 import { StrKey } from '@stellar/stellar-sdk';
 import type { IncomingMessage, ServerResponse } from 'node:http';
+// The default Fast window lives with the handler that measures against it (kv.ts).
+import { DEFAULT_FAST_WINDOW_MS } from './kv.js';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -35,6 +37,13 @@ export interface PublicConfig {
   forwarderContractId?: string;
   attestationUrl?: string;
   simMode: boolean;
+  /** Transfer modes the API accepts (spec §4). */
+  transferModes: readonly ['fast', 'standard'];
+  /**
+   * Server-side Fast window: the threshold the status frame measures `elapsedMs`
+   * against. The client renders `degraded`, it never computes this (spec §3/§7).
+   */
+  fastWindowMs: number;
 }
 
 export interface SseHandlerDeps {
@@ -288,6 +297,10 @@ export function publicConfigBundle(env: Record<string, string | undefined>): Pub
     forwarderContractId: env.FORWARDER_CONTRACT_ID,
     attestationUrl: env.CIRCLE_ATTESTATION_BASE_URL,
     simMode: (env.SIM_MODE ?? 'false').toLowerCase() === 'true',
+    transferModes: ['fast', 'standard'],
+    // Same default the handlers fall back to, so the advertised window can never
+    // disagree with the window `degraded` is computed from.
+    fastWindowMs: env.FAST_WINDOW_MS ? Number(env.FAST_WINDOW_MS) : DEFAULT_FAST_WINDOW_MS,
   };
 }
 

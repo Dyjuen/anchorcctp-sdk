@@ -4,6 +4,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { validateEventParams, publicConfigBundle, SimTimeline, postInitiate, fileStoreAt, collectSse, createSseHandler, parseAmountBase6, collectSseReal, gateRealStream, createIntentStore, createRealGate, RateLimitBuckets, readBodyCapped } from './events.js';
+import { DEFAULT_FAST_WINDOW_MS } from './kv.js';
 const tmpPath = () => join(mkdtempSync(join(tmpdir(), 'replay-')), 'replay.json');
 
 const G = 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5';
@@ -36,6 +37,14 @@ describe('validateEventParams', () => {
 });
 
 describe('publicConfigBundle', () => {
+  it('advertises both transfer modes and the server-side fast window (spec §4/R11)', () => {
+    const bundle = publicConfigBundle({} as never);
+    expect(bundle.transferModes).toEqual(['fast', 'standard']);
+    expect(bundle.fastWindowMs).toBe(DEFAULT_FAST_WINDOW_MS);
+    // FAST_WINDOW_MS is the one knob; the advertised window is the one the status
+    // frame measures `elapsedMs` against, so they must move together.
+    expect(publicConfigBundle({ FAST_WINDOW_MS: '45000' } as never).fastWindowMs).toBe(45_000);
+  });
   it('leaks no secrets', () => {
     const bundle = publicConfigBundle({ SECRET: 'SDNMRSIZWINOTESTFAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKE1234', STELLAR_SECRET: 'SDNMRSIZWINOTESTFAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKE1234', VITE_NETWORK: 'testnet' } as never);
     const text = JSON.stringify(bundle);

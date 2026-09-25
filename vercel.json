@@ -3,5 +3,9 @@
   "installCommand": "npm install",
   "buildCommand": "npm run build --workspace=@anchor-cctp/core-sdk && npm run build --workspace=@anchor-cctp/demo",
   "outputDirectory": "apps/demo/dist",
-  "framework": "vite"
+  "framework": "vite",
+  "functions": {
+    "api/receive/status.ts": { "maxDuration": 30 },
+    "api/receive/settle.ts": { "maxDuration": 300 }
+  }
 }

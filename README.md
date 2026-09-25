@@ -173,6 +173,47 @@ npm run build
 
 ---
 
+## Vercel Deployment (demo API)
+
+The demo SPA (`apps/demo/dist`) is static; the receive path runs as Vercel Functions
+under the repo-root `api/` directory, each a thin wrapper over the framework-free
+handlers in `apps/demo/server/handlers.ts`. Slash paths only (spec §6) — a literal `:`
+in a filename is fragile.
+
+| Route | File | Method | Hobby duration |
+|---|---|---|---|
+| `GET /api/config` | `api/config.ts` | GET | platform default |
+| `GET /api/fees` | `api/fees.ts` | GET | platform default |
+| `POST /api/receive/initiate` | `api/receive/initiate.ts` | POST | platform default |
+| `GET /api/receive/status` | `api/receive/status.ts` | GET | `maxDuration: 30` |
+| `POST /api/receive/settle` | `api/receive/settle.ts` | POST | `maxDuration: 300` |
+
+**Hobby vs Pro durations.** Hobby caps function duration at 300s with no extension;
+`sleep`-style extensions are Pro-only, and Fluid compute raises Pro to 800s GA
+(1800s beta). Every Hobby invocation here is designed to finish far inside that: the
+short-poll design keeps each call under ~30s (`settle` polls Iris for at most
+`SETTLE_MAX_RETRIES` = 10 attempts ≈ 60s worst case), and the Standard-path waiting
+happens client-side across many polls, never inside one invocation. **Anything above
+300s requires Pro** — that is the only reason to leave Hobby for this workload.
+
+Environment (set in the Vercel dashboard; never `VITE_`-prefixed, so nothing reaches
+the browser bundle):
+
+- `KV_REST_API_URL`, `KV_REST_API_TOKEN` — Upstash Redis via the Vercel Marketplace
+  (Vercel KV is sunset). Required; the functions fail at cold start without them.
+- `STELLAR_SECRET` — sponsor key, server-only. Required in real mode
+  (`SIM_MODE=false`, which is the only mode the deployment runs).
+- `CIRCLE_ATTESTATION_BASE_URL` — must be explicit and network-consistent
+  (testnet → `https://iris-api-sandbox.circle.com`, mainnet →
+  `https://iris-api.circle.com`); there is no cross-network default.
+- `HORIZON_URL`, `SOROBAN_RPC_URL` — required, `https` + `*.stellar.org`.
+- `API_ORIGIN` (optional) — the deployment's public origin, added to the CSP
+  `connect-src`; falls back to `VERCEL_URL` when unset.
+- `ALLOWED_ORIGINS` (optional, comma-separated) — browser Origin allowlist for
+  `initiate`; `VERCEL_URL` is appended automatically.
+
+---
+
 ## License
 
 MIT © Mother's Grace (Juen)
