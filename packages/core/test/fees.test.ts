@@ -1,5 +1,5 @@
 import { fetchTransferFee } from '../src/attestation/fees.js';
-import { FeeUnavailableError } from '../src/errors/index.js';
+import { FeeUnavailableError, InvalidDomainError } from '../src/errors/index.js';
 
 /**
  * Live sandbox shape for GET /v2/burn/USDC/fees/6/27 (verified 2026-09-25).
@@ -44,17 +44,33 @@ describe('fetchTransferFee', () => {
     expect(sink.url).toBe('https://iris-api-sandbox.circle.com/v2/burn/USDC/fees/6/27');
   });
 
-  it('falls back to the public Iris base URL and global fetch when neither is injected', async () => {
-    const sink: { url?: string } = {};
+  it('resolves the Iris base from CIRCLE_ATTESTATION_BASE_URL before the mainnet default, with global fetch', async () => {
     const originalFetch = globalThis.fetch;
-    globalThis.fetch = captureStub(sink, TIERS);
+    const originalEnv = process.env.CIRCLE_ATTESTATION_BASE_URL;
     try {
+      // Env-first (mirrors AttestationClient): a missing env var must not silently
+      // point testnet quotes at mainnet Iris.
+      process.env.CIRCLE_ATTESTATION_BASE_URL = 'https://iris-api-sandbox.circle.com/';
+      const envSink: { url?: string } = {};
+      globalThis.fetch = captureStub(envSink, TIERS);
       const fee = await fetchTransferFee(6, 27, { mode: 'standard' });
       expect(fee).toEqual({ minimumFeeBps: 0, finalityThreshold: 2000 });
+      expect(envSink.url).toBe('https://iris-api-sandbox.circle.com/v2/burn/USDC/fees/6/27');
+
+      // Only when the env var is absent does the public default apply.
+      delete process.env.CIRCLE_ATTESTATION_BASE_URL;
+      const defaultSink: { url?: string } = {};
+      globalThis.fetch = captureStub(defaultSink, TIERS);
+      await fetchTransferFee(6, 27, { mode: 'fast' });
+      expect(defaultSink.url).toBe('https://iris-api.circle.com/v2/burn/USDC/fees/6/27');
     } finally {
       globalThis.fetch = originalFetch;
+      if (originalEnv !== undefined) {
+        process.env.CIRCLE_ATTESTATION_BASE_URL = originalEnv;
+      } else {
+        delete process.env.CIRCLE_ATTESTATION_BASE_URL;
+      }
     }
-    expect(sink.url).toBe('https://iris-api.circle.com/v2/burn/USDC/fees/6/27');
   });
 
   it('coerces string-encoded threshold and fee from the JSON body', async () => {
@@ -92,10 +108,57 @@ describe('fetchTransferFee', () => {
   });
 
   it('throws FeeUnavailableError when the route is missing (404)', async () => {
-    const err = await fetchTransferFee(6, 999, { baseUrl: 'https://x', fetch: stubOf({ error: 'not found' }, false, 404), mode: 'fast' })
+    const err = await fetchTransferFee(6, 27, { baseUrl: 'https://x', fetch: stubOf({ error: 'not found' }, false, 404), mode: 'fast' })
       .catch((e: unknown) => e);
     expect(err).toBeInstanceOf(FeeUnavailableError);
     expect((err as FeeUnavailableError).message).toMatch(/404/);
+  });
+
+  it('rejects unsupported domains before building the URL (§4)', async () => {
+    const fetchSpy = jest.fn();
+    const badSource = await fetchTransferFee(999, 27, { baseUrl: 'https://x', fetch: fetchSpy as unknown as typeof fetch, mode: 'fast' })
+      .catch((e: unknown) => e);
+    expect(badSource).toBeInstanceOf(InvalidDomainError);
+    expect(badSource).toMatchObject({ code: 'INVALID_DOMAIN', domainId: 999 });
+
+    const badDest = await fetchTransferFee(6, 999, { baseUrl: 'https://x', fetch: fetchSpy as unknown as typeof fetch, mode: 'fast' })
+      .catch((e: unknown) => e);
+    expect(badDest).toBeInstanceOf(InvalidDomainError);
+    expect(badDest).toMatchObject({ code: 'INVALID_DOMAIN', domainId: 999 });
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('wraps a network failure (rejecting fetch) in FeeUnavailableError', async () => {
+    const dnsFailure = (async () => {
+      throw new Error('getaddrinfo ENOTFOUND iris-api.circle.com');
+    }) as unknown as typeof fetch;
+    const err = await fetchTransferFee(6, 27, { baseUrl: 'https://x', fetch: dnsFailure, mode: 'fast' })
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(FeeUnavailableError);
+    expect((err as FeeUnavailableError).message).toMatch(/ENOTFOUND/);
+
+    const nonErrorRejection = (async () => {
+      throw 'boom';
+    }) as unknown as typeof fetch;
+    const err2 = await fetchTransferFee(6, 27, { baseUrl: 'https://x', fetch: nonErrorRejection, mode: 'fast' })
+      .catch((e: unknown) => e);
+    expect(err2).toBeInstanceOf(FeeUnavailableError);
+    expect((err2 as FeeUnavailableError).message).toMatch(/boom/);
+  });
+
+  it('wraps an unparseable 200 body in FeeUnavailableError', async () => {
+    const badJson = (async () => ({
+      ok: true,
+      status: 200,
+      json: async () => {
+        throw new SyntaxError('Unexpected token < in JSON');
+      },
+    })) as unknown as typeof fetch;
+    const err = await fetchTransferFee(6, 27, { baseUrl: 'https://x', fetch: badJson, mode: 'fast' })
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(FeeUnavailableError);
+    expect((err as FeeUnavailableError).message).toMatch(/JSON/);
   });
 
   it('throws FeeUnavailableError when the requested fast tier is absent', async () => {

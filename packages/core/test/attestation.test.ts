@@ -311,7 +311,9 @@ describe('AttestationClient v2 by-txHash (testnet path)', () => {
   });
 
   it('never treats attestation:"PENDING" as complete', async () => {
-    const frame = { messages: [{ message: '0x' + 'ab'.repeat(200), attestation: 'PENDING', status: 'pending' }] };
+    // status is 'complete' on purpose: only the `attestation !== 'PENDING'` clause
+    // can reject this frame, so the guard stays pinned by this test.
+    const frame = { messages: [{ message: '0x' + 'ab'.repeat(200), attestation: 'PENDING', status: 'complete' }] };
     const stub = async () => ({ ok: true, json: async () => frame });
     const client = new AttestationClient({ baseUrl: 'https://x', fetchImpl: stub as never, maxRetries: 2, pollIntervalMs: 1 });
     await expect(client.pollAttestationByTx(6, '0x' + 'ab'.repeat(32))).rejects.toThrow(/timed out/i);
