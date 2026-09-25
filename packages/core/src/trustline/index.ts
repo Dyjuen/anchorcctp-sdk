@@ -3,6 +3,17 @@ import { TransactionBuilder, Networks, Account, Operation, Asset } from '@stella
 
 export const TESTNET_USDC_ISSUER = 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5';
 
+/**
+ * B5: Horizon-backed trustline provider, injected via `config.trustlineProvider`.
+ * This is the production path; `ctx._test.hasTrustline` / `_test.createTrustline`
+ * remain an equivalent test-only fallback that the factory rejects when
+ * `NODE_ENV=production` (N1).
+ */
+export interface TrustlineProvider {
+  hasTrustline(addr: string): Promise<boolean>;
+  createTrustline(xdr: string): Promise<string>;
+}
+
 export interface EnsureTrustlineParams {
   destination: string;
   asset?: string;

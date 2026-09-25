@@ -444,7 +444,103 @@ describe('receive() Orchestration Engine', () => {
         destinationAddress: validDestination,
         amount,
       })
-    ).rejects.toMatchObject({ code: 'TRUSTLINE_CREATION_FAILED' });
+    ).rejects.toMatchObject({
+      code: 'TRUSTLINE_CREATION_FAILED',
+      // B5: the fail-loud message must name the production config key.
+      message: expect.stringContaining('config.trustlineProvider'),
+    });
+  });
+
+  it('B5: uses config trustlineProvider instead of _test when present', async () => {
+    const seen: string[] = [];
+    const sdk = createAnchorCCTP({
+      signer: async (x) => 'SIGNED_TX_123',
+      dustCollectorAddress: validDestination,
+      sponsorAccount: validSponsor,
+      sorobanTransport: fakeTransport(),
+      forwarderContractId: 'CA66Q2WFBND6V4UEB7RD4SAXSVIWMD6RA4X3U32ELVFGXV5PJK4T4VSZ',
+      trustlineProvider: {
+        hasTrustline: async (addr: string) => {
+          seen.push(addr);
+          return true;
+        },
+        createTrustline: async () => {
+          throw new Error('must not be called');
+        },
+      },
+      _test: {
+        attestation: async () => ({
+          status: 'complete',
+          attestation: '0x' + 'ab'.repeat(40),
+          message: wellFormedMsg(1000000n),
+          signature: goodSig,
+        }),
+        hasTrustline: async () => {
+          throw new Error('must not be called');
+        },
+      },
+    } as any);
+
+    const r = await sdk.receive({
+      sourceDomain: 0,
+      burnTxHash: H('cafe42'),
+      destinationAddress: validDestination,
+      amount: 1000000n,
+    });
+
+    expect(seen).toEqual([validDestination]);
+    expect(r.settled).toBe(true);
+  });
+
+  it('B5: createTrustline resolves from config provider, not the signer', async () => {
+    const created: string[] = [];
+    const signedBySigner: string[] = [];
+    const sdk = createAnchorCCTP({
+      signer: async (xdr) => {
+        signedBySigner.push(xdr);
+        return 'SIGNED_TX_123';
+      },
+      dustCollectorAddress: validDestination,
+      sponsorAccount: validSponsor,
+      sorobanTransport: fakeTransport(),
+      forwarderContractId: 'CA66Q2WFBND6V4UEB7RD4SAXSVIWMD6RA4X3U32ELVFGXV5PJK4T4VSZ',
+      trustline: { allowCreation: true, spendCapXlm: 2 },
+      trustlineProvider: {
+        hasTrustline: async () => false,
+        createTrustline: async (xdr: string) => {
+          created.push(xdr);
+          return 'TRUSTLINE_TX';
+        },
+      },
+      _test: {
+        attestation: async () => ({
+          status: 'complete',
+          attestation: '0x' + 'ab'.repeat(40),
+          message: wellFormedMsg(1000000n),
+          signature: goodSig,
+        }),
+        hasTrustline: async () => {
+          throw new Error('must not be called');
+        },
+        createTrustline: async () => {
+          throw new Error('must not be called');
+        },
+      },
+    } as any);
+
+    const r = await sdk.receive({
+      sourceDomain: 0,
+      burnTxHash: H('cafe43'),
+      destinationAddress: validDestination,
+      amount: 1000000n,
+    });
+
+    // The trustline change-trust XDR went to the config creator, never to the signer
+    // (the signer fallback would have been handed exactly that XDR).
+    expect(created.length).toBe(1);
+    expect(signedBySigner.length).toBe(1);
+    expect(signedBySigner[0]).not.toBe(created[0]);
+    expect(r.settled).toBe(true);
   });
 
   it('O5/M1: normalizes replay key case (0xABC same as 0xabc)', async () => {

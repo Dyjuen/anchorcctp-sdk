@@ -56,6 +56,35 @@ describe('AnchorCCTP Configuration & Factory', () => {
     }
   });
 
+  it('B5: trustlineProvider is accepted as a first-class config key', () => {
+    const provider = {
+      hasTrustline: async () => true,
+      createTrustline: async (xdr: string) => xdr,
+    };
+    const sdk = createAnchorCCTP({
+      signer: async (x) => x,
+      trustlineProvider: provider,
+    } satisfies AnchorCCTPConfig);
+    expect(sdk).toBeDefined();
+  });
+
+  it('B5: trustlineProvider is allowed in production (unlike _test)', () => {
+    const original = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+    try {
+      const sdk = createAnchorCCTP({
+        signer: async (x) => x,
+        trustlineProvider: {
+          hasTrustline: async () => true,
+          createTrustline: async (xdr: string) => xdr,
+        },
+      } satisfies AnchorCCTPConfig);
+      expect(sdk).toBeDefined();
+    } finally {
+      process.env.NODE_ENV = original;
+    }
+  });
+
   it('N1: _test allowed outside production', () => {
     const original = process.env.NODE_ENV;
     process.env.NODE_ENV = 'test';

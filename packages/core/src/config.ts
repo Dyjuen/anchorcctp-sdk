@@ -10,6 +10,7 @@ import { createLogger, Logger } from './logger/index.js';
 import { receive, ReceiveParams, ReceiveResult, ReceiveContext } from './receive.js';
 import { SignerCallback, SorobanTransport, resolveForwarder } from './forwarder/index.js';
 import { InvalidConfigError } from './errors/index.js';
+import { TrustlineProvider } from './trustline/index.js';
 
 export interface TrustlineConfig {
   allowCreation: boolean;
@@ -36,6 +37,12 @@ export interface AnchorCCTPConfig {
    */
   sorobanTransport?: SorobanTransport;
   usdcIssuer?: string;
+  /**
+   * B5: Horizon-backed trustline provider (inspect + optional create). This is the
+   * production path wired to `ctx.defaultTrustlineProvider`; `_test` is a test-only
+   * fallback and is rejected when `NODE_ENV=production` (N1).
+   */
+  trustlineProvider?: TrustlineProvider;
   _test?: Record<string, unknown>;
 }
 
@@ -100,6 +107,7 @@ export function createAnchorCCTP(config: AnchorCCTPConfig): AnchorCCTP {
     defaultSponsorAccount: config.sponsorAccount,
     defaultRpc: config.sorobanTransport,
     defaultUsdcIssuer: config.usdcIssuer,
+    defaultTrustlineProvider: config.trustlineProvider,
     network: config.network,
     _test: config._test,
   };

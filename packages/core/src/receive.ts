@@ -1,7 +1,7 @@
 import { assertSupportedDomain } from './domains/index.js';
 import { translateToStellar, submitMint, SignerCallback, SorobanTransport } from './forwarder/index.js';
 import { convert6to7 } from './decimals/index.js';
-import { ensureTrustline, TESTNET_USDC_ISSUER } from './trustline/index.js';
+import { ensureTrustline, TESTNET_USDC_ISSUER, TrustlineProvider } from './trustline/index.js';
 import { ReplayStore, SettlementRecord } from './replay/index.js';
 import { AttestationClient, AttestationResult } from './attestation/index.js';
 import { parseTransferAmounts } from './cctp-message.js';
@@ -66,6 +66,12 @@ export interface ReceiveContext {
   /** B3/B4: Default Soroban transport (from `config.sorobanTransport`). No implicit default. */
   defaultRpc?: SorobanTransport;
   defaultUsdcIssuer?: string;
+  /**
+   * B5: Production trustline provider (from `config.trustlineProvider`). Takes
+   * precedence over `_test`; `_test` is a test-only fallback and the factory
+   * rejects it when `NODE_ENV=production` (N1).
+   */
+  defaultTrustlineProvider?: TrustlineProvider;
   network?: 'testnet' | 'mainnet';
   _test?: {
     attestation?: (burnTxHash: string) => Promise<Partial<AttestationResult>>;
@@ -216,11 +222,22 @@ export async function receive(
     throw new MintFailedError(burnTxHash, 'No signer configured. Pass params.signer or config.signer.');
   }
 
-  const hasTrustline = ctx._test?.hasTrustline;
+  // B5: the config-supplied provider wins; `_test` stays a test-only fallback (the
+  // factory already rejects `_test` when NODE_ENV=production — N1 — so production
+  // can never reach it; no extra env branch is needed here).
+  const configTrustlineProvider = ctx.defaultTrustlineProvider;
+  const hasTrustline: (() => Promise<boolean>) | undefined = configTrustlineProvider
+    ? () => configTrustlineProvider.hasTrustline(stellarDestination)
+    : ctx._test?.hasTrustline;
   if (!hasTrustline) {
-    throw new TrustlineCreationError(stellarDestination, 'No hasTrustline provider wired. Pass Horizon-backed provider via _test.hasTrustline (tests) or production wiring.');
+    throw new TrustlineCreationError(
+      stellarDestination,
+      'No hasTrustline provider wired. Pass config.trustlineProvider (production) or _test.hasTrustline (tests).'
+    );
   }
-  const createTrustline = ctx._test?.createTrustline ?? (async (xdr: string) => effectiveSigner(xdr));
+  const createTrustline = configTrustlineProvider
+    ? (xdr: string) => configTrustlineProvider.createTrustline(xdr)
+    : ctx._test?.createTrustline ?? (async (xdr: string) => effectiveSigner(xdr));
 
   // O15: sourceSequence must be numeric string
   if (params.sourceSequence !== undefined && !/^\d+$/.test(params.sourceSequence)) {
