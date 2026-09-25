@@ -19,10 +19,12 @@
  *   npm run testnet:receive -- <burnTxHash> [G...] [--source-domain 6] [--amount 1000000] [--verify-only] [--log docs/evidence/core-testnet-receive.log]
  */
 import { appendFileSync } from 'node:fs';
-import { Networks, rpc } from '@stellar/stellar-sdk';
+import { Asset, Horizon, Keypair, Networks, Operation, TransactionBuilder, rpc } from '@stellar/stellar-sdk';
 import { AttestationClient } from '../packages/core/src/attestation/index.js';
 import { createAnchorCCTPFromEnv } from '../packages/core/src/testnet-config.js';
 import { createAnchorCCTP } from '../packages/core/src/config.js';
+import { readAccountState } from '../packages/core/src/testnet/account.js';
+import { TESTNET_USDC_ISSUER } from '../packages/core/src/trustline/index.js';
 import { createSorobanTransport } from './soroban-transport.js';
 
 function arg(name: string): string | undefined {
@@ -103,10 +105,49 @@ async function runVerifyOnly(): Promise<void> {
   process.exit(0);
 }
 
+/**
+ * Creates the USDC trustline when it is missing and the caller opted in.
+ *
+ * F2: the change-trust tx is signed by the same account that sponsors the mint,
+ * which advances that account's sequence. This MUST run before the sponsor
+ * sequence is read for the mint tx, otherwise the mint carries a stale sequence
+ * and the network rejects it with `txBAD_SEQ`. `testnet:auto` does the same.
+ */
+async function ensureTrustlineFirst(
+  keypair: Keypair | undefined,
+  destinationAddress: string
+): Promise<void> {
+  if (!keypair) return; // offline stub — nothing can be signed
+  const allowCreation = (process.env.TRUSTLINE_ALLOW_CREATION ?? 'false').toLowerCase() === 'true';
+  if (!allowCreation) return;
+
+  const horizonUrl = process.env.HORIZON_URL ?? 'https://horizon-testnet.stellar.org';
+  const state = await readAccountState({ horizonUrl, address: destinationAddress });
+  if (!state.exists || state.hasTrustline) return;
+
+  const spendCapRaw = process.env.SPEND_CAP_XLM ?? process.env.STELLAR_SPEND_CAP_XLM ?? '2';
+  const spendCap = Number(spendCapRaw);
+  if (!Number.isFinite(spendCap) || 0.5 > spendCap) {
+    log(`[WARN] [trustline] skipped — 0.5 XLM reserve exceeds SPEND_CAP_XLM=${spendCapRaw}`);
+    return;
+  }
+
+  const horizon = new Horizon.Server(horizonUrl);
+  const account = await horizon.loadAccount(destinationAddress);
+  const tx = new TransactionBuilder(account, { fee: '100', networkPassphrase: Networks.TESTNET })
+    .addOperation(Operation.changeTrust({ asset: new Asset('USDC', TESTNET_USDC_ISSUER) }))
+    .setTimeout(30)
+    .build();
+  tx.sign(keypair);
+  await horizon.submitTransaction(tx);
+  log('[EVENT] [trustline] created (0.5 XLM reserve)');
+}
+
 // Full receive mode.
 async function runReceive(): Promise<void> {
 let sdk;
 let destinationAddress = destArg;
+let keypair: Keypair | undefined;
 let offline = false;
 try {
   const fromEnv = createAnchorCCTPFromEnv({
@@ -115,6 +156,7 @@ try {
   });
   sdk = fromEnv.client;
   destinationAddress = fromEnv.destinationAddress;
+  keypair = fromEnv.keypair;
   log(`[INFO] SDK from env (signer: ${fromEnv.hasSigner ? 'real Keypair' : 'offline stub'})`);
 } catch {
   // No usable env identity — offline stub proves XDR build without settlement.
@@ -140,6 +182,8 @@ const transport = createSorobanTransport(sorobanServer, Networks.TESTNET);
 const before = Date.now();
 log(`[STEP] [receive] sourceDomain=${sourceDomain} dest=${destinationAddress} amount=${amount.toString()}`);
 try {
+  // F2: any trustline creation must happen BEFORE the sequence read below.
+  await ensureTrustlineFirst(keypair, destinationAddress);
   // B3/B4: receive() simulates, assembles, broadcasts and confirms. The sponsor's
   // real sequence must be read from chain — simulation never supplies it.
   const sponsorAccount = await sorobanServer.getAccount(destinationAddress);

@@ -1,6 +1,6 @@
 import { translateToStellar, submitMint, buildMintAndForwardXdr, resolveForwarder, TESTNET_FORWARDER, MAINNET_FORWARDER } from '../src/forwarder/index.js';
 import type { SorobanTransport } from '../src/forwarder/index.js';
-import { MintFailedError, ForwarderContractError, InvalidConfigError, InvalidAddressError } from '../src/errors/index.js';
+import { MintFailedError, MintUnconfirmedError, ForwarderContractError, InvalidConfigError, InvalidAddressError } from '../src/errors/index.js';
 import { StrKey, TransactionBuilder, Networks } from '@stellar/stellar-sdk';
 
 /** Valid G... sponsor used as the mint transaction source (B2: it is the only source). */
@@ -358,6 +358,42 @@ describe('B3+B4: submitMint broadcasts, assembles and confirms', () => {
     const r = await submitMint(mintParams, async (x) => x, rpc, { maxAttempts: 5, pollIntervalMs: 1 });
     expect(r.txHash).toBe('hash-2nd');
     expect(polls).toBe(2);
+  });
+
+  it('keeps polling when getTransaction throws a transient RPC error, then confirms', async () => {
+    let polls = 0;
+    const rpc = makeRpc({
+      sendTransaction: async () => ({ status: 'PENDING', hash: 'hash-transient' }),
+      getTransaction: async () => {
+        polls += 1;
+        if (polls < 3) throw new Error('fetch failed: ECONNRESET');
+        return { status: 'SUCCESS' };
+      },
+    });
+    const r = await submitMint(mintParams, async (x) => x, rpc, { maxAttempts: 5, pollIntervalMs: 0 });
+    expect(r.txHash).toBe('hash-transient');
+    expect(polls).toBe(3);
+  });
+
+  it('reports persistent getTransaction failures as MINT_UNCONFIRMED, not MINT_FAILED', async () => {
+    const rpc = makeRpc({
+      sendTransaction: async () => ({ status: 'PENDING', hash: 'deadbeef' }),
+      getTransaction: async () => {
+        throw new Error('fetch failed: ETIMEDOUT');
+      },
+    });
+    const err = await submitMint(mintParams, async (x) => x, rpc, {
+      maxAttempts: 3,
+      pollIntervalMs: 0,
+    }).catch((e: unknown) => e);
+
+    expect(err).not.toBeInstanceOf(MintFailedError);
+    expect(err).toBeInstanceOf(MintUnconfirmedError);
+    const unconfirmed = err as MintUnconfirmedError;
+    expect(unconfirmed.code).toBe('MINT_UNCONFIRMED');
+    // the broadcast hash must survive for reconciliation
+    expect(unconfirmed.mintTxHash).toBe('deadbeef');
+    expect(unconfirmed.message).toContain('deadbeef');
   });
 
   it('throws MintFailedError when send status is not PENDING', async () => {

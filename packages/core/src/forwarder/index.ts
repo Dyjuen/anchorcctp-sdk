@@ -186,9 +186,17 @@ export async function submitMint(
 
     // B3: do not report success until the network confirms SUCCESS.
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      const got = await rpc.getTransaction(hash);
-      if (got.status === 'SUCCESS') return { txHash: hash };
-      if (got.status === 'FAILED') {
+      let status: string;
+      try {
+        status = (await rpc.getTransaction(hash)).status;
+      } catch {
+        // A transient RPC/network error while polling is "confirmation not observed",
+        // not a failed mint — keep polling and let SUCCESS/FAILED/the window decide,
+        // so the broadcast hash survives as MINT_UNCONFIRMED rather than MINT_FAILED.
+        status = 'NOT_FOUND';
+      }
+      if (status === 'SUCCESS') return { txHash: hash };
+      if (status === 'FAILED') {
         throw new MintFailedError(params.message, 'transaction FAILED on network');
       }
       const isLastAttempt = attempt === maxAttempts - 1;
