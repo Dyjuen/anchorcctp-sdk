@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { motion, useScroll, useMotionValueEvent, useTransform } from "framer-motion";
-import { Navigation, Menu, Wallet } from "lucide-react";
+import { Menu, Wallet } from "lucide-react";
 import { cn } from "../../lib/utils";
 
 import { WalletState } from "../../wallet/freighter";
@@ -24,6 +24,11 @@ const navItems = [
 ];
 
 const EXPAND_SCROLL_THRESHOLD = 80;
+
+// Docs site (VitePress). Override per environment with VITE_DOCS_URL.
+const DOCS_URL: string =
+  (import.meta as unknown as { env?: Record<string, string | undefined> }).env?.VITE_DOCS_URL ??
+  'http://localhost:5174/docs/overview/what';
 
 const containerVariants = {
   expanded: {
@@ -71,8 +76,8 @@ const itemVariants = {
 
 const collapsedIconVariants = {
   expanded: { opacity: 0, scale: 0.6, rotate: -45, transition: { duration: 0.2 } },
-  collapsed: { 
-    opacity: 1, 
+  collapsed: {
+    opacity: 1,
     scale: 1,
     rotate: 0,
     transition: {
@@ -86,28 +91,28 @@ const collapsedIconVariants = {
 
 export function AnimatedNavbar({ wallet, onConnect, activeSection, setActiveSection, onNavigate }: AnimatedNavProps) {
   const [isExpanded, setExpanded] = React.useState(true);
-  
+
   const { scrollY } = useScroll();
   const lastScrollY = React.useRef(0);
   const scrollPositionOnCollapse = React.useRef(0);
 
   useMotionValueEvent(scrollY, "change", (latest) => {
     const previous = lastScrollY.current;
-    
+
     // Hide navbar if near the bottom of the page (footer)
-    const isAtBottom = typeof window !== 'undefined' && 
+    const isAtBottom = typeof window !== 'undefined' &&
       (window.innerHeight + window.scrollY >= document.body.offsetHeight - 200);
-      
+
     if (isAtBottom) {
       setExpanded(false);
       scrollPositionOnCollapse.current = latest;
     } else if (isExpanded && latest > previous && latest > 150) {
       setExpanded(false);
-      scrollPositionOnCollapse.current = latest; 
+      scrollPositionOnCollapse.current = latest;
     } else if (!isExpanded && !isAtBottom && latest < previous && (scrollPositionOnCollapse.current - latest > EXPAND_SCROLL_THRESHOLD)) {
       setExpanded(true);
     }
-    
+
     lastScrollY.current = latest;
   });
 
@@ -152,13 +157,13 @@ export function AnimatedNavbar({ wallet, onConnect, activeSection, setActiveSect
       >
         <img src="/assets/img/final.svg" alt="Anchor CCTP Logo" className="h-7 w-7 object-contain" />
       </motion.div>
-      
+
       {/* Nav Links */}
       <motion.div
         variants={itemVariants}
         className={cn(
           "flex items-center gap-1 sm:gap-3 px-2 sm:px-4",
-          !isExpanded && "pointer-events-none opacity-0 transition-opacity duration-200" 
+          !isExpanded && "pointer-events-none opacity-0 transition-opacity duration-200"
         )}
       >
         {navItems.map((item) => (
@@ -174,8 +179,8 @@ export function AnimatedNavbar({ wallet, onConnect, activeSection, setActiveSect
             }}
             className={cn(
               "text-xs sm:text-sm font-extrabold transition-all px-4 py-2 rounded-full cursor-pointer whitespace-nowrap",
-              activeSection === item.id 
-                ? "text-white bg-[#3E6BFF] shadow-sm" 
+              activeSection === item.id
+                ? "text-white bg-[#3E6BFF] shadow-sm"
                 : "text-slate-300 hover:text-white hover:bg-slate-800/60"
             )}
           >
@@ -192,6 +197,16 @@ export function AnimatedNavbar({ wallet, onConnect, activeSection, setActiveSect
           !isExpanded && "pointer-events-none opacity-0 transition-opacity duration-200"
         )}
       >
+        <motion.a
+          href={DOCS_URL}
+          target="_blank"
+          rel="noreferrer"
+          variants={itemVariants}
+          onClick={(e) => e.stopPropagation()}
+          className="text-xs sm:text-sm font-extrabold transition-all px-4 py-2 rounded-full cursor-pointer whitespace-nowrap text-slate-300 hover:text-white hover:bg-slate-800/60"
+        >
+          Docs
+        </motion.a>
         <button
           onClick={(e) => {
             e.stopPropagation();
@@ -203,7 +218,7 @@ export function AnimatedNavbar({ wallet, onConnect, activeSection, setActiveSect
           <span>{wallet?.connected ? `${wallet.address?.slice(0, 6)}...${wallet.address?.slice(-4)}` : "Connect Wallet"}</span>
         </button>
       </motion.div>
-      
+
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
         <motion.div
           variants={collapsedIconVariants}
