@@ -5,6 +5,9 @@ import { MESSENGER_ABI } from '../src/evm/burn.js';
 
 const FWD = 'CA66Q2WFBND6V4UEB7RD4SAXSVIWMD6RA4X3U32ELVFGXV5PJK4T4VSZ';
 const DEST = 'GCX2EQXSPCHMBSEGYZRVTZWOIDRXWRWYEFRTCNVOZPYXE4QEFPKNUF3V';
+// med25519 (M...) form of DEST with muxed id 0 — needed because the plan's
+// 52-char M... literal has an invalid checksum and never reaches the muxed branch.
+const DEST_MUXED = 'MCX2EQXSPCHMBSEGYZRVTZWOIDRXWRWYEFRTCNVOZPYXE4QEFPKNUAAAAAAAAAAAABFBI';
 
 describe('contractStrkeyToBytes32', () => {
   test('decodes testnet forwarder to 0x bytes32', () => {
@@ -18,16 +21,28 @@ describe('contractStrkeyToBytes32', () => {
 });
 
 describe('buildCctpForwarderHookData', () => {
-  test('O3: returns raw recipient bytes (no length prefix)', () => {
-    const hook = buildCctpForwarderHookData(DEST);
-    // Should be exactly 32 bytes = 64 hex chars (raw ed25519 bytes, no length prefix)
-    const raw = Buffer.from(hook.slice(2), 'hex');
-    expect(raw.length).toBe(32);
-    expect(hook).toBe('0x' + Buffer.from(StrKey.decodeEd25519PublicKey(DEST)).toString('hex'));
+  it('encodes G... to Circle layout: 24 zero bytes, u32be version 0, u32be len, strkey utf8', () => {
+    const out = buildCctpForwarderHookData('GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5');
+    const bytes = Buffer.from(out.slice(2), 'hex');
+    expect(bytes.length).toBe(32 + 56);
+    expect(bytes.subarray(0, 24).every((b) => b === 0)).toBe(true);
+    expect(bytes.readUInt32BE(24)).toBe(0);
+    expect(bytes.readUInt32BE(28)).toBe(56);
+    expect(bytes.subarray(32).toString('utf8')).toBe('GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5');
   });
-  test('accepts C... and M... recipients', () => {
-    expect(() => buildCctpForwarderHookData(FWD)).not.toThrow();
+
+  test('encodes C... contract recipient to the same utf8 layout', () => {
+    const bytes = Buffer.from(buildCctpForwarderHookData(FWD).slice(2), 'hex');
+    expect(bytes.length).toBe(32 + 56);
+    expect(bytes.readUInt32BE(24)).toBe(0);
+    expect(bytes.readUInt32BE(28)).toBe(56);
+    expect(bytes.subarray(32).toString('utf8')).toBe(FWD);
   });
+
+  test('rejects muxed M... explicitly instead of falling into contract decode', () => {
+    expect(() => buildCctpForwarderHookData(DEST_MUXED)).toThrow(/muxed/i);
+  });
+
   test('rejects garbage recipient (fund-loss guard)', () => {
     expect(() => buildCctpForwarderHookData('NOT_AN_ADDRESS')).toThrow('Invalid forward recipient');
   });
@@ -60,6 +75,6 @@ describe('buildCctpForwarderHookData', () => {
     const decodedBytes = ('0x' + dataHex) as `0x${string}`;
 
     expect(decodedBytes).toBe(hookData);
-    expect(dataLen).toBe(32); // G... recipient = raw ed25519 = 32 bytes
+    expect(dataLen).toBe(32 + 56); // Circle layout: 32-byte header + 56-char strkey utf8
   });
 });

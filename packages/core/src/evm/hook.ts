@@ -7,18 +7,30 @@ export function contractStrkeyToBytes32(strkey: string): `0x${string}` {
   return `0x${Buffer.from(StrKey.decodeContract(strkey)).toString('hex')}`;
 }
 
+// Circle's CctpForwarder expects hookData as:
+// 24 zero magic bytes │ u32be version (0 = utf8 strkey) │ u32be length L │ L bytes utf8 strkey.
 export function buildCctpForwarderHookData(forwardRecipientStrkey: string): `0x${string}` {
-  const isValid =
-    StrKey.isValidEd25519PublicKey(forwardRecipientStrkey) ||
-    StrKey.isValidContract(forwardRecipientStrkey) ||
-    StrKey.isValidMed25519PublicKey(forwardRecipientStrkey);
+  const kind = StrKey.isValidEd25519PublicKey(forwardRecipientStrkey)
+    ? 'ed25519'
+    : StrKey.isValidContract(forwardRecipientStrkey)
+      ? 'contract'
+      : StrKey.isValidMed25519PublicKey(forwardRecipientStrkey)
+        ? 'med25519'
+        : null;
 
-  if (!isValid) {
+  if (!kind) {
     throw new Error(`Invalid forward recipient: ${forwardRecipientStrkey}`);
   }
 
-  if (StrKey.isValidEd25519PublicKey(forwardRecipientStrkey)) {
-    return `0x${Buffer.from(StrKey.decodeEd25519PublicKey(forwardRecipientStrkey)).toString('hex')}`;
+  // M... (muxed) has no contract encoding — reject explicitly instead of falling into decodeContract.
+  if (kind === 'med25519') {
+    throw new Error(`Muxed M... recipients unsupported for CCTP hookData: ${forwardRecipientStrkey}`);
   }
-  return `0x${Buffer.from(StrKey.decodeContract(forwardRecipientStrkey)).toString('hex')}`;
+
+  const recipientBytes = Buffer.from(forwardRecipientStrkey, 'utf8');
+  const hookData = Buffer.alloc(32 + recipientBytes.length);
+  hookData.writeUInt32BE(0, 24);
+  hookData.writeUInt32BE(recipientBytes.length, 28);
+  recipientBytes.copy(hookData, 32);
+  return `0x${hookData.toString('hex')}`;
 }
