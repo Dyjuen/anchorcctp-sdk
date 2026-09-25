@@ -1,0 +1,165 @@
+/* AnchorCCTP brand theme: dark-first, demo-portal palette. Quiet docs skin. */
+
+/* Light theme (default): warm bone, editorial minimal */
+:root {
+  --vp-c-brand-1: #2f5bff;
+  --vp-c-brand-2: #2f5bff;
+  --vp-c-brand-3: #0891b2;
+  --vp-c-brand-soft: rgba(62, 107, 255, 0.12);
+  --vp-c-bg: #fbfbfa;
+  --vp-c-bg-soft: #f4f4f2;
+  --vp-c-bg-mute: #efefec;
+  --vp-c-divider: rgba(0, 0, 0, 0.08);
+  --vp-c-gutter: rgba(0, 0, 0, 0.08);
+  --vp-font-family-base: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  --vp-font-family-mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+/* Dark theme: demo-portal palette */
+.dark {
+  --vp-c-brand-1: #3e6bff;
+  --vp-c-brand-2: #7c3aed;
+  --vp-c-brand-3: #06b6d4;
+  --vp-c-brand-soft: rgba(62, 107, 255, 0.14);
+  --vp-c-bg: #070c18;
+  --vp-c-bg-soft: #0b132b;
+  --vp-c-bg-mute: #0b132b;
+  --vp-c-divider: rgba(255, 255, 255, 0.1);
+  --vp-c-gutter: rgba(255, 255, 255, 0.1);
+}
+
+::selection {
+  background: #3e6bff;
+  color: #fff;
+}
+
+/* Code blocks + custom containers */
+:root .vp-doc div[class*='language-'],
+:root .vp-doc .custom-block {
+  background: #f4f4f2;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 12px;
+}
+.dark .vp-doc div[class*='language-'],
+.dark .vp-doc .custom-block {
+  background: rgba(11, 19, 43, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+}
+
+/* Layout: narrower sidebar, content pulled left */
+:root {
+  --vp-sidebar-width: 232px;
+}
+@media (min-width: 960px) {
+  .VPDoc.has-aside .content-container {
+    max-width: 760px;
+  }
+}
+
+/* Code blocks wrap long lines instead of horizontal scroll */
+.vp-doc div[class*='language-'] pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Hero ambient glow (see HeroGlow.vue) */
+.docs-glow {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.docs-glow .blob-1,
+.docs-glow .blob-2 {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(80px);
+  animation: docs-drift 24s ease-in-out infinite alternate;
+}
+.docs-glow .blob-1 {
+  top: -120px;
+  left: 12%;
+  width: 480px;
+  height: 480px;
+  background: radial-gradient(circle, rgba(62, 107, 255, 0.13) 0%, rgba(7, 12, 24, 0) 70%);
+}
+.docs-glow .blob-2 {
+  top: 60px;
+  right: 8%;
+  width: 560px;
+  height: 560px;
+  background: radial-gradient(circle, rgba(124, 58, 237, 0.11) 0%, rgba(7, 12, 24, 0) 70%);
+  animation-delay: -12s;
+}
+.docs-grid {
+  position: absolute;
+  inset: 0;
+  background-size: 40px 40px;
+}
+:root .docs-grid {
+  background-image:
+    linear-gradient(to right, rgba(0, 0, 0, 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.04) 1px, transparent 1px);
+}
+.dark .docs-grid {
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+}
+@keyframes docs-drift {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(24px, 16px, 0);
+  }
+}
+
+/* Route enter: single fade-rise, transform/opacity only */
+.VPDoc .vp-doc {
+  animation: docs-enter 250ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes docs-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Scroll reveal for .reveal blocks */
+.reveal {
+  opacity: 0;
+  transform: translateY(12px);
+  transition:
+    opacity 600ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 600ms cubic-bezier(0.16, 1, 0.3, 1);
+  transition-delay: calc(var(--i, 0) * 60ms);
+}
+.reveal.in {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Sidebar active indicator slides via transform */
+.VPSidebarItem.is-active > .item .indicator {
+  background: var(--vp-c-brand-1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .docs-glow .blob-1,
+  .docs-glow .blob-2,
+  .VPDoc .vp-doc,
+  .reveal {
+    animation: none;
+    transition: none;
+  }
+  .reveal {
+    opacity: 1;
+    transform: none;
+  }
+}
