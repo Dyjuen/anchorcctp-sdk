@@ -29,6 +29,11 @@ export * from './events/index.js';
 export * from './attestation/index.js';
 
 /**
+ * Circle Iris fee quotes per finality tier (fast/standard), fetched — never hardcoded.
+ */
+export * from './attestation/fees.js';
+
+/**
  * EVM 32-byte to Stellar StrKey address translation and delegated mint submission.
  */
 export * from './forwarder/index.js';

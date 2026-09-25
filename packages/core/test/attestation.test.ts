@@ -299,5 +299,22 @@ describe('AttestationClient v2 by-txHash (testnet path)', () => {
     expect(res.status).toBe('complete');
     expect(calls).toBe(2);
   });
+
+  // NOTE: tier fields live under msg.decodedMessage (verified live 2026-09-25: top-level messages[0].finalityThresholdExecuted is undefined).
+  it('carries finalityThresholdExecuted + delayReason from v2 frame', async () => {
+    const frame = { messages: [{ message: '0x' + 'ab'.repeat(200), attestation: '0x' + 'cd'.repeat(65), status: 'complete', decodedMessage: { finalityThresholdExecuted: 2000, delayReason: 'insufficient_fee' } }] };
+    const stub = async () => ({ ok: true, json: async () => frame });
+    const client = new AttestationClient({ baseUrl: 'https://x', fetchImpl: stub as never, maxRetries: 1 });
+    const r = await client.pollAttestationByTx(6, '0x' + 'ab'.repeat(32));
+    expect(r.finalityThresholdExecuted).toBe(2000);
+    expect(r.delayReason).toBe('insufficient_fee');
+  });
+
+  it('never treats attestation:"PENDING" as complete', async () => {
+    const frame = { messages: [{ message: '0x' + 'ab'.repeat(200), attestation: 'PENDING', status: 'pending' }] };
+    const stub = async () => ({ ok: true, json: async () => frame });
+    const client = new AttestationClient({ baseUrl: 'https://x', fetchImpl: stub as never, maxRetries: 2, pollIntervalMs: 1 });
+    await expect(client.pollAttestationByTx(6, '0x' + 'ab'.repeat(32))).rejects.toThrow(/timed out/i);
+  });
 });
 

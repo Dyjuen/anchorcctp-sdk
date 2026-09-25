@@ -8,6 +8,17 @@ export interface AttestationResult {
   signature: string;
   attempts: number;
   elapsedTimeMs: number;
+  /**
+   * Finality tier Iris actually executed (1000 = Fast, 2000 = Standard), read
+   * from the v2 frame's `decodedMessage.finalityThresholdExecuted`. Undefined
+   * when the endpoint omits the field.
+   */
+  finalityThresholdExecuted?: number;
+  /**
+   * Why Iris delayed the attestation (e.g. `insufficient_fee`), read from
+   * `decodedMessage.delayReason`. `null` means no delay was reported.
+   */
+  delayReason?: string | null;
 }
 
 export interface AttestationClientOptions {
@@ -179,10 +190,21 @@ export class AttestationClient {
 
         if (res.ok) {
           const data = (await res.json()) as {
-            messages?: Array<{ message?: string; attestation?: string; status?: string }>;
+            messages?: Array<{
+              message?: string;
+              attestation?: string;
+              status?: string;
+              decodedMessage?: {
+                finalityThresholdExecuted?: number | string | null;
+                delayReason?: string | null;
+              };
+            }>;
           };
           const msg = data.messages?.[0];
           if (msg?.message && msg.attestation && msg.attestation !== 'PENDING' && msg.status === 'complete') {
+            // Tier fields are nested under decodedMessage (verified live 2026-09-25) —
+            // the top-level message row leaves them undefined.
+            const executed = msg.decodedMessage?.finalityThresholdExecuted;
             return {
               status: 'complete',
               attestation: msg.attestation,
@@ -190,6 +212,8 @@ export class AttestationClient {
               signature: msg.attestation,
               attempts: attempt,
               elapsedTimeMs: elapsedMs,
+              finalityThresholdExecuted: executed === undefined || executed === null ? undefined : Number(executed),
+              delayReason: msg.decodedMessage?.delayReason ?? null,
             };
           }
         }

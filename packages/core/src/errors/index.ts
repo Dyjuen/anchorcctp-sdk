@@ -156,6 +156,23 @@ export class InvalidAddressError extends AnchorCCTPError {
   }
 }
 
+/**
+ * Thrown when the Circle Iris fee API is unreachable, errors, or has no entry for
+ * the requested finality tier — callers must never fall back to a hardcoded fee.
+ */
+export class FeeUnavailableError extends AnchorCCTPError {
+  readonly code = 'FEE_UNAVAILABLE';
+  readonly remediation = 'Retry the fee quote, or fall back to the Standard tier (free) if Fast is unavailable.';
+
+  constructor(
+    public readonly sourceDomain: number,
+    public readonly destDomain: number,
+    public readonly reason: string
+  ) {
+    super(`Circle fee API unavailable for route ${sourceDomain}->${destDomain}: ${reason}.`);
+  }
+}
+
 export class ReplayTransferError extends AnchorCCTPError {
   readonly code = 'REPLAY_TRANSFER';
   readonly remediation = 'This burn transaction has already been processed and settled. Check existing settlement records.';
